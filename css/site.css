@@ -121,7 +121,8 @@ h2 { font-family: var(--display); font-weight: 800; text-transform: uppercase; f
 .svc p { grid-column: 2; margin: 0; color: var(--dim); }
 
 /* Team */
-.team { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.team { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 1100px) { .team { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 760px) { .team { grid-template-columns: 1fr; } }
 .member { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); text-decoration: none; }
 .member:hover { border-color: var(--flare); }
