@@ -1,3 +1,5 @@
+import { SEASONS } from "./sports.js";
+
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
 const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
 
@@ -37,7 +39,10 @@ const signedIn = `<form id="add">
 <label for="title">Title</label><input id="title" name="title" maxlength="60" required>
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
-<label for="sport">Sport</label><select id="sport" name="sport"><option value="football">Football</option><option value="soccer">Soccer</option><option value="volleyball">Volleyball</option><option value="basketball">Basketball</option><option value="other">Other</option></select>
+<label for="sport">Sport</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
+  const options = sports.map(([value, label]) => `<option value="${value}">${label.replace("&", "&amp;")}</option>`).join("");
+  return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
+}).join("")}</select>
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
 <p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page within a minute.</p>
 <p role="status"></p></form>

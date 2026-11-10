@@ -165,6 +165,20 @@ test("titles and credits are stored as plain text", async () => {
   assert.equal(stored.sport, "other");
 });
 
+test("every season's sports can be chosen, and the form offers exactly those", async () => {
+  const { SPORTS } = await import("../netlify/studio/sports.js");
+  assert.deepEqual(SPORTS, ["football", "soccer", "volleyball", "cross-country", "basketball", "wrestling", "indoor-track", "lacrosse", "baseball", "softball", "track-and-field", "other"]);
+  const cookie = await signIn();
+  const page = (await call("/studio", { cookie })).body;
+  assert.deepEqual([...page.matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]), SPORTS);
+  assert.match(page, /<optgroup label="Winter">/);
+  assert.match(page, /Track &amp; Field/);
+  for (const sport of SPORTS) {
+    const added = await call("/studio/upload", { method: "POST", cookie, form: photo({ sport }) });
+    assert.equal(added.body.photo.sport, sport);
+  }
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;

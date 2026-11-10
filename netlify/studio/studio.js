@@ -11,13 +11,13 @@
 // in Netlify Blobs.
 import { getStore } from "@netlify/blobs";
 import { studioPage } from "./page.js";
+import { SPORTS } from "./sports.js";
 
 const SESSION_HOURS = 12;
 const COOKIE = "hm_studio";
 const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending them
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
-const SPORTS = ["football", "soccer", "volleyball", "basketball", "other"];
 const SECURITY = { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
 
 const encoder = new TextEncoder();

@@ -2,7 +2,13 @@
 (() => {
   const gallery = document.querySelector(".gallery");
   const shots = [...document.querySelectorAll(".shot")];
-  const filters = [...document.querySelectorAll(".filters button")];
+  const filterGroup = document.querySelector(".filters");
+  const filters = [...filterGroup.querySelectorAll("button")];
+  const SPORT_NAMES = {
+    football: "Football", soccer: "Soccer", volleyball: "Volleyball", "cross-country": "Cross Country",
+    basketball: "Basketball", wrestling: "Wrestling", "indoor-track": "Indoor Track",
+    lacrosse: "Lacrosse", baseball: "Baseball", softball: "Softball", "track-and-field": "Track & Field", other: "Other",
+  };
   const viewer = document.querySelector(".viewer");
   const photo = viewer.querySelector("img");
   const caption = viewer.querySelector(".viewer-cap");
@@ -12,12 +18,13 @@
 
   const visible = () => shots.filter((shot) => !shot.hidden);
 
-  for (const button of filters) {
+  function useFilter(button) {
     button.addEventListener("click", () => {
       for (const other of filters) other.setAttribute("aria-pressed", String(other === button));
       for (const shot of shots) shot.hidden = button.dataset.filter !== "all" && shot.dataset.sport !== button.dataset.filter;
     });
   }
+  filters.forEach(useFilter);
 
   function show(index) {
     const list = visible();
@@ -83,6 +90,21 @@
       });
       gallery.prepend(...added);
       shots.unshift(...added);
+      // Add a button for any sport that has photos but no button yet.
+      const order = Object.keys(SPORT_NAMES);
+      const present = [...new Set(shots.map((shot) => shot.dataset.sport))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      for (const sport of present) {
+        if (filters.some((button) => button.dataset.filter === sport)) continue;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.filter = sport;
+        button.setAttribute("aria-pressed", "false");
+        button.append(`${SPORT_NAMES[sport] || "Other"} `, document.createElement("span"));
+        const after = filters.filter((b) => b.dataset.filter !== "all" && order.indexOf(b.dataset.filter) > order.indexOf(sport))[0];
+        filterGroup.insertBefore(button, after || null);
+        filters.push(button);
+        useFilter(button);
+      }
       for (const button of filters) {
         const sport = button.dataset.filter;
         button.querySelector("span").textContent = shots.filter((shot) => sport === "all" || shot.dataset.sport === sport).length;
