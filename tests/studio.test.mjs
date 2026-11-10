@@ -11,6 +11,7 @@ const { BlobsServer } = await import("@netlify/blobs/server");
 const { createStudio } = await import("../netlify/studio/studio.js");
 
 const SITE = "https://horizon.example";
+const USERNAME = "studio-owner";
 const PASSWORD = "correct horse battery";
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6]);
 let blobs, directory, port, site = 0, studio;
@@ -28,7 +29,7 @@ after(async () => {
 beforeEach(() => {
   const url = `http://localhost:${port}`;
   globalThis.netlifyBlobsContext = Buffer.from(JSON.stringify({ edgeURL: url, uncachedEdgeURL: url, token: "t", siteID: `studio-${++site}`, deployID: "d", primaryRegion: "us-east-2" })).toString("base64");
-  globalThis.Netlify = { env: { get: (name) => (name === "STUDIO_PASSWORD" ? PASSWORD : undefined) } };
+  globalThis.Netlify = { env: { get: (name) => ({ STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD })[name] } };
   studio = createStudio();
 });
 
@@ -48,7 +49,7 @@ async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "1
 }
 
 async function signIn() {
-  const reply = await call("/studio/login", { method: "POST", form: { password: PASSWORD } });
+  const reply = await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD } });
   assert.equal(reply.status, 200);
   return reply.headers.get("set-cookie").split(";")[0];
 }
@@ -56,10 +57,15 @@ const photo = (extra = {}) => ({ title: "Big win", credit: "@cb.framed.it", spor
 
 test("without a password set in Netlify the studio is switched off", async () => {
   for (const value of [undefined, "", "short"]) {
-    globalThis.Netlify = { env: { get: () => value } };
+    globalThis.Netlify = { env: { get: (name) => (name === "STUDIO_USERNAME" ? USERNAME : value) } };
     assert.equal((await call("/studio")).status, 503);
     assert.equal((await call("/studio/login", { method: "POST", form: { password: value || "" } })).status, 503);
   }
+});
+
+test("a password without a username also leaves it switched off", async () => {
+  globalThis.Netlify = { env: { get: (name) => (name === "STUDIO_PASSWORD" ? PASSWORD : undefined) } };
+  assert.equal((await call("/studio")).status, 503);
 });
 
 test("the sign-in page shows no tools until the password is given", async () => {
@@ -72,9 +78,12 @@ test("the sign-in page shows no tools until the password is given", async () => 
 });
 
 test("a wrong password is refused, the right one signs in", async () => {
-  const wrong = await call("/studio/login", { method: "POST", form: { password: "correct horse batterx" } });
-  assert.equal(wrong.status, 401);
-  assert.equal(wrong.headers.get("set-cookie"), null);
+  for (const form of [{ username: USERNAME, password: "correct horse batterx" }, { username: "someone-else", password: PASSWORD }, { password: PASSWORD }]) {
+    const wrong = await call("/studio/login", { method: "POST", form });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.body.error, "Wrong username or password.", "the reply never says which one was wrong");
+    assert.equal(wrong.headers.get("set-cookie"), null);
+  }
 
   const cookie = await signIn();
   assert.match(cookie, /^hm_studio=\d{13}\.[0-9a-f]{64}$/);
@@ -83,7 +92,7 @@ test("a wrong password is refused, the right one signs in", async () => {
 });
 
 test("the session cookie is locked down and cannot be forged or extended", async () => {
-  const reply = await call("/studio/login", { method: "POST", form: { password: PASSWORD } });
+  const reply = await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD } });
   const header = reply.headers.get("set-cookie");
   for (const part of ["Path=/studio", "Secure", "HttpOnly", "SameSite=Strict", "Max-Age=43200"]) assert.ok(header.includes(part), part);
   const [expires, signature] = header.split(";")[0].split("=")[1].split(".");
@@ -98,14 +107,14 @@ test("six wrong tries in a minute from one address are cut off", async () => {
   let reply;
   for (let i = 0; i < 6; i++) reply = await call("/studio/login", { method: "POST", form: { password: "nope" }, ip: "203.0.113.9" });
   assert.equal(reply.status, 429);
-  assert.equal((await call("/studio/login", { method: "POST", form: { password: PASSWORD }, ip: "203.0.113.9" })).status, 429, "even the right password waits");
-  assert.equal((await call("/studio/login", { method: "POST", form: { password: PASSWORD }, ip: "203.0.113.10" })).status, 200);
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD }, ip: "203.0.113.9" })).status, 429, "even the right password waits");
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD }, ip: "203.0.113.10" })).status, 200);
 });
 
 test("requests from another site are refused", async () => {
   const cookie = await signIn();
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo(), origin: "https://evil.example" })).status, 403);
-  assert.equal((await call("/studio/login", { method: "POST", form: { password: PASSWORD }, origin: null })).status, 403);
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD }, origin: null })).status, 403);
 });
 
 test("nobody can add or remove photos without signing in", async () => {

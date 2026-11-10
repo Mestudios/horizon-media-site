@@ -14,9 +14,9 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio li button{margin-top:6px;padding:8px 12px;font-size:13px}
 </style></head><body><main class="studio"><h1>Studio</h1>`;
 
-const off = `<p>The studio is switched off because no password has been set.</p><p class="note">To switch it on, add an environment variable named STUDIO_PASSWORD (at least 12 characters) in the Netlify project settings, then redeploy.</p>`;
+const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy.</p>`;
 
-const out = `<form id="login"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
+const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
 <script>
 document.getElementById("login").addEventListener("submit", async (event) => {
   event.preventDefault();

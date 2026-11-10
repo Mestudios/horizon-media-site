@@ -39,11 +39,11 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 `portfolio.html` shows the portfolio: a grid with a sport filter and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
 
-The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one password. Its code is in `netlify/studio/`.
+The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
-- The password is the `STUDIO_PASSWORD` environment variable in the Netlify project settings (at least 12 characters). Until it is set, the studio is switched off. Changing it signs everyone out.
+- The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page.
-- Five wrong passwords in a minute from one address locks that address out for the rest of the minute.
+- Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute.
 
 ## Photo protection
 

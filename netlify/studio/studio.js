@@ -5,8 +5,10 @@
 //   /portfolio-photos.json   the list of added photos (public; the portfolio page reads it)
 //   /uploads/<id>/full.jpg   an added photo (public), and /thumb.jpg its small copy
 //
-// The password is the STUDIO_PASSWORD environment variable in Netlify. Until
-// that is set, signing in is switched off. Photos are kept in Netlify Blobs.
+// The sign-in is two environment variables in Netlify: STUDIO_USERNAME and
+// STUDIO_PASSWORD. Until both are set, signing in is switched off. They are
+// never written in this code, because this code is public. Photos are kept
+// in Netlify Blobs.
 import { getStore } from "@netlify/blobs";
 import { studioPage } from "./page.js";
 
@@ -23,9 +25,12 @@ const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).pa
 const sha256 = async (text) => hex(await crypto.subtle.digest("SHA-256", encoder.encode(text)));
 const store = () => getStore({ name: "studio-photos", consistency: "strong" });
 
+const setting = (name) => globalThis.Netlify?.env?.get?.(name) || "";
+
 function password() {
-  const value = globalThis.Netlify?.env?.get?.("STUDIO_PASSWORD") || "";
-  return value.length >= 12 ? value : null; // a short password is treated as not set
+  const value = setting("STUDIO_PASSWORD");
+  // A short password, or no username, is treated as not set.
+  return value.length >= 12 && setting("STUDIO_USERNAME") !== "" ? value : null;
 }
 
 // Compares two strings without leaking, through timing, how much of them matched.
@@ -106,9 +111,12 @@ export function createStudio() {
     if (url.pathname === "/studio/login") {
       if (tooManyAttempts(context.ip || "unknown", now)) return json({ error: "Too many tries. Wait a minute." }, 429);
       const form = await request.formData();
-      if (!(await same(String(form.get("password") || ""), secret))) {
-        console.warn(`studio: wrong password from ${context.ip}`);
-        return json({ error: "Wrong password." }, 401);
+      // Check both every time, so the reply does not reveal which one was wrong.
+      const nameOk = await same(String(form.get("username") || ""), setting("STUDIO_USERNAME"));
+      const passwordOk = await same(String(form.get("password") || ""), secret);
+      if (!nameOk || !passwordOk) {
+        console.warn(`studio: failed sign-in from ${context.ip}`);
+        return json({ error: "Wrong username or password." }, 401);
       }
       const expires = now + SESSION_HOURS * 3_600_000;
       return json({ ok: true }, 200, {
