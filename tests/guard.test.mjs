@@ -127,7 +127,8 @@ async function crowd(handler, count) {
 }
 
 const recordedVisits = async () => (await getStore("site-guard").list()).blobs.map(({ key }) => key);
-const pagePhotos = [...PAGE.matchAll(/(?:\ssrc="|url\(')(img\/[^"')]+\.jpe?g)/g)].map((match) => match[1]);
+const ALL_PAGES = PAGE + readFileSync(join(ROOT, "portfolio.html"), "utf8");
+const pagePhotos = [...new Set([...ALL_PAGES.matchAll(/(?:\s(?:src|data-full)="|url\(')(img\/[^"')]+\.jpe?g)/g)].map((match) => match[1]))].filter((path) => !path.includes("/thumb/"));
 
 // ---- The user's rule: more than 10 at once -> smaller photos ----------------
 
@@ -511,7 +512,7 @@ test("the function Netlify runs is the guard, in front of the homepage only", as
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },

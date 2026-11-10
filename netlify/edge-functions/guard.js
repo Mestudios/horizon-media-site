@@ -1,11 +1,11 @@
-// Runs the site guard in front of the homepage. The guard itself is in
+// Runs the site guard in front of the pages that show photos. The guard itself is in
 // ../guard/ (start with guard.js there; the numbers are in settings.js).
 import { createGuard } from "../guard/guard.js";
 
 export default createGuard();
 
 export const config = {
-  path: ["/", "/index.html"],
+  path: ["/", "/index.html", "/portfolio", "/portfolio.html"],
   method: "GET",
   // If the guard fails, Netlify serves the page without it.
   onError: "bypass",

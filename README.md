@@ -35,6 +35,16 @@ Visitors are told apart by an anonymous cookie, `hm_visitor`: a random id that l
 
 The thresholds, the two-minute window, the rate limit and the cookie are in `netlify/guard/settings.js`. The rate limit also appears in `netlify/edge-functions/guard.js` as Netlify's own setting; keep the two the same.
 
+## Portfolio page and the studio
+
+`portfolio.html` shows the portfolio: a grid with a sport filter and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
+
+The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one password. Its code is in `netlify/studio/`.
+
+- The password is the `STUDIO_PASSWORD` environment variable in the Netlify project settings (at least 12 characters). Until it is set, the studio is switched off. Changing it signs everyone out.
+- Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page.
+- Five wrong passwords in a minute from one address locks that address out for the rest of the minute.
+
 ## Photo protection
 
 `js/protect.js` discourages casual copying. It cannot stop someone determined.

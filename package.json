@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-reporter=spec tests/guard.test.mjs",
+    "test": "node --test --test-reporter=spec tests/guard.test.mjs tests/studio.test.mjs",
     "photos": "python3 tools/make_photo_variants.py",
     "build": "sh tools/build-site.sh"
   },

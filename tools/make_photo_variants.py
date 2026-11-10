@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / "index.html"
+PAGES = [ROOT / "index.html", ROOT / "portfolio.html"]
 MANIFEST = ROOT / "netlify" / "guard" / "photo-variants.js"
 
 # Longest allowed width in pixels, by how the page uses the photo, and JPEG quality.
@@ -40,20 +40,20 @@ MANIFEST_HEADER = """\
 // "source" identifies the original the copies were made from.
 export default """
 
-IMG_TAG = re.compile(r"""\ssrc=["'](img/[^"'?#]+)["']""")
+IMG_TAG = re.compile(r"""\s(?:src|data-full)=["'](img/[^"'?#]+)["']""")
 CSS_URL = re.compile(r"""url\(\s*["']?(img/[^"')?#]+)["']?\s*\)""")
 
 
 def page_photos():
-    """Photos index.html shows, mapped to how they are used ("img" or "background")."""
-    html = PAGE.read_text(encoding="utf-8")
+    """Photos the pages show, mapped to how they are used ("img" or "background")."""
+    html = "\n".join(page.read_text(encoding="utf-8") for page in PAGES if page.is_file())
     found = {}
     for kind, pattern in (("img", IMG_TAG), ("background", CSS_URL)):
         for path in pattern.findall(html):
             if not path.lower().endswith((".jpg", ".jpeg")) or ".." in path.split("/"):
                 continue
-            if any(path.startswith(f"img/{level}/") for level in SIZES):
-                continue
+            if any(path.startswith(f"img/{level}/") for level in SIZES) or "/thumb/" in path:
+                continue  # already a small copy
             if (ROOT / path).is_file():
                 # A photo used both ways keeps the larger (background) size.
                 if found.get(path) != "background":

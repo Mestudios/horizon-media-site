@@ -27,6 +27,81 @@ export default {
     "lite": "img/lite/hero-sunset.jpg",
     "saver": "img/saver/hero-sunset.jpg"
   },
+  "img/portfolio/fifty-fifty.jpg": {
+    "source": "3579575cfb6e94da",
+    "lite": "img/lite/portfolio/fifty-fifty.jpg",
+    "saver": "img/saver/portfolio/fifty-fifty.jpg"
+  },
+  "img/portfolio/flex.jpg": {
+    "source": "61a7855f88356498",
+    "lite": "img/lite/portfolio/flex.jpg",
+    "saver": "img/saver/portfolio/flex.jpg"
+  },
+  "img/portfolio/game-face.jpg": {
+    "source": "f875e60c1e693b57",
+    "lite": "img/lite/portfolio/game-face.jpg",
+    "saver": "img/saver/portfolio/game-face.jpg"
+  },
+  "img/portfolio/golden-hour.jpg": {
+    "source": "2d3f06f8bd218c73",
+    "lite": "img/lite/portfolio/golden-hour.jpg",
+    "saver": "img/saver/portfolio/golden-hour.jpg"
+  },
+  "img/portfolio/in-the-trenches.jpg": {
+    "source": "86c1599ce20ffb68",
+    "lite": "img/lite/portfolio/in-the-trenches.jpg",
+    "saver": "img/saver/portfolio/in-the-trenches.jpg"
+  },
+  "img/portfolio/jump-ball.jpg": {
+    "source": "289ea8a624c46c44",
+    "lite": "img/lite/portfolio/jump-ball.jpg",
+    "saver": "img/saver/portfolio/jump-ball.jpg"
+  },
+  "img/portfolio/leading-them-out.jpg": {
+    "source": "ecb5a1881fb0c8b6",
+    "lite": "img/lite/portfolio/leading-them-out.jpg",
+    "saver": "img/saver/portfolio/leading-them-out.jpg"
+  },
+  "img/portfolio/lift-off.jpg": {
+    "source": "30f221352889928f",
+    "lite": "img/lite/portfolio/lift-off.jpg",
+    "saver": "img/saver/portfolio/lift-off.jpg"
+  },
+  "img/portfolio/number-one.jpg": {
+    "source": "11744e113f3c368e",
+    "lite": "img/lite/portfolio/number-one.jpg",
+    "saver": "img/saver/portfolio/number-one.jpg"
+  },
+  "img/portfolio/on-camera.jpg": {
+    "source": "e7dd49c3124cefd2",
+    "lite": "img/lite/portfolio/on-camera.jpg",
+    "saver": "img/saver/portfolio/on-camera.jpg"
+  },
+  "img/portfolio/one-hand-grab.jpg": {
+    "source": "cfe4de3838ca4a2f",
+    "lite": "img/lite/portfolio/one-hand-grab.jpg",
+    "saver": "img/saver/portfolio/one-hand-grab.jpg"
+  },
+  "img/portfolio/our-ball.jpg": {
+    "source": "2ee8da4612b124c7",
+    "lite": "img/lite/portfolio/our-ball.jpg",
+    "saver": "img/saver/portfolio/our-ball.jpg"
+  },
+  "img/portfolio/set.jpg": {
+    "source": "d3bcd27c65caa3c2",
+    "lite": "img/lite/portfolio/set.jpg",
+    "saver": "img/saver/portfolio/set.jpg"
+  },
+  "img/portfolio/the-celebration.jpg": {
+    "source": "592cf770c7b61bc7",
+    "lite": "img/lite/portfolio/the-celebration.jpg",
+    "saver": "img/saver/portfolio/the-celebration.jpg"
+  },
+  "img/portfolio/under-the-lights.jpg": {
+    "source": "55c52a8259cde065",
+    "lite": "img/lite/portfolio/under-the-lights.jpg",
+    "saver": "img/saver/portfolio/under-the-lights.jpg"
+  },
   "img/soccer-kick.jpg": {
     "source": "b5a6594539c5ac3c",
     "lite": "img/lite/soccer-kick.jpg",

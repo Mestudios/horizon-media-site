@@ -188,7 +188,7 @@ footer p { margin: 8px 0 0; }
 .page-top { padding: clamp(56px, 9vw, 96px) 0 8px; border-bottom: 1px solid var(--line); background: radial-gradient(80% 120% at 0% 0%, rgba(255,198,26,.10), transparent 60%); }
 .page-top .hero-copy { margin-bottom: 40px; }
 .rule-left { margin: 24px 0; }
-.portfolio { padding-top: 40px; }
+.portfolio { padding: 40px 0 64px; }
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
 .filters button {
@@ -207,6 +207,7 @@ footer p { margin: 8px 0 0; }
   position: relative; aspect-ratio: 3 / 4; overflow: hidden; padding: 0; border: 0; border-radius: 6px;
   background: var(--panel); cursor: zoom-in; display: block; width: 100%;
 }
+.shot[hidden] { display: none; }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
 .shot-info {
   position: absolute; inset: auto 0 0 0; padding: 40px 12px 12px; text-align: left;
