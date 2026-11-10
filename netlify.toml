@@ -1,0 +1,24 @@
+# Netlify settings for the Horizon Media site.
+
+[build]
+  # Copies the website into dist/ without the project's own files (the guard
+  # that runs on Netlify's side, tests, tools, notes), so only the site itself
+  # is public.
+  command = "sh tools/build-site.sh"
+  publish = "dist"
+
+# Security headers for every file. The homepage is sent through the guard,
+# which adds the same ones from netlify/guard/settings.js. Keep the two lists
+# the same (npm test checks).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Other sites may not show this one inside a frame.
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none'"
+    # Browsers must not guess a file's type.
+    X-Content-Type-Options = "nosniff"
+    # Other sites learn only this site's address from links, not the page path.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # The site never needs these device features.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
