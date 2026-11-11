@@ -42,8 +42,8 @@ SIZES = {
 }
 # A busy-mode copy is only kept if it is at most this fraction of the web copy's size.
 WORTHWHILE = 0.9
-# Photos narrower than this (the team's round profile pictures) get no watermark:
-# it would be unreadable at that size.
+# Originals narrower than this (the team's round profile pictures) get no
+# watermark on any copy: it would be unreadable at that size.
 WATERMARK_MIN_WIDTH = 400
 # Where the watermark sits: right-aligned, with its bottom edge this far down the
 # photo. Pages crop photos to fit their frames (phones crop the homepage tiles to
@@ -132,9 +132,7 @@ def watermark(image):
     """Draws the Horizon Media mark (the logo's three slashes and the name) onto the photo."""
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-    if image.width < WATERMARK_MIN_WIDTH:
-        return image
-    size = max(12, round(image.width * WATERMARK_WIDTH / 5.2))
+    size = max(8, round(image.width * WATERMARK_WIDTH / 5.2))
     font = ImageFont.truetype(str(FONT), size)
     try:
         font.set_variation_by_axes([800])  # the heavy weight the site's headings use
@@ -165,11 +163,12 @@ def watermark(image):
 def encode(image, max_width, quality):
     from PIL import Image
 
+    marked = image.width >= WATERMARK_MIN_WIDTH
     copy = image
     if copy.width > max_width:
         copy = copy.resize((max_width, round(copy.height * max_width / copy.width)), Image.LANCZOS)
     buffer = io.BytesIO()
-    watermark(copy).save(buffer, "JPEG", quality=quality, optimize=True, progressive=True)
+    (watermark(copy) if marked else copy).save(buffer, "JPEG", quality=quality, optimize=True, progressive=True)
     return buffer.getvalue()
 
 
