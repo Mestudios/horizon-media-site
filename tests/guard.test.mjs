@@ -424,16 +424,17 @@ test("the smallest mode falls back to the small copy when a photo has no smalles
   assert.ok(reply.body.includes('src="img/saver/soccer-kick.jpg"'));
 });
 
-test("every photo on the page has up-to-date smaller copies", () => {
+test("every photo on the page has up-to-date watermarked copies made from an original in photos/", () => {
   const hint = "run: python3 tools/make_photo_variants.py";
   assert.ok(pagePhotos.length >= 8, `found the page's photos: ${pagePhotos}`);
   assert.ok(pagePhotos.includes("img/hero-sunset.jpg"), "including the hero photo");
   for (const photo of pagePhotos) {
     const entry = photoVariants[photo];
     assert.ok(entry, `${photo} has no smaller copies (${hint})`);
-    const original = readFileSync(join(ROOT, photo));
-    assert.equal(entry.source, createHash("sha256").update(original).digest("hex").slice(0, 16), `${photo} changed since its copies were made (${hint})`);
-    let previous = original.length;
+    const original = join(ROOT, "photos", photo.slice("img/".length));
+    assert.ok(existsSync(original), `${photo} has no original in photos/ (${hint})`);
+    assert.equal(entry.source, createHash("sha256").update(readFileSync(original)).digest("hex").slice(0, 16), `${photo}'s original changed since its copies were made (${hint})`);
+    let previous = statSync(join(ROOT, photo)).size;
     for (const level of ["lite", "saver"]) {
       assert.ok(existsSync(join(ROOT, entry[level])), `${entry[level]} is missing (${hint})`);
       const size = statSync(join(ROOT, entry[level])).size;
@@ -441,7 +442,10 @@ test("every photo on the page has up-to-date smaller copies", () => {
       previous = size;
     }
   }
-  for (const photo of Object.keys(photoVariants)) assert.ok(pagePhotos.includes(photo), `${photo} is listed but not on the page (${hint})`);
+  for (const photo of Object.keys(photoVariants)) {
+    if (photo.includes("/thumb/")) continue; // grid thumbnails are listed too, with no busy-mode copies
+    assert.ok(pagePhotos.includes(photo), `${photo} is listed but not on the page (${hint})`);
+  }
 });
 
 // ---- When things go wrong ---------------------------------------------------
@@ -557,12 +561,13 @@ test("the published folder holds the website and none of the project's own files
   try {
     execFileSync("sh", [join(ROOT, "tools/build-site.sh"), out], { stdio: "pipe" });
     const published = readdirSync(out, { recursive: true }).map((path) => String(path).replaceAll("\\", "/"));
-    for (const needed of ["index.html", "css/site.css", "js/protect.js", "img/og-image.jpg", ...pagePhotos, ...Object.values(photoVariants).flatMap(({ lite, saver }) => [lite, saver])]) {
+    for (const needed of ["index.html", "css/site.css", "js/protect.js", "img/og-image.jpg", ...pagePhotos, ...Object.values(photoVariants).flatMap(({ lite, saver }) => [lite, saver]).filter(Boolean), ...Object.keys(photoVariants)]) {
       assert.ok(published.includes(needed), `${needed} is published`);
     }
+    assert.ok(!published.some((path) => path.startsWith("photos")), "the original photos are not published");
     const allowed = new Set(["index.html", "css", "js", "img"]);
     const extra = readdirSync(out).filter((name) => !allowed.has(name));
-    const privateFiles = ["netlify", "netlify.toml", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "dist"];
+    const privateFiles = ["netlify", "netlify.toml", "photos", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "dist"];
     assert.deepEqual(extra.filter((name) => privateFiles.includes(name)), [], "none of the project's own files are published");
     assert.equal(readFileSync(join(out, "index.html"), "utf8"), PAGE);
 

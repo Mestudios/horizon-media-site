@@ -44,7 +44,7 @@ const signedIn = `<form id="add">
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
 }).join("")}</select>
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
-<p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page within a minute.</p>
+<p class="note">The photo is shrunk to website size and watermarked on this device before it is sent. It appears on the portfolio page within a minute.</p>
 <p role="status"></p></form>
 <ul id="photos"></ul>
 <script>
@@ -56,13 +56,47 @@ teamButtons.forEach((button) => button.addEventListener("click", () => { credit.
 credit.addEventListener("input", markTeam);
 const list = document.getElementById("photos");
 
-// Draws the photo at a smaller size and returns it as a JPEG file.
+// Draws the Horizon Media watermark the same way tools/make_photo_variants.py
+// does: the logo's three slashes and the name, right-aligned, its bottom edge
+// 76% of the way down, 30% of the photo's width.
+function watermark(context, width, height) {
+  const size = Math.max(8, Math.round((width * 0.3) / 5.2));
+  context.font = "800 " + size + 'px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif';
+  const text = "HORIZON MEDIA";
+  const metrics = context.measureText(text);
+  const cap = metrics.actualBoundingBoxAscent || size * 0.7;
+  const slash = cap * 0.62, gap = cap * 0.18;
+  const markWidth = 3 * slash + 2 * gap + cap * 0.35 + metrics.width;
+  const x0 = width * 0.95 - markWidth, y0 = height * 0.76 - cap;
+  context.save();
+  context.fillStyle = "rgba(255, 255, 255, 0.72)";
+  context.shadowColor = "rgba(0, 0, 0, 0.45)";
+  context.shadowBlur = Math.max(1, cap * 0.16);
+  for (let i = 0; i < 3; i++) {
+    const x = x0 + i * (slash + gap);
+    context.beginPath();
+    context.moveTo(x + slash * 0.45, y0);
+    context.lineTo(x + slash, y0);
+    context.lineTo(x + slash * 0.55, y0 + cap);
+    context.lineTo(x, y0 + cap);
+    context.closePath();
+    context.fill();
+  }
+  context.textBaseline = "alphabetic";
+  context.fillText(text, x0 + 3 * slash + 2 * gap + cap * 0.35, y0 + cap);
+  context.restore();
+}
+
+// Draws the photo at a smaller size, watermarks it, and returns it as a JPEG file.
+// The original never leaves this device.
 function shrink(image, width, quality) {
   const scale = Math.min(1, width / image.width);
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(image.width * scale);
   canvas.height = Math.round(image.height * scale);
-  canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  watermark(context, canvas.width, canvas.height);
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
@@ -98,6 +132,7 @@ document.getElementById("add").addEventListener("submit", async (event) => {
   status.textContent = "Preparing the photo...";
   try {
     const image = await createImageBitmap(document.getElementById("photo").files[0], { imageOrientation: "from-image" });
+    await document.fonts.load('800 40px "Big Shoulders Display"').catch(() => {});
     const body = new FormData(event.target);
     body.set("full", await shrink(image, 1200, 0.82), "full.jpg");
     body.set("thumb", await shrink(image, 480, 0.7), "thumb.jpg");

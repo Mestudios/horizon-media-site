@@ -2,9 +2,9 @@
 # Builds the folder Netlify publishes.
 #
 # Everything at the top of this repository is part of the website, except the
-# project's own files listed below: the guard that runs on Netlify's side, the
-# tests and tools, and the notes for people working on the site. Leaving them
-# out keeps them off the public site.
+# project's own files listed below: the original photos (photos/), the guard
+# that runs on Netlify's side, the tests and tools, and the notes for people
+# working on the site. Leaving them out keeps them off the public site.
 #
 # Usage: sh tools/build-site.sh [output folder, default "dist"]
 set -eu
@@ -23,7 +23,7 @@ mkdir -p "$out"
 
 for item in *; do
   case "$item" in
-    dist | node_modules | netlify | netlify.toml | tests | tools | package.json | package-lock.json | README.md) ;;
+    dist | node_modules | netlify | netlify.toml | photos | tests | tools | package.json | package-lock.json | README.md) ;;
     *) [ "$item" = "$out" ] || cp -R "$item" "$out/" ;;
   esac
 done

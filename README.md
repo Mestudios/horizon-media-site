@@ -47,19 +47,34 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 ## Photo protection
 
-`js/protect.js` discourages casual copying. It cannot stop someone determined.
+`js/protect.js` discourages casual copying. It is not a security control: it cannot stop someone determined, and nothing relies on it. The real protection is that only watermarked, web-sized copies are published (see Photos).
 
 - Right-click and dragging are blocked on photos.
 - On computers, the photos blur when a screenshot shortcut is pressed or the visitor leaves the window, and sharpen when they come back. A note in the corner says so.
 - On phones and tablets nothing can be done about screenshots: they are taken with hardware buttons a web page cannot see.
 
-## After adding or replacing a photo
+## Photos
 
-```
-python3 tools/make_photo_variants.py
-```
+The website never publishes an original photo. Originals live in `photos/`, which `tools/build-site.sh` leaves out of the published site. Every photo a page shows is a copy made from one of them by `tools/make_photo_variants.py`:
 
-This creates the smaller copies and updates the list in `netlify/guard/photo-variants.js`. Commit what it changes. A photo without copies still works: it stays full size in busy mode. The script needs Pillow (`pip install pillow`).
+- the web copy in `img/`: at most 1200 pixels wide (480 for grid thumbnails), compressed, with a visible Horizon Media watermark;
+- smaller busy-mode copies in `img/lite/` and `img/saver/`, also watermarked;
+- the list busy mode reads, `netlify/guard/photo-variants.js`.
+
+The team's small round profile pictures are not watermarked, because the mark would be unreadable at that size.
+
+### Adding or replacing a photo
+
+1. Put the original in `photos/`, at the same path the page will use under `img/`. For example, `photos/game-day.jpg` is shown as `img/game-day.jpg`.
+2. Add it to the page (`index.html` or `portfolio.html`) using the `img/` path.
+3. Run `python3 tools/make_photo_variants.py`. It needs Pillow (`pip install pillow`).
+4. Commit everything it changed, including the original in `photos/`.
+
+`npm test` fails if a photo on a page has no original, or if its copies are out of date.
+
+Photos added through the studio are shrunk and watermarked on the device before they are uploaded, so the original never leaves it.
+
+**This repository is public on GitHub**, so anything committed here, including `photos/`, can be downloaded from GitHub even though the website does not publish it. Make the repository private to keep the originals private; Netlify keeps working.
 
 ## Tests
 
