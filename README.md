@@ -37,7 +37,7 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 ## Photo protection
 
-`js/protect.js` discourages casual copying. It is not a security control: it cannot stop someone determined, and nothing relies on it. The real protection is that only watermarked, web-sized copies are published (see Photos).
+`js/protect.js` discourages casual copying. It is not a security control: it cannot stop someone determined, and nothing relies on it. The real protection is that only web-sized copies are published (see Photos).
 
 - Right-click and dragging are blocked on photos.
 - On computers, the photos blur when a screenshot shortcut is pressed or the visitor leaves the window, and sharpen when they come back. A note in the corner says so.
@@ -47,11 +47,11 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 The website never publishes an original photo. Originals live in `photos/`, which `tools/build-site.sh` leaves out of the published site. Every photo a page shows is a copy made from one of them by `tools/make_photo_variants.py`:
 
-- the web copy in `img/`: at most 1200 pixels wide (480 for grid thumbnails), compressed, with a visible Horizon Media watermark;
-- smaller busy-mode copies in `img/lite/` and `img/saver/`, also watermarked;
+- the web copy in `img/`: at most 1200 pixels wide (480 for grid thumbnails) and compressed;
+- smaller busy-mode copies in `img/lite/` and `img/saver/`;
 - the list busy mode reads, `netlify/guard/photo-variants.js`.
 
-The team's small round profile pictures are not watermarked, because the mark would be unreadable at that size.
+The script can also add a visible Horizon Media watermark to every copy: set `WATERMARK = True` at the top of it and run it with `--force`.
 
 ### Adding or replacing a photo
 
