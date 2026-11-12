@@ -72,7 +72,7 @@ The script can also add a visible Horizon Media watermark to every copy: set `WA
 
 `npm test` fails if a photo on a page has no original, or if its copies are out of date.
 
-Photos added through the studio are shrunk and watermarked on the device before they are uploaded, so the original never leaves it.
+Photos added through the studio are shrunk on the device before they are uploaded, so the original never leaves it. Turning on `WATERMARK` at the top of the studio's script in `netlify/studio/page.js` watermarks them too.
 
 **This repository is public on GitHub**, so anything committed here, including `photos/`, can be downloaded from GitHub even though the website does not publish it. Make the repository private to keep the originals private; Netlify keeps working.
 
