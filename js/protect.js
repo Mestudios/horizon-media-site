@@ -3,7 +3,7 @@
 // simply turn JavaScript off). Nothing should rely on this file.
 //
 // What actually protects the photos happens before they reach the browser:
-// the site only publishes watermarked, web-sized copies, and the originals
+// the site only publishes web-sized copies, and the originals
 // stay out of the public site (see tools/make_photo_variants.py).
 
 // 1. Saving: blocks the right-click menu and dragging on photos, which stops

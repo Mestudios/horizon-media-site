@@ -4,9 +4,8 @@
 The originals in photos/ are never published (tools/build-site.sh leaves the
 folder out). For each photo a page uses, this script writes into img/:
 
-  - the web copy the page shows: at most 1200 pixels wide, compressed, with a
-    visible Horizon Media watermark;
-  - the smaller busy-mode copies in img/lite/ and img/saver/, watermarked too;
+  - the web copy the page shows: at most 1200 pixels wide and compressed;
+  - the smaller busy-mode copies in img/lite/ and img/saver/;
   - the list busy mode reads (netlify/guard/photo-variants.js).
 
 Run it from anywhere after adding or replacing a photo:
@@ -42,6 +41,9 @@ SIZES = {
 }
 # A busy-mode copy is only kept if it is at most this fraction of the web copy's size.
 WORTHWHILE = 0.9
+# Whether copies get a visible Horizon Media watermark. Off for now; set it to
+# True and run with --force to add the mark to every photo.
+WATERMARK = False
 # Originals narrower than this (the team's round profile pictures) get no
 # watermark on any copy: it would be unreadable at that size.
 WATERMARK_MIN_WIDTH = 400
@@ -163,7 +165,7 @@ def watermark(image):
 def encode(image, max_width, quality):
     from PIL import Image
 
-    marked = image.width >= WATERMARK_MIN_WIDTH
+    marked = WATERMARK and image.width >= WATERMARK_MIN_WIDTH
     copy = image
     if copy.width > max_width:
         copy = copy.resize((max_width, round(copy.height * max_width / copy.width)), Image.LANCZOS)
@@ -234,7 +236,7 @@ def check(photos, manifest):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Make the website's watermarked photos from the originals in photos/.")
+    parser = argparse.ArgumentParser(description="Make the website's photos from the originals in photos/.")
     parser.add_argument("--check", action="store_true", help="change nothing; exit 1 if out of date")
     parser.add_argument("--force", action="store_true", help="remake everything")
     args = parser.parse_args()
