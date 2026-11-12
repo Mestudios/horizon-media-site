@@ -1,5 +1,10 @@
-// Photo protection. These are deterrents against casual copying, not locks:
-// anyone determined can still copy what their own screen shows.
+// Photo protection. NOT A SECURITY CONTROL: these are deterrents against
+// casual copying, and anyone determined can get round every one of them (or
+// simply turn JavaScript off). Nothing should rely on this file.
+//
+// What actually protects the photos happens before they reach the browser:
+// the site only publishes web-sized copies, and the originals
+// stay out of the public site (see tools/make_photo_variants.py).
 
 // 1. Saving: blocks the right-click menu and dragging on photos, which stops
 //    the quick "Save Image As…".

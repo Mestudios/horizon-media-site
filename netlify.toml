@@ -20,5 +20,8 @@
     X-Content-Type-Options = "nosniff"
     # Other sites learn only this site's address from links, not the page path.
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # Browsers must always use HTTPS for this site. (Netlify sends this too;
+    # it is listed here so it stays in place if that ever changes.)
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
     # The site never needs these device features.
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
