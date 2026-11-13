@@ -3,6 +3,7 @@
 //
 //   /studio                  sign in, then add or remove photos
 //   /portfolio-photos.json   the list of added photos (public; the portfolio page reads it)
+//   /announcements.json      announcements added in the studio (public; the homepage reads it)
 //   /uploads/<id>/full.jpg   an added photo (public), and /thumb.jpg its small copy
 //
 // Each sign-in is a pair of environment variables in Netlify: STUDIO_USERNAME and
@@ -19,6 +20,7 @@ const COOKIE = "hm_studio";
 const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending them
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
+const MAX_ANNOUNCEMENTS = 50;
 const SECURITY = { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
 
 const encoder = new TextEncoder();
@@ -87,6 +89,13 @@ export function createStudio() {
     return entry.count > 5;
   }
 
+  // Newest date first; on the same date, the most recently added first.
+  async function listAnnouncements() {
+    const { blobs } = await store().list({ prefix: "ann/" });
+    const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+    return items.sort((a, b) => b.date.localeCompare(a.date) || b.added - a.added);
+  }
+
   async function listPhotos() {
     const { blobs } = await store().list({ prefix: "meta/" });
     const photos = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
@@ -100,6 +109,9 @@ export function createStudio() {
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
       return json(await listPhotos(), 200, { "cache-control": "public, max-age=60" });
+    }
+    if (request.method === "GET" && url.pathname === "/announcements.json") {
+      return json(await listAnnouncements(), 200, { "cache-control": "public, max-age=60" });
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
@@ -172,6 +184,28 @@ export function createStudio() {
       await store().setJSON(`meta/${id}`, photo);
       console.log(`studio: added photo ${id}`);
       return json({ ok: true, photo });
+    }
+
+    if (url.pathname === "/studio/announce") {
+      const title = clean(form.get("title"), 80);
+      const text = clean(form.get("text"), 400);
+      const today = new Date(now).toISOString().slice(0, 10);
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get("date") || "")) ? String(form.get("date")) : today;
+      if (!title || !text) return json({ error: "Give the announcement a headline and some text." }, 400);
+      if ((await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
+      const id = hex(crypto.getRandomValues(new Uint8Array(8)));
+      const announcement = { id, title, text, date, added: now };
+      await store().setJSON(`ann/${id}`, announcement);
+      console.log(`studio: added announcement ${id}`);
+      return json({ ok: true, announcement });
+    }
+
+    if (url.pathname === "/studio/announce-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown announcement." }, 400);
+      await store().delete(`ann/${id}`);
+      console.log(`studio: removed announcement ${id}`);
+      return json({ ok: true });
     }
 
     if (url.pathname === "/studio/delete") {

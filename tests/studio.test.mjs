@@ -207,6 +207,25 @@ test("a car photo can credit the car's owner; other photos ignore it", async () 
   assert.equal(photos.find((p) => p.sport === "football").owner, undefined);
 });
 
+test("announcements: signed-in only, stored as plain text, newest date first, and removable", async () => {
+  assert.equal((await call("/studio/announce", { method: "POST", form: { title: "x", text: "y" } })).status, 401);
+  const cookie = await signIn();
+  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "", text: "y" } })).status, 400);
+  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "Older", text: "One", date: "2026-11-01" } })).status, 200);
+  const newer = await call("/studio/announce", { method: "POST", cookie, form: { title: "<b>Newer</b>", text: "Two <script>x</script>", date: "2026-11-20" } });
+  assert.equal(newer.status, 200);
+  const bad = await call("/studio/announce", { method: "POST", cookie, form: { title: "No date", text: "Three", date: "tomorrow" } });
+  assert.match(bad.body.announcement.date, /^\d{4}-\d{2}-\d{2}$/, "a bad date falls back to today");
+  const list = await call("/announcements.json");
+  assert.equal(list.headers.get("cache-control"), "public, max-age=60");
+  assert.deepEqual(list.body.map((a) => a.title).slice(0, 1), ["bNewer/b"]);
+  assert.equal(list.body[0].text, "Two scriptx/script");
+  assert.equal(list.body.at(-1).title, "Older");
+  assert.equal((await call("/studio/announce-delete", { method: "POST", cookie, form: { id: "nope" } })).status, 400);
+  assert.equal((await call("/studio/announce-delete", { method: "POST", cookie, form: { id: newer.body.announcement.id } })).status, 200);
+  assert.ok(!(await call("/announcements.json")).body.some((a) => a.id === newer.body.announcement.id));
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;

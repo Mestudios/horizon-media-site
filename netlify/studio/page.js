@@ -19,6 +19,12 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio li img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;display:block}
 .studio li b{display:block;font-size:14px;margin-top:6px}
 .studio li button{margin-top:6px;padding:8px 12px;font-size:13px}
+.studio h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:34px;margin:56px 0 4px}
+.studio textarea{width:100%;padding:12px;font:inherit;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:4px;resize:vertical}
+.studio .ann-admin{display:block}
+.studio .ann-admin li{padding:14px 0;border-bottom:1px solid var(--line)}
+.studio .ann-admin time{display:block;color:var(--flare-2);font-size:13px}
+.studio .ann-admin p{margin:4px 0 0;color:var(--dim);font-size:14px}
 .studio .team{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .studio .team button{margin:0;padding:8px 14px;min-height:40px;font:600 14px/1 var(--body);color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:999px;cursor:pointer}
 .studio .team button[aria-pressed=true]{background:var(--flare);border-color:var(--flare);color:#1a1402}
@@ -50,6 +56,15 @@ const signedIn = `<form id="add">
 <p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page within a minute.</p>
 <p role="status"></p></form>
 <ul id="photos"></ul>
+<h2>Announcements</h2>
+<p class="note">The newest three show on the homepage, newest date first.</p>
+<form id="announce">
+<label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
+<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="4" required></textarea>
+<label for="ann-date">Date</label><input id="ann-date" name="date" type="date" required>
+<button class="btn btn-hot">Post announcement</button>
+<p role="status"></p></form>
+<ul id="announcements" class="ann-admin"></ul>
 <script>
 const status = document.querySelector("#add [role=status]");
 const credit = document.getElementById("credit");
@@ -154,7 +169,51 @@ document.getElementById("logout").addEventListener("click", async () => {
   await fetch("/studio/logout", { method: "POST" });
   location.reload();
 });
+const announceForm = document.getElementById("announce");
+const announceStatus = announceForm.querySelector("[role=status]");
+const announceList = document.getElementById("announcements");
+const dateBox = document.getElementById("ann-date");
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+dateBox.value = today();
+
+async function refreshAnnouncements() {
+  const items = await (await fetch("/announcements.json", { cache: "no-store" })).json();
+  announceList.textContent = "";
+  for (const item of items) {
+    const row = document.createElement("li");
+    const when = document.createElement("time");
+    when.textContent = item.date;
+    const title = document.createElement("b");
+    title.textContent = item.title;
+    const text = document.createElement("p");
+    text.textContent = item.text;
+    const remove = document.createElement("button");
+    remove.className = "btn";
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", async () => {
+      remove.disabled = true;
+      const body = new FormData();
+      body.set("id", item.id);
+      const response = await fetch("/studio/announce-delete", { method: "POST", body });
+      announceStatus.textContent = response.ok ? "Removed." : (await response.json()).error;
+      refreshAnnouncements();
+    });
+    row.append(when, title, text, remove);
+    announceList.append(row);
+  }
+}
+
+announceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  announceStatus.textContent = "Posting...";
+  const response = await fetch("/studio/announce", { method: "POST", body: new FormData(announceForm) });
+  announceStatus.textContent = response.ok ? "Posted. It shows on the homepage within a minute." : (await response.json()).error;
+  if (response.ok) { announceForm.reset(); dateBox.value = today(); refreshAnnouncements(); }
+});
+
 refresh();
+refreshAnnouncements();
 </script>`;
 
 export function studioPage({ state }) {
