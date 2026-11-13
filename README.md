@@ -43,7 +43,7 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
-- The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public.
+- The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public. To give more people their own sign-in, add `STUDIO_USERNAME_2` and `STUDIO_PASSWORD_2`, then `_3`, up to `_5`; changing one person's password signs out only that person.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page, or on the car page when their category is Cars.
 - Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute.
 

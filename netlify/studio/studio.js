@@ -5,8 +5,9 @@
 //   /portfolio-photos.json   the list of added photos (public; the portfolio page reads it)
 //   /uploads/<id>/full.jpg   an added photo (public), and /thumb.jpg its small copy
 //
-// The sign-in is two environment variables in Netlify: STUDIO_USERNAME and
-// STUDIO_PASSWORD. Until both are set, signing in is switched off. They are
+// Each sign-in is a pair of environment variables in Netlify: STUDIO_USERNAME and
+// STUDIO_PASSWORD, then STUDIO_USERNAME_2 / STUDIO_PASSWORD_2 and so on up to _5
+// (see accounts()). Until one pair is set, signing in is switched off. They are
 // never written in this code, because this code is public. Photos are kept
 // in Netlify Blobs.
 import { getStore } from "@netlify/blobs";
@@ -27,10 +28,20 @@ const store = () => getStore({ name: "studio-photos", consistency: "strong" });
 
 const setting = (name) => globalThis.Netlify?.env?.get?.(name) || "";
 
-function password() {
-  const value = setting("STUDIO_PASSWORD");
-  // A short password, or no username, is treated as not set.
-  return value.length >= 12 && setting("STUDIO_USERNAME") !== "" ? value : null;
+const MAX_ACCOUNTS = 5;
+
+// The team's sign-ins: STUDIO_USERNAME and STUDIO_PASSWORD, then
+// STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5. A pair with no
+// username, or a password shorter than 12 characters, is ignored.
+function accounts() {
+  const found = [];
+  for (let n = 1; n <= MAX_ACCOUNTS; n++) {
+    const suffix = n === 1 ? "" : `_${n}`;
+    const username = setting(`STUDIO_USERNAME${suffix}`);
+    const password = setting(`STUDIO_PASSWORD${suffix}`);
+    if (username !== "" && password.length >= 12) found.push({ n, username, password });
+  }
+  return found;
 }
 
 // Compares two strings without leaking, through timing, how much of them matched.
@@ -41,15 +52,18 @@ async function same(a, b) {
   return diff === 0;
 }
 
-async function sign(expires, secret) {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(`studio-session:${secret}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return hex(await crypto.subtle.sign("HMAC", key, encoder.encode(String(expires))));
+// A session is signed with the account's own username and password, so
+// changing one account's password signs out only that account.
+async function sign(expires, account) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(`studio-session:${account.username}:${account.password}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return hex(await crypto.subtle.sign("HMAC", key, encoder.encode(`${account.n}:${expires}`)));
 }
 
-async function signedIn(request, secret, now) {
-  const match = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
+async function signedIn(request, list, now) {
+  const match = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.([1-9])\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
   if (!match || Number(match[1]) <= now) return false;
-  return same(match[2], await sign(match[1], secret));
+  const account = list.find((a) => a.n === Number(match[2]));
+  return account !== undefined && same(match[3], await sign(match[1], account));
 }
 
 const reply = (body, status = 200, headers = {}) =>
@@ -97,12 +111,12 @@ export function createStudio() {
     if (!url.pathname.startsWith("/studio")) return;
 
     // ---- Private: everything under /studio
-    const secret = password();
-    if (secret === null) return reply(studioPage({ state: "off" }), 503);
+    const list = accounts();
+    if (list.length === 0) return reply(studioPage({ state: "off" }), 503);
 
     if (request.method === "GET") {
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
-      return reply(studioPage({ state: (await signedIn(request, secret, now)) ? "in" : "out" }));
+      return reply(studioPage({ state: (await signedIn(request, list, now)) ? "in" : "out" }));
     }
     if (request.method !== "POST") return reply("Not allowed", 405);
     // Forms must come from this site itself.
@@ -111,23 +125,31 @@ export function createStudio() {
     if (url.pathname === "/studio/login") {
       if (tooManyAttempts(context.ip || "unknown", now)) return json({ error: "Too many tries. Wait a minute." }, 429);
       const form = await request.formData();
-      // Check both every time, so the reply does not reveal which one was wrong.
-      const nameOk = await same(String(form.get("username") || ""), setting("STUDIO_USERNAME"));
-      const passwordOk = await same(String(form.get("password") || ""), secret);
-      if (!nameOk || !passwordOk) {
+      // Check every account, both fields each time, so the reply does not reveal
+      // which account exists or which field was wrong.
+      const username = String(form.get("username") || "");
+      const password = String(form.get("password") || "");
+      let account;
+      for (const candidate of list) {
+        const nameOk = await same(username, candidate.username);
+        const passwordOk = await same(password, candidate.password);
+        if (nameOk && passwordOk && account === undefined) account = candidate;
+      }
+      if (account === undefined) {
         console.warn(`studio: failed sign-in from ${context.ip}`);
         return json({ error: "Wrong username or password." }, 401);
       }
+      console.log(`studio: ${account.username} signed in`);
       const expires = now + SESSION_HOURS * 3_600_000;
       return json({ ok: true }, 200, {
-        "set-cookie": `${COOKIE}=${expires}.${await sign(expires, secret)}; Max-Age=${SESSION_HOURS * 3600}; Path=/studio; Secure; HttpOnly; SameSite=Strict`,
+        "set-cookie": `${COOKIE}=${expires}.${account.n}.${await sign(expires, account)}; Max-Age=${SESSION_HOURS * 3600}; Path=/studio; Secure; HttpOnly; SameSite=Strict`,
       });
     }
     if (url.pathname === "/studio/logout") {
       return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=; Max-Age=0; Path=/studio; Secure; HttpOnly; SameSite=Strict` });
     }
 
-    if (!(await signedIn(request, secret, now))) return json({ error: "Sign in first." }, 401);
+    if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
     const form = await request.formData();
 
     if (url.pathname === "/studio/upload") {

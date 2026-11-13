@@ -68,6 +68,24 @@ test("a password without a username also leaves it switched off", async () => {
   assert.equal((await call("/studio")).status, 503);
 });
 
+test("a second sign-in (STUDIO_USERNAME_2 / STUDIO_PASSWORD_2) works on its own, and short or half-set pairs are ignored", async () => {
+  const env = { STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "second-person", STUDIO_PASSWORD_2: "another long password", STUDIO_USERNAME_3: "too-short", STUDIO_PASSWORD_3: "short", STUDIO_PASSWORD_4: "no username for this one" };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  const second = await call("/studio/login", { method: "POST", form: { username: "second-person", password: "another long password" } });
+  assert.equal(second.status, 200);
+  const cookie = second.headers.get("set-cookie").split(";")[0];
+  assert.match(cookie, /^hm_studio=\d{13}\.2\./);
+  assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 200, "the second person can add photos");
+  for (const form of [{ username: "second-person", password: PASSWORD }, { username: USERNAME, password: "another long password" }, { username: "too-short", password: "short" }, { username: "", password: "no username for this one" }]) {
+    assert.equal((await call("/studio/login", { method: "POST", form, ip: "198.51.100.77" })).status, 401, JSON.stringify(form));
+  }
+  // Changing the second password signs out only the second person.
+  const first = (await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD } })).headers.get("set-cookie").split(";")[0];
+  env.STUDIO_PASSWORD_2 = "a brand new password";
+  assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 401);
+  assert.equal((await call("/studio/upload", { method: "POST", cookie: first, form: photo() })).status, 200);
+});
+
 test("the sign-in page shows no tools until the password is given", async () => {
   const page = await call("/studio");
   assert.equal(page.status, 200);
@@ -86,7 +104,7 @@ test("a wrong password is refused, the right one signs in", async () => {
   }
 
   const cookie = await signIn();
-  assert.match(cookie, /^hm_studio=\d{13}\.[0-9a-f]{64}$/);
+  assert.match(cookie, /^hm_studio=\d{13}\.1\.[0-9a-f]{64}$/);
   const page = await call("/studio", { cookie });
   assert.match(page.body, /id="add"/);
 });
@@ -95,9 +113,10 @@ test("the session cookie is locked down and cannot be forged or extended", async
   const reply = await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD } });
   const header = reply.headers.get("set-cookie");
   for (const part of ["Path=/studio", "Secure", "HttpOnly", "SameSite=Strict", "Max-Age=43200"]) assert.ok(header.includes(part), part);
-  const [expires, signature] = header.split(";")[0].split("=")[1].split(".");
+  const [expires, n, signature] = header.split(";")[0].split("=")[1].split(".");
+  assert.equal(n, "1");
   const later = String(Number(expires) + 86_400_000);
-  for (const forged of [`hm_studio=${later}.${signature}`, `hm_studio=${expires}.${"0".repeat(64)}`, `hm_studio=${Date.now() - 1000}.${signature}`, "hm_studio=1"]) {
+  for (const forged of [`hm_studio=${later}.1.${signature}`, `hm_studio=${expires}.1.${"0".repeat(64)}`, `hm_studio=${Date.now() - 1000}.1.${signature}`, `hm_studio=${expires}.2.${signature}`, `hm_studio=${expires}.${signature}`, "hm_studio=1"]) {
     assert.equal((await call("/studio/upload", { method: "POST", cookie: forged, form: photo() })).status, 401, forged);
     assert.doesNotMatch((await call("/studio", { cookie: forged })).body, /id="add"/);
   }
