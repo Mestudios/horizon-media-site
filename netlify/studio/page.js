@@ -12,6 +12,8 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio input,.studio select{width:100%;padding:12px;font:inherit;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:4px}
 .studio button{margin-top:20px}
 .studio .note{color:var(--dim);font-size:14px}
+#login button{display:block;margin:28px auto 0;padding:16px 48px;min-width:240px;font-size:19px}
+#login [role=status]{text-align:center}
 .studio [role=status]{min-height:1.5em;margin-top:14px;color:var(--flare-2)}
 .studio ul{list-style:none;padding:0;margin:28px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .studio li img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;display:block}
