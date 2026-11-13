@@ -19,7 +19,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio li img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;display:block}
 .studio li b{display:block;font-size:14px;margin-top:6px}
 .studio li button{margin-top:8px;padding:10px 18px;min-height:44px;font-size:15px}
-.studio .btn-danger{border-color:#b3261e;color:#ff7b70}
+.studio .btn-danger{border-color:#b3261e;color:var(--danger)}
 .studio .btn-danger:hover{background:#b3261e;border-color:#b3261e;color:#fff}
 .studio h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:34px;margin:56px 0 4px}
 .studio textarea{width:100%;padding:12px;font:inherit;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:4px;resize:vertical}

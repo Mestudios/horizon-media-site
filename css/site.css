@@ -21,6 +21,7 @@
   --accent-2: var(--flare-2);
   --soft: #c9c9c9;
   --soft-2: #d0d0d0;
+  --danger: #ff7b70;
   color-scheme: dark;
 }
 
@@ -29,13 +30,13 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --night: #f6f4ef; --panel: #ffffff; --line: #ddd8cc; --chalk: #141414; --dim: #5e5e5e;
-    --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e;
+    --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e; --danger: #b3261e;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --night: #f6f4ef; --panel: #ffffff; --line: #ddd8cc; --chalk: #141414; --dim: #5e5e5e;
-  --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e;
+  --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e; --danger: #b3261e;
   color-scheme: light;
 }
 /* Text laid over photos, and the photo viewer, stay light-on-dark in both modes. */
