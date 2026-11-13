@@ -8,6 +8,9 @@
 <link rel="icon" type="image/png" href="img/favicon.png">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Horizon">
+<script>try{var t=localStorage.getItem("hm-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Horizon Media">
 <meta property="og:title" content="Portfolio · Horizon Media">
@@ -22,6 +25,7 @@
     <div class="nav-links">
       <a href="portfolio.html" class="nav-keep" aria-current="page">Portfolio</a>
       <a href="cars.html">Cars</a>
+      <a href="presets.html">Presets</a>
       <a href="./#team">Team</a>
       <a href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8" class="nav-cta">Book coverage</a>
     </div>
@@ -97,22 +101,42 @@
 </section>
 
 <div class="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
-  <img alt="">
+  <canvas class="viewer-photo" role="img" aria-label=""></canvas>
   <button type="button" class="viewer-close" aria-label="Close">&times;</button>
   <button type="button" class="viewer-prev" aria-label="Previous photo">&lsaquo;</button>
   <button type="button" class="viewer-next" aria-label="Next photo">&rsaquo;</button>
-  <div class="viewer-bar"><p class="viewer-cap"></p><span class="viewer-count"></span></div>
+  <div class="viewer-bar"><p class="viewer-cap"></p><span class="viewer-count"></span><button type="button" class="btn btn-hot viewer-request">Request this photo</button></div>
+  <form class="request" hidden>
+    <button type="button" class="request-close" aria-label="Close the request form">&times;</button>
+    <h2>Request this photo</h2>
+    <p class="request-for">Photo: <b class="request-photo"></b></p>
+    <div class="request-fields">
+      <input type="hidden" name="photo"><input type="hidden" name="title">
+      <label for="request-name">Your name</label><input id="request-name" name="name" maxlength="60" autocomplete="name" required>
+      <label for="request-contact">Instagram name or email</label><input id="request-contact" name="contact" maxlength="100" autocapitalize="none" placeholder="@yourname or you@email.com" required>
+      <label for="request-message">Anything else? (optional)</label><textarea id="request-message" name="message" maxlength="500" rows="3" placeholder="Which game, who is in it, what you need it for"></textarea>
+      <div class="request-trap" aria-hidden="true"><label for="request-website">Leave this empty</label><input id="request-website" name="website" tabindex="-1" autocomplete="off"></div>
+      <p class="request-note">We only use this to reply to you. See our <a href="privacy.html">privacy page</a>.</p>
+      <div class="btns"><button type="submit" class="btn btn-hot">Send request</button><button type="button" class="btn request-cancel">Cancel</button></div>
+    </div>
+    <div class="request-done" hidden>
+      <p>Thanks! We got your request and will reach out to you.</p>
+      <p>In a hurry? <a href="https://ig.me/m/hor1zonmedia">Message us on Instagram</a>.</p>
+    </div>
+    <p role="status"></p>
+  </form>
 </div>
 
 <footer>
   <div class="wrap">
     <div class="foot-brand"><a class="logo" href="./"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a><p>Sports content, done right.</p></div>
-    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:horzion.media418@gmail.com">Email</a></nav>
+    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:horzion.media418@gmail.com">Email</a></nav>
     <p class="foot-copy">© 2026 Horizon Media. All photos belong to their photographers.</p>
   </div>
 </footer>
 
 <script src="js/protect.js"></script>
 <script src="js/portfolio.js"></script>
+<script src="js/site.js"></script>
 </body>
 </html>

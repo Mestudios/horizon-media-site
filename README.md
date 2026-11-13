@@ -37,16 +37,32 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 ## Portfolio page, car page and the studio
 
-`portfolio.html` shows the portfolio: a grid with a sport filter and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
+`portfolio.html` shows the portfolio: a grid and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
+
+The viewer draws each photo onto a canvas with the Horizon Media mark on it, so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 200 wait in the inbox at once, and a hidden field catches simple bots.
 
 `cars.html` is the car photography page. It uses the same grid and viewer; its photos go in `photos/cars/` and are listed in the page like the portfolio's.
 
 The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
+- Several photos can be picked and uploaded at once; they share the title, credit and category.
+- **On the site** lists every photo built into the portfolio and car pages. Remove takes one off the site (it is listed in Netlify Blobs and the pages leave it out); Put back shows it again. Its file stays in the repository; to delete it for good, remove it from the page in code.
+- **Photo requests** lists what visitors asked for. Done deletes a request.
+
 - The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public. To give more people their own sign-in, add `STUDIO_USERNAME_2` and `STUDIO_PASSWORD_2`, then `_3`, up to `_5`; changing one person's password signs out only that person.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page, or on the car page when their category is Cars.
-- Signed-in team members can also post, edit and remove **announcements**, each with an optional link to a page of the site or an https address. They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
+- Signed-in team members can also post, edit and remove **announcements**, each with an optional link to a page of the site or an https address. An announcement goes up on its date (a future date schedules it) and, if it has a "comes down after" date, comes down after that day. Days follow New York time (`TIME_ZONE` in `netlify/studio/studio.js`). They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
 - Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute.
+
+## Presets page
+
+`presets.html` will hold free Lightroom presets. For now it says they are coming soon. To add one, put the .dng and .xmp files in a folder such as `presets/`, add a before-and-after photo, and replace a "Coming soon" card with download links. The terms page already covers how the presets may be used.
+
+## Light and dark mode, and the app icon
+
+The site follows the visitor's phone or computer setting for light or dark mode. The round switch in the menu bar overrides it, and the choice is saved in that browser only (`js/site.js`). The colours for both modes are at the top of `css/site.css`; text over photos and the photo viewer stay dark in both.
+
+`manifest.webmanifest` and the icons in `img/icon-*.png` let visitors add the site to their home screen like an app. On Android and computers, an "Add to home screen" button appears in the footer when the browser offers it; on iPhones it is in Safari's Share menu.
 
 ## Photo protection
 
