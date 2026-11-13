@@ -43,7 +43,7 @@ const signedIn = `<form id="add">
   const options = sports.map(([value, label]) => `<option value="${value}">${label.replace("&", "&amp;")}</option>`).join("");
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
 }).join("")}</select>
-<label for="owner">Car owner's Instagram name (car photos only, optional)</label><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
+<label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Blur license plates before uploading a car photo: the site's privacy page promises they are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
 <p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page within a minute.</p>
 <p role="status"></p></form>
