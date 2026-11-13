@@ -85,6 +85,8 @@ img { max-width: 100%; }
 .board div { padding: 18px 12px; text-align: center; border-left: 1px solid var(--line); }
 .board div:first-child { border-left: 0; }
 .board b { display: block; font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: .04em; text-transform: uppercase; }
+.board a { display: block; color: inherit; text-decoration: none; }
+.board a:hover b { color: var(--flare); }
 .board span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
 @media (max-width: 640px) {
   .board .wrap { grid-template-columns: repeat(2, 1fr); }
@@ -186,9 +188,10 @@ footer p { margin: 8px 0 0; }
 /* ===== Portfolio page ===== */
 .nav-links a[aria-current="page"] { color: var(--chalk); }
 .page-top { padding: clamp(56px, 9vw, 96px) 0 8px; border-bottom: 1px solid var(--line); background: radial-gradient(80% 120% at 0% 0%, rgba(255,198,26,.10), transparent 60%); }
-.page-top .hero-copy { margin-bottom: 40px; }
+.page-top .hero-copy { margin-bottom: 20px; }
+.page-cta { margin: 0 0 40px; display: flex; flex-wrap: wrap; gap: 12px; }
 .rule-left { margin: 24px 0; }
-.portfolio { padding-top: 40px; }
+.portfolio { padding: 40px 0 64px; }
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
 .filters button {
@@ -207,6 +210,7 @@ footer p { margin: 8px 0 0; }
   position: relative; aspect-ratio: 3 / 4; overflow: hidden; padding: 0; border: 0; border-radius: 6px;
   background: var(--panel); cursor: zoom-in; display: block; width: 100%;
 }
+.shot[hidden] { display: none; }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
 .shot-info {
   position: absolute; inset: auto 0 0 0; padding: 40px 12px 12px; text-align: left;
@@ -284,3 +288,8 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 .legal p, .legal li { color: #d0d0d0; }
 .legal .updated { color: var(--dim); font-size: 14px; margin: 0; }
 .legal a { color: var(--flare-2); }
+
+/* Car photography: homepage band, and the gallery's empty state on cars.html */
+.cars-band { border-bottom: 1px solid var(--line); background: radial-gradient(70% 120% at 100% 0%, rgba(255,198,26,.10), transparent 60%); }
+.cars-band .lede { margin-bottom: 28px; }
+.gallery-empty { color: var(--dim); margin: 0; }

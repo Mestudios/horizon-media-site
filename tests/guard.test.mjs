@@ -127,7 +127,8 @@ async function crowd(handler, count) {
 }
 
 const recordedVisits = async () => (await getStore("site-guard").list()).blobs.map(({ key }) => key);
-const pagePhotos = [...PAGE.matchAll(/(?:\ssrc="|url\(')(img\/[^"')]+\.jpe?g)/g)].map((match) => match[1]);
+const ALL_PAGES = PAGE + readFileSync(join(ROOT, "portfolio.html"), "utf8") + readFileSync(join(ROOT, "cars.html"), "utf8");
+const pagePhotos = [...new Set([...ALL_PAGES.matchAll(/(?:\s(?:src|data-full)="|url\(')(img\/[^"')]+\.jpe?g)/g)].map((match) => match[1]))].filter((path) => !path.includes("/thumb/"));
 
 // ---- The user's rule: more than 10 at once -> smaller photos ----------------
 
@@ -441,7 +442,10 @@ test("every photo on the page has up-to-date watermarked copies made from an ori
       previous = size;
     }
   }
-  for (const photo of Object.keys(photoVariants)) assert.ok(pagePhotos.includes(photo), `${photo} is listed but not on the page (${hint})`);
+  for (const photo of Object.keys(photoVariants)) {
+    if (photo.includes("/thumb/")) continue; // grid thumbnails are listed too, with no busy-mode copies
+    assert.ok(pagePhotos.includes(photo), `${photo} is listed but not on the page (${hint})`);
+  }
 });
 
 // ---- When things go wrong ---------------------------------------------------
@@ -512,7 +516,7 @@ test("the function Netlify runs is the guard, in front of the homepage only", as
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },
@@ -557,7 +561,7 @@ test("the published folder holds the website and none of the project's own files
   try {
     execFileSync("sh", [join(ROOT, "tools/build-site.sh"), out], { stdio: "pipe" });
     const published = readdirSync(out, { recursive: true }).map((path) => String(path).replaceAll("\\", "/"));
-    for (const needed of ["index.html", "css/site.css", "js/protect.js", "img/og-image.jpg", ...pagePhotos, ...Object.values(photoVariants).flatMap(({ lite, saver }) => [lite, saver])]) {
+    for (const needed of ["index.html", "css/site.css", "js/protect.js", "img/og-image.jpg", ...pagePhotos, ...Object.values(photoVariants).flatMap(({ lite, saver }) => [lite, saver]).filter(Boolean), ...Object.keys(photoVariants)]) {
       assert.ok(published.includes(needed), `${needed} is published`);
     }
     assert.ok(!published.some((path) => path.startsWith("photos")), "the original photos are not published");
