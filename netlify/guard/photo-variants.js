@@ -2,6 +2,86 @@
 // Every photo the pages show, the original (in photos/) it was made from, and,
 // for busy mode, where its smaller copies are.
 export default {
+  "img/cars/cockpit.jpg": {
+    "source": "e7ae4abee9e8eec5",
+    "lite": "img/lite/cars/cockpit.jpg",
+    "saver": "img/saver/cars/cockpit.jpg"
+  },
+  "img/cars/green-machine.jpg": {
+    "source": "2364218df8840599",
+    "lite": "img/lite/cars/green-machine.jpg",
+    "saver": "img/saver/cars/green-machine.jpg"
+  },
+  "img/cars/grille.jpg": {
+    "source": "138d7e3d9df3a447",
+    "lite": "img/lite/cars/grille.jpg",
+    "saver": "img/saver/cars/grille.jpg"
+  },
+  "img/cars/mountain-meet.jpg": {
+    "source": "ecac9ba8df327a4b",
+    "lite": "img/lite/cars/mountain-meet.jpg",
+    "saver": "img/saver/cars/mountain-meet.jpg"
+  },
+  "img/cars/nose.jpg": {
+    "source": "86b01dc65509f870",
+    "lite": "img/lite/cars/nose.jpg",
+    "saver": "img/saver/cars/nose.jpg"
+  },
+  "img/cars/overlook.jpg": {
+    "source": "69ff95d4ef2d9735",
+    "lite": "img/lite/cars/overlook.jpg",
+    "saver": "img/saver/cars/overlook.jpg"
+  },
+  "img/cars/pulling-in.jpg": {
+    "source": "8ed89444bc048335",
+    "lite": "img/lite/cars/pulling-in.jpg",
+    "saver": "img/saver/cars/pulling-in.jpg"
+  },
+  "img/cars/rear-wing.jpg": {
+    "source": "2d566789ab9fda4e",
+    "lite": "img/lite/cars/rear-wing.jpg",
+    "saver": "img/saver/cars/rear-wing.jpg"
+  },
+  "img/cars/rolling-out.jpg": {
+    "source": "9cf85591d82c5e52",
+    "lite": "img/lite/cars/rolling-out.jpg",
+    "saver": "img/saver/cars/rolling-out.jpg"
+  },
+  "img/cars/thumb/cockpit.jpg": {
+    "source": "e7ae4abee9e8eec5"
+  },
+  "img/cars/thumb/green-machine.jpg": {
+    "source": "2364218df8840599"
+  },
+  "img/cars/thumb/grille.jpg": {
+    "source": "138d7e3d9df3a447"
+  },
+  "img/cars/thumb/mountain-meet.jpg": {
+    "source": "ecac9ba8df327a4b"
+  },
+  "img/cars/thumb/nose.jpg": {
+    "source": "86b01dc65509f870"
+  },
+  "img/cars/thumb/overlook.jpg": {
+    "source": "69ff95d4ef2d9735"
+  },
+  "img/cars/thumb/pulling-in.jpg": {
+    "source": "8ed89444bc048335"
+  },
+  "img/cars/thumb/rear-wing.jpg": {
+    "source": "2d566789ab9fda4e"
+  },
+  "img/cars/thumb/rolling-out.jpg": {
+    "source": "9cf85591d82c5e52"
+  },
+  "img/cars/thumb/wheel.jpg": {
+    "source": "4ec0224ab2131375"
+  },
+  "img/cars/wheel.jpg": {
+    "source": "4ec0224ab2131375",
+    "lite": "img/lite/cars/wheel.jpg",
+    "saver": "img/saver/cars/wheel.jpg"
+  },
   "img/celebration.jpg": {
     "source": "7ff00c6817c2f54d",
     "lite": "img/lite/celebration.jpg",
