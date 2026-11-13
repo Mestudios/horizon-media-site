@@ -18,7 +18,9 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio ul{list-style:none;padding:0;margin:28px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .studio li img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;display:block}
 .studio li b{display:block;font-size:14px;margin-top:6px}
-.studio li button{margin-top:6px;padding:8px 12px;font-size:13px}
+.studio li button{margin-top:8px;padding:10px 18px;min-height:44px;font-size:15px}
+.studio .btn-danger{border-color:#b3261e;color:#ff7b70}
+.studio .btn-danger:hover{background:#b3261e;border-color:#b3261e;color:#fff}
 .studio h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:34px;margin:56px 0 4px}
 .studio textarea{width:100%;padding:12px;font:inherit;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:4px;resize:vertical}
 .studio .ann-admin{display:block}
@@ -153,10 +155,11 @@ async function refresh() {
     const title = document.createElement("b");
     title.textContent = photo.title;
     const remove = document.createElement("button");
-    remove.className = "btn";
+    remove.className = "btn btn-danger";
     remove.type = "button";
     remove.textContent = "Remove";
     remove.addEventListener("click", async () => {
+      if (!confirm('Remove "' + photo.title + '" from the site? This deletes it for good.')) return;
       remove.disabled = true;
       const body = new FormData();
       body.set("id", photo.id);
@@ -318,10 +321,11 @@ async function refreshAnnouncements() {
       announceForm.scrollIntoView({ behavior: "smooth" });
     });
     const remove = document.createElement("button");
-    remove.className = "btn";
+    remove.className = "btn btn-danger";
     remove.type = "button";
     remove.textContent = "Remove";
     remove.addEventListener("click", async () => {
+      if (!confirm('Remove the announcement "' + item.title + '"? This cannot be undone.')) return;
       remove.disabled = true;
       const body = new FormData();
       body.set("id", item.id);
