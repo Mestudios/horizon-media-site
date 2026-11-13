@@ -23,8 +23,8 @@
     title.textContent = shot.dataset.title;
     const link = document.createElement("a");
     link.href = shot.dataset.post;
-    link.textContent = shot.dataset.credit ? "See more on Instagram" : "See the post on Instagram";
-    caption.append(title, `Photo by @${shot.dataset.credit || "cb.framed.it"}. `, link);
+    link.textContent = shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
+    caption.append(title, `Photo by @${shot.dataset.credit}. `, link);
     count.textContent = `${open + 1} / ${list.length}`;
   }
 

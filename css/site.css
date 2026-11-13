@@ -186,7 +186,8 @@ footer p { margin: 8px 0 0; }
 /* ===== Portfolio page ===== */
 .nav-links a[aria-current="page"] { color: var(--chalk); }
 .page-top { padding: clamp(56px, 9vw, 96px) 0 8px; border-bottom: 1px solid var(--line); background: radial-gradient(80% 120% at 0% 0%, rgba(255,198,26,.10), transparent 60%); }
-.page-top .hero-copy { margin-bottom: 40px; }
+.page-top .hero-copy { margin-bottom: 20px; }
+.page-cta { margin: 0 0 40px; }
 .rule-left { margin: 24px 0; }
 .portfolio { padding: 40px 0 64px; }
 
