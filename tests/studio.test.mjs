@@ -13,6 +13,8 @@ const { createStudio } = await import("../netlify/studio/studio.js");
 const SITE = "https://horizon.example";
 const USERNAME = "studio-owner";
 const PASSWORD = "correct horse battery";
+// Today on the studio's calendar (it runs on New York time).
+const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6]);
 let blobs, directory, port, site = 0, studio;
 
@@ -139,7 +141,7 @@ test("requests from another site are refused", async () => {
 test("nobody can add or remove photos without signing in", async () => {
   assert.equal((await call("/studio/upload", { method: "POST", form: photo() })).status, 401);
   assert.equal((await call("/studio/delete", { method: "POST", form: { id: "0123456789abcdef" } })).status, 401);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, []);
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
 });
 
 test("a signed-in upload appears in the public list and can be fetched", async () => {
@@ -151,8 +153,8 @@ test("a signed-in upload appears in the public list and can be fetched", async (
 
   const list = await call("/portfolio-photos.json");
   assert.equal(list.headers.get("cache-control"), "public, max-age=60");
-  assert.equal(list.body.length, 1);
-  assert.deepEqual({ ...list.body[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 });
+  assert.equal(list.body.photos.length, 1);
+  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 });
 
   for (const size of ["full", "thumb"]) {
     const image = await call(`/uploads/${id}/${size}.jpg`);
@@ -172,13 +174,13 @@ test("uploads that are not JPEG photos, or are too large, are refused", async ()
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ thumb: html }) })).status, 415);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ full: new Blob([JPEG, new Uint8Array(1_500_001)]) }) })).status, 413);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: { title: "x", credit: "y", sport: "football" } })).status, 400);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, []);
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
 });
 
 test("titles and credits are stored as plain text", async () => {
   const cookie = await signIn();
   await call("/studio/upload", { method: "POST", cookie, form: photo({ title: '<img src=x onerror=alert(1)> Win', credit: "@@<b>name</b>", sport: "curling" }) });
-  const [stored] = (await call("/portfolio-photos.json")).body;
+  const [stored] = (await call("/portfolio-photos.json")).body.photos;
   assert.equal(stored.title, "img src=x onerror=alert(1) Win");
   assert.equal(stored.credit, "bname/b");
   assert.equal(stored.sport, "other");
@@ -202,7 +204,7 @@ test("a car photo can credit the car's owner; other photos ignore it", async () 
   const cookie = await signIn();
   await call("/studio/upload", { method: "POST", cookie, form: photo({ sport: "cars", owner: "@@<b>owner</b>" }) });
   await call("/studio/upload", { method: "POST", cookie, form: photo({ sport: "football", owner: "someone" }) });
-  const photos = (await call("/portfolio-photos.json")).body;
+  const photos = (await call("/portfolio-photos.json")).body.photos;
   assert.equal(photos.find((p) => p.sport === "cars").owner, "bowner/b");
   assert.equal(photos.find((p) => p.sport === "football").owner, undefined);
 });
@@ -211,16 +213,17 @@ test("announcements: signed-in only, stored as plain text, newest date first, an
   assert.equal((await call("/studio/announce", { method: "POST", form: { title: "x", text: "y" } })).status, 401);
   const cookie = await signIn();
   assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "", text: "y" } })).status, 400);
-  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "Older", text: "One", date: "2026-11-01" } })).status, 200);
-  const newer = await call("/studio/announce", { method: "POST", cookie, form: { title: "<b>Newer</b>", text: "Two <script>x</script>", date: "2026-11-20" } });
+  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "Older", text: "One", date: "2000-11-01" } })).status, 200);
+  const newer = await call("/studio/announce", { method: "POST", cookie, form: { title: "<b>Newer</b>", text: "Two <script>x</script>", date: TODAY } });
   assert.equal(newer.status, 200);
-  const bad = await call("/studio/announce", { method: "POST", cookie, form: { title: "No date", text: "Three", date: "tomorrow" } });
-  assert.match(bad.body.announcement.date, /^\d{4}-\d{2}-\d{2}$/, "a bad date falls back to today");
   const list = await call("/announcements.json");
   assert.equal(list.headers.get("cache-control"), "public, max-age=60");
   assert.deepEqual(list.body.map((a) => a.title).slice(0, 1), ["bNewer/b"]);
   assert.equal(list.body[0].text, "Two scriptx/script");
   assert.equal(list.body.at(-1).title, "Older");
+  const bad = await call("/studio/announce", { method: "POST", cookie, form: { title: "No date", text: "Three", date: "tomorrow" } });
+  assert.match(bad.body.announcement.date, /^\d{4}-\d{2}-\d{2}$/, "a bad date falls back to today");
+  assert.equal(bad.body.announcement.date, TODAY);
   assert.equal((await call("/studio/announce-delete", { method: "POST", cookie, form: { id: "nope" } })).status, 400);
   assert.equal((await call("/studio/announce-delete", { method: "POST", cookie, form: { id: newer.body.announcement.id } })).status, 200);
   assert.ok(!(await call("/announcements.json")).body.some((a) => a.id === newer.body.announcement.id));
@@ -253,12 +256,76 @@ test("announcement links must be a page of this site or an https address", async
   assert.equal(noLinkText.body.announcement.linkText, "Read more");
 });
 
+test("scheduled announcements go up on their date and come down after their end date", async () => {
+  const cookie = await signIn();
+  const post = (form) => call("/studio/announce", { method: "POST", cookie, form: { text: "x", ...form } });
+  assert.equal((await post({ title: "Backwards", date: "2026-05-02", until: "2026-05-01" })).status, 400);
+  assert.equal((await post({ title: "Scheduled", date: "2099-01-01" })).status, 200);
+  assert.equal((await post({ title: "Ended", date: "2000-01-01", until: "2000-01-02" })).status, 200);
+  assert.equal((await post({ title: "Running", date: "2000-01-01", until: "2099-01-01" })).status, 200);
+  assert.equal((await post({ title: "Last day", date: "2000-01-01", until: TODAY })).status, 200);
+  const shown = (await call("/announcements.json")).body.map((a) => a.title);
+  assert.ok(shown.includes("Running") && shown.includes("Last day"));
+  assert.ok(!shown.includes("Scheduled") && !shown.includes("Ended"));
+
+  // The studio sees every announcement, and today's date to label them.
+  assert.equal((await call("/studio/announcements.json")).status, 401);
+  const all = (await call("/studio/announcements.json", { cookie })).body;
+  assert.equal(all.today, TODAY);
+  for (const title of ["Scheduled", "Ended", "Running"]) assert.ok(all.items.some((a) => a.title === title), title);
+  assert.equal(all.items.find((a) => a.title === "Running").until, "2099-01-01");
+});
+
+test("built-in photos can be taken off the site and put back, by signed-in team members only", async () => {
+  const form = { path: "img/portfolio/golden-hour.jpg" };
+  assert.equal((await call("/studio/hide", { method: "POST", form })).status, 401);
+  const cookie = await signIn();
+  for (const path of ["img/../netlify/x.jpg", "uploads/0123456789abcdef/full.jpg", "img/hero-sunset.jpg", "https://evil.example/a.jpg"]) {
+    assert.equal((await call("/studio/hide", { method: "POST", cookie, form: { path } })).status, 400, path);
+  }
+  assert.equal((await call("/studio/hide", { method: "POST", cookie, form })).status, 200);
+  await call("/studio/hide", { method: "POST", cookie, form }); // twice is still once
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } });
+  assert.deepEqual((await call("/portfolio-photos.json")).body.hidden, ["img/portfolio/golden-hour.jpg", "img/cars/grille.jpg"]);
+  assert.equal((await call("/studio/unhide", { method: "POST", cookie, form })).status, 200);
+  assert.deepEqual((await call("/portfolio-photos.json")).body.hidden, ["img/cars/grille.jpg"]);
+});
+
+test("visitors can request a photo; only the team can read requests, and Done deletes them", async () => {
+  const ask = (form, options = {}) => call("/photo-request", { method: "POST", form: { photo: "img/portfolio/golden-hour.jpg", title: "Golden hour", name: "Sam", contact: "@sam", ...form }, ...options });
+  assert.equal((await call("/photo-request")).status, 405);
+  assert.equal((await ask({}, { origin: "https://evil.example" })).status, 403);
+  assert.equal((await ask({ photo: "netlify/studio/studio.js" })).status, 400);
+  assert.equal((await ask({ name: "" })).status, 400);
+  assert.equal((await ask({ contact: "" })).status, 400);
+  assert.equal((await ask({ website: "spam.example" })).status, 200, "a bot gets a quiet yes");
+  assert.equal((await ask({ name: "<b>Sam</b>", message: "For my <script>mom</script>" })).status, 200);
+  assert.equal((await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" })).status, 200);
+
+  assert.equal((await call("/studio/requests.json")).status, 401);
+  const cookie = await signIn();
+  const requests = (await call("/studio/requests.json", { cookie })).body;
+  assert.equal(requests.length, 2, "the bot's request was not stored");
+  const sam = requests.find((r) => r.photo === "img/portfolio/golden-hour.jpg");
+  assert.deepEqual([sam.name, sam.contact, sam.message, sam.title], ["bSam/b", "@sam", "For my scriptmom/script", "Golden hour"]);
+  assert.equal((await call("/studio/request-done", { method: "POST", form: { id: sam.id } })).status, 401);
+  assert.equal((await call("/studio/request-done", { method: "POST", cookie, form: { id: sam.id } })).status, 200);
+  assert.equal((await call("/studio/requests.json", { cookie })).body.length, 1);
+});
+
+test("one address can send only a few photo requests an hour", async () => {
+  const ask = () => call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "A", contact: "a@b.c" }, ip: "203.0.113.7" });
+  for (let i = 0; i < 5; i++) assert.equal((await ask()).status, 200);
+  assert.equal((await ask()).status, 429);
+  assert.equal((await call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "B", contact: "b" }, ip: "203.0.113.8" })).status, 200);
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id: "not-an-id" } })).status, 400);
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id } })).status, 200);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, []);
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
   assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404);
 });
 

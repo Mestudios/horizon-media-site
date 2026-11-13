@@ -2,9 +2,11 @@
 // the portfolio from any phone or computer, without touching the code.
 //
 //   /studio                  sign in, then add or remove photos
-//   /portfolio-photos.json   the list of added photos (public; the portfolio page reads it)
-//   /announcements.json      announcements added in the studio (public; the homepage reads it)
+//   /portfolio-photos.json   added photos, and built-in photos taken off the site
+//                            (public; the portfolio and car pages read it)
+//   /announcements.json      announcements that are up today (public; the homepage reads it)
 //   /uploads/<id>/full.jpg   an added photo (public), and /thumb.jpg its small copy
+//   /photo-request           visitors ask for a photo (public form; the studio lists them)
 //
 // Each sign-in is a pair of environment variables in Netlify: STUDIO_USERNAME and
 // STUDIO_PASSWORD, then STUDIO_USERNAME_2 / STUDIO_PASSWORD_2 and so on up to _5
@@ -21,6 +23,15 @@ const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending the
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
+const MAX_REQUESTS = 200; // photo requests waiting in the studio; more are refused until some are handled
+const REQUESTS_PER_HOUR = 5; // from one address
+// Announcements go up on their date and come down after their end date, by the
+// calendar in this time zone.
+const TIME_ZONE = "America/New_York";
+// A built-in photo on the portfolio or car page, by the path its page uses.
+const BUILT_IN = /^img\/(portfolio|cars)\/[a-z0-9-]{1,60}\.jpg$/;
+// A photo a visitor can ask for: a built-in one or one added in the studio.
+const REQUESTABLE = /^(img\/(portfolio|cars)\/[a-z0-9-]{1,60}\.jpg|uploads\/[0-9a-f]{16}\/full\.jpg)$/;
 const SECURITY = { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
 
 const encoder = new TextEncoder();
@@ -73,9 +84,26 @@ const reply = (body, status = 200, headers = {}) =>
 const json = (data, status = 200, headers = {}) => reply(JSON.stringify(data), status, { "content-type": "application/json", ...headers });
 const isJpeg = (bytes) => bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 const clean = (value, max) => String(value || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, max);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const todayIn = (now) => new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
+// Whether an announcement is up on the given day: from its date to its end date, if it has one.
+const isUp = (item, today) => item.date <= today && (!item.until || item.until >= today);
 
 export function createStudio() {
   const attempts = new Map(); // address -> { minute, count }
+  const requestsFrom = new Map(); // address -> { hour, count }
+
+  function tooManyRequests(ip, now) {
+    const hour = Math.floor(now / 3_600_000);
+    const entry = requestsFrom.get(ip);
+    if (!entry || entry.hour !== hour) {
+      if (requestsFrom.size > 2000) requestsFrom.clear();
+      requestsFrom.set(ip, { hour, count: 1 });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > REQUESTS_PER_HOUR;
+  }
 
   function tooManyAttempts(ip, now) {
     const minute = Math.floor(now / 60_000);
@@ -117,16 +145,47 @@ export function createStudio() {
     return photos.sort((a, b) => b.added - a.added);
   }
 
+  // Built-in photos taken off the site in the studio, by their img/ path.
+  const listHidden = async () => (await store().get("hidden", { type: "json" })) || [];
+
+  async function listRequests() {
+    const { blobs } = await store().list({ prefix: "req/" });
+    const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+    return items.sort((a, b) => b.added - a.added);
+  }
+
   return async function studio(request, context) {
     const url = new URL(request.url);
     const now = Date.now();
 
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
-      return json(await listPhotos(), 200, { "cache-control": "public, max-age=60" });
+      const [photos, hidden] = await Promise.all([listPhotos(), listHidden()]);
+      return json({ photos, hidden }, 200, { "cache-control": "public, max-age=60" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
-      return json(await listAnnouncements(), 200, { "cache-control": "public, max-age=60" });
+      const today = todayIn(now);
+      const up = (await listAnnouncements()).filter((item) => isUp(item, today));
+      return json(up, 200, { "cache-control": "public, max-age=60" });
+    }
+    if (url.pathname === "/photo-request") {
+      if (request.method !== "POST") return reply("Not allowed", 405);
+      if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
+      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "Too many requests from here. Try again later, or message us on Instagram." }, 429);
+      const form = await request.formData();
+      // A field people never see: forms that fill it in are bots.
+      if (String(form.get("website") || "") !== "") return json({ ok: true });
+      const name = clean(form.get("name"), 60);
+      const contact = clean(form.get("contact"), 100);
+      const message = clean(form.get("message"), 500);
+      const photoPath = String(form.get("photo") || "");
+      if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
+      if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
+      if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ error: "We have too many requests right now. Message us on Instagram instead." }, 503);
+      const id = hex(crypto.getRandomValues(new Uint8Array(8)));
+      await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
+      console.log(`studio: photo request ${id}`);
+      return json({ ok: true });
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
@@ -142,6 +201,13 @@ export function createStudio() {
     if (list.length === 0) return reply(studioPage({ state: "off" }), 503);
 
     if (request.method === "GET") {
+      // Lists only the team sees: every announcement (with scheduled and ended
+      // ones) and the photo requests.
+      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json") {
+        if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+        if (url.pathname === "/studio/requests.json") return json(await listRequests());
+        return json({ today: todayIn(now), items: await listAnnouncements() });
+      }
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       return reply(studioPage({ state: (await signedIn(request, list, now)) ? "in" : "out" }));
     }
@@ -206,9 +272,12 @@ export function createStudio() {
     if (url.pathname === "/studio/announce") {
       const title = clean(form.get("title"), 80);
       const text = clean(form.get("text"), 400);
-      const today = new Date(now).toISOString().slice(0, 10);
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get("date") || "")) ? String(form.get("date")) : today;
+      const today = todayIn(now);
+      const date = DAY.test(String(form.get("date") || "")) ? String(form.get("date")) : today;
+      // Optional: the last day it shows. Empty means it stays up.
+      const until = DAY.test(String(form.get("until") || "")) ? String(form.get("until")) : "";
       if (!title || !text) return json({ error: "Give the announcement a headline and some text." }, 400);
+      if (until && until < date) return json({ error: "The take-down date must be on or after the date it goes up." }, 400);
       if (!form.get("id") && (await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
       // An optional link: a page of this site (cars.html, portfolio.html#x) or an https address.
       const rawLink = String(form.get("link") || "").trim();
@@ -222,13 +291,13 @@ export function createStudio() {
         if (!/^[0-9a-f]{16}$/.test(editing)) return json({ error: "Unknown announcement." }, 400);
         const old = await store().get(`ann/${editing}`, { type: "json" });
         if (!old) return json({ error: "That announcement no longer exists." }, 404);
-        const announcement = { ...old, title, text, date, link, linkText };
+        const announcement = { ...old, title, text, date, until, link, linkText };
         await store().setJSON(`ann/${editing}`, announcement);
         console.log(`studio: edited announcement ${editing}`);
         return json({ ok: true, announcement });
       }
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const announcement = { id, title, text, date, link, linkText, added: now };
+      const announcement = { id, title, text, date, until, link, linkText, added: now };
       await store().setJSON(`ann/${id}`, announcement);
       console.log(`studio: added announcement ${id}`);
       return json({ ok: true, announcement });
@@ -239,6 +308,25 @@ export function createStudio() {
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown announcement." }, 400);
       await store().delete(`ann/${id}`);
       console.log(`studio: removed announcement ${id}`);
+      return json({ ok: true });
+    }
+
+    // Takes a built-in photo off the portfolio or car page, or puts it back.
+    if (url.pathname === "/studio/hide" || url.pathname === "/studio/unhide") {
+      const path = String(form.get("path") || "");
+      if (!BUILT_IN.test(path)) return json({ error: "Unknown photo." }, 400);
+      const hidden = (await listHidden()).filter((p) => p !== path);
+      if (url.pathname === "/studio/hide") hidden.push(path);
+      await store().setJSON("hidden", hidden.slice(-500));
+      console.log(`studio: ${url.pathname === "/studio/hide" ? "removed" : "put back"} ${path}`);
+      return json({ ok: true, hidden });
+    }
+
+    // Marks a photo request as handled, which deletes it.
+    if (url.pathname === "/studio/request-done") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown request." }, 400);
+      await store().delete(`req/${id}`);
       return json({ ok: true });
     }
 
