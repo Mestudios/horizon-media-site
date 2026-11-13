@@ -53,7 +53,7 @@ const signedIn = `<form id="add">
 }).join("")}</select>
 <label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Blur license plates before uploading a car photo: the site's privacy page promises they are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
-<p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page within a minute.</p>
+<p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page right away.</p>
 <p role="status"></p></form>
 <ul id="photos"></ul>
 <h2>Announcements</h2>
@@ -214,7 +214,7 @@ async function refreshAnnouncements() {
       const body = new FormData();
       body.set("id", item.id);
       const response = await fetch("/studio/announce-delete", { method: "POST", body });
-      announceStatus.textContent = response.ok ? "Removed." : (await response.json()).error;
+      announceStatus.textContent = response.ok ? "Removed. It is gone from the homepage." : (await response.json()).error;
       refreshAnnouncements();
     });
     row.append(when, title, text, editButton, document.createTextNode(" "), remove);
@@ -236,7 +236,7 @@ announceForm.addEventListener("submit", async (event) => {
   const editing = document.getElementById("ann-id").value !== "";
   announceStatus.textContent = editing ? "Saving..." : "Posting...";
   const response = await fetch("/studio/announce", { method: "POST", body: new FormData(announceForm) });
-  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + " It shows on the homepage within a minute." : (await response.json()).error;
+  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + " It shows on the homepage right away." : (await response.json()).error;
   if (response.ok) { stopEditing(); refreshAnnouncements(); }
 });
 
