@@ -165,9 +165,9 @@ test("titles and credits are stored as plain text", async () => {
   assert.equal(stored.sport, "other");
 });
 
-test("every season's sports can be chosen, and the form offers exactly those", async () => {
+test("every season's sports and cars can be chosen, and the form offers exactly those", async () => {
   const { SPORTS } = await import("../netlify/studio/sports.js");
-  assert.deepEqual(SPORTS, ["football", "soccer", "volleyball", "cross-country", "basketball", "wrestling", "indoor-track", "lacrosse", "baseball", "softball", "track-and-field", "other"]);
+  assert.deepEqual(SPORTS, ["football", "soccer", "volleyball", "cross-country", "basketball", "wrestling", "indoor-track", "lacrosse", "baseball", "softball", "track-and-field", "cars", "other"]);
   const cookie = await signIn();
   const page = (await call("/studio", { cookie })).body;
   assert.deepEqual([...page.matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]), SPORTS);

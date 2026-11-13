@@ -39,7 +39,7 @@ const signedIn = `<form id="add">
 <label for="title">Title</label><input id="title" name="title" maxlength="60" required>
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
-<label for="sport">Sport</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
+<label for="sport">Category</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
   const options = sports.map(([value, label]) => `<option value="${value}">${label.replace("&", "&amp;")}</option>`).join("");
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
 }).join("")}</select>

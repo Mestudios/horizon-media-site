@@ -5,7 +5,7 @@ import { createGuard } from "../guard/guard.js";
 export default createGuard();
 
 export const config = {
-  path: ["/", "/index.html", "/portfolio", "/portfolio.html"],
+  path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html"],
   method: "GET",
   // If the guard fails, Netlify serves the page without it.
   onError: "bypass",

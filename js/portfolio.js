@@ -1,4 +1,5 @@
-// Portfolio page: the full-size photo viewer, and photos added through the studio.
+// Portfolio and car pages: the full-size photo viewer, and photos added through the
+// studio (car photos on the car page, everything else on the portfolio).
 (() => {
   const gallery = document.querySelector(".gallery");
   const shots = [...document.querySelectorAll(".shot")];
@@ -47,9 +48,15 @@
   shots.forEach(wire);
 
   // Photos added through the studio (/studio) come first, newest at the top.
+  const forCars = gallery.dataset.studio === "cars";
+  const empty = document.querySelector(".gallery-empty");
+  const showEmpty = () => {
+    if (empty) empty.hidden = shots.length > 0;
+  };
   fetch("portfolio-photos.json")
     .then((response) => (response.ok ? response.json() : []))
-    .then((photos) => {
+    .then((all) => {
+      const photos = all.filter((photo) => (photo.sport === "cars") === forCars);
       const added = photos.map((photo) => {
         const shot = document.createElement("button");
         shot.className = "shot";
@@ -76,8 +83,9 @@
       });
       gallery.prepend(...added);
       shots.unshift(...added);
+      showEmpty();
     })
-    .catch(() => {});
+    .catch(showEmpty);
   viewer.querySelector(".viewer-close").addEventListener("click", close);
   viewer.querySelector(".viewer-prev").addEventListener("click", () => show(open - 1));
   viewer.querySelector(".viewer-next").addEventListener("click", () => show(open + 1));

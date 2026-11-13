@@ -29,7 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "photos"
-PAGES = [ROOT / "index.html", ROOT / "portfolio.html"]
+PAGES = [ROOT / "index.html", ROOT / "portfolio.html", ROOT / "cars.html"]
 MANIFEST = ROOT / "netlify" / "guard" / "photo-variants.js"
 FONT = ROOT / "fonts" / "big-shoulders-display-latin.woff2"
 
