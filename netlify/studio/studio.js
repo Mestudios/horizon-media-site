@@ -161,12 +161,14 @@ export function createStudio() {
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
       const [photos, hidden] = await Promise.all([listPhotos(), listHidden()]);
-      return json({ photos, hidden }, 200, { "cache-control": "public, max-age=60" });
+      // Not kept by browsers: a photo or announcement removed in the studio
+      // disappears from the site on the next page load.
+      return json({ photos, hidden }, 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       const today = todayIn(now);
       const up = (await listAnnouncements()).filter((item) => isUp(item, today));
-      return json(up, 200, { "cache-control": "public, max-age=60" });
+      return json(up, 200, { "cache-control": "no-cache" });
     }
     if (url.pathname === "/photo-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);

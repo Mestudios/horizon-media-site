@@ -61,7 +61,7 @@ const signedIn = `<form id="add">
 }).join("")}</select>
 <label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Blur license plates before uploading a car photo: the site's privacy page promises they are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
-<p class="note">Photos are shrunk to website size on this device before they are sent. They appear on the site within a minute.</p>
+<p class="note">Photos are shrunk to website size on this device before they are sent. They appear on the site right away.</p>
 <p role="status"></p></form>
 <h2>Added here</h2>
 <p class="note">Photos added in the studio. Remove deletes them for good.</p>
@@ -83,7 +83,7 @@ const signedIn = `<form id="add">
 <p role="status"></p></form>
 <ul id="announcements" class="ann-admin"></ul>
 <h2>On the site</h2>
-<p class="note">The photos built into the portfolio and car pages. Remove takes one off the site within a minute; Put back shows it again.</p>
+<p class="note">The photos built into the portfolio and car pages. Remove takes one off the site right away; Put back shows it again.</p>
 <ul id="site-photos"></ul>
 <script>
 const status = document.querySelector("#add [role=status]");
@@ -326,7 +326,7 @@ async function refreshAnnouncements() {
       const body = new FormData();
       body.set("id", item.id);
       const response = await fetch("/studio/announce-delete", { method: "POST", body });
-      announceStatus.textContent = response.ok ? "Removed." : (await response.json()).error;
+      announceStatus.textContent = response.ok ? "Removed. It is gone from the homepage." : (await response.json()).error;
       refreshAnnouncements();
     });
     row.append(when, title, text, editButton, document.createTextNode(" "), remove);
@@ -350,7 +350,7 @@ announceForm.addEventListener("submit", async (event) => {
   announceStatus.textContent = editing ? "Saving..." : "Posting...";
   const response = await fetch("/studio/announce", { method: "POST", body: new FormData(announceForm) });
   const scheduled = dateBox.value > today();
-  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage within a minute.") : (await response.json()).error;
+  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away.") : (await response.json()).error;
   if (response.ok) { stopEditing(); refreshAnnouncements(); }
 });
 
