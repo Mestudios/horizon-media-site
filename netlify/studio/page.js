@@ -57,12 +57,14 @@ const signedIn = `<form id="add">
 <p role="status"></p></form>
 <ul id="photos"></ul>
 <h2>Announcements</h2>
-<p class="note">The newest three show on the homepage, newest date first.</p>
-<form id="announce">
+<p class="note">The newest three show on the homepage, newest date first. Press Edit on one below to change it.</p>
+<form id="announce"><input type="hidden" name="id" id="ann-id">
 <label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
 <label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="4" required></textarea>
 <label for="ann-date">Date</label><input id="ann-date" name="date" type="date" required>
-<button class="btn btn-hot">Post announcement</button>
+<label for="ann-link">Link (optional)</label><input id="ann-link" name="link" maxlength="300" placeholder="cars.html or https://...">
+<label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
+<button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button>
 <p role="status"></p></form>
 <ul id="announcements" class="ann-admin"></ul>
 <script>
@@ -187,6 +189,22 @@ async function refreshAnnouncements() {
     title.textContent = item.title;
     const text = document.createElement("p");
     text.textContent = item.text;
+    const editButton = document.createElement("button");
+    editButton.className = "btn";
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => {
+      document.getElementById("ann-id").value = item.id;
+      document.getElementById("ann-title").value = item.title;
+      document.getElementById("ann-text").value = item.text;
+      dateBox.value = item.date;
+      document.getElementById("ann-link").value = item.link || "";
+      document.getElementById("ann-link-text").value = item.linkText || "";
+      document.getElementById("ann-submit").textContent = "Save changes";
+      document.getElementById("ann-cancel").hidden = false;
+      announceStatus.textContent = "Editing: " + item.title;
+      announceForm.scrollIntoView({ behavior: "smooth" });
+    });
     const remove = document.createElement("button");
     remove.className = "btn";
     remove.type = "button";
@@ -199,17 +217,27 @@ async function refreshAnnouncements() {
       announceStatus.textContent = response.ok ? "Removed." : (await response.json()).error;
       refreshAnnouncements();
     });
-    row.append(when, title, text, remove);
+    row.append(when, title, text, editButton, document.createTextNode(" "), remove);
     announceList.append(row);
   }
 }
 
+function stopEditing() {
+  announceForm.reset();
+  document.getElementById("ann-id").value = "";
+  dateBox.value = today();
+  document.getElementById("ann-submit").textContent = "Post announcement";
+  document.getElementById("ann-cancel").hidden = true;
+}
+document.getElementById("ann-cancel").addEventListener("click", () => { stopEditing(); announceStatus.textContent = ""; });
+
 announceForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  announceStatus.textContent = "Posting...";
+  const editing = document.getElementById("ann-id").value !== "";
+  announceStatus.textContent = editing ? "Saving..." : "Posting...";
   const response = await fetch("/studio/announce", { method: "POST", body: new FormData(announceForm) });
-  announceStatus.textContent = response.ok ? "Posted. It shows on the homepage within a minute." : (await response.json()).error;
-  if (response.ok) { announceForm.reset(); dateBox.value = today(); refreshAnnouncements(); }
+  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + " It shows on the homepage within a minute." : (await response.json()).error;
+  if (response.ok) { stopEditing(); refreshAnnouncements(); }
 });
 
 refresh();

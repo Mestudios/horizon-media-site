@@ -1,16 +1,12 @@
-// Homepage: adds announcements posted in the studio (/studio) to the ones
-// written into index.html, and shows the newest three, newest date first.
+// Homepage: shows the announcements managed in the studio (/studio), newest
+// three first. The cards written into index.html are only a fallback for when
+// the list can't be loaded.
 (() => {
   const list = document.querySelector(".ann-list");
   if (!list) return;
   const SHOW = 3;
-  const builtIn = [...list.querySelectorAll(".ann")].map((card) => ({
-    date: card.querySelector("time").getAttribute("datetime"),
-    added: 0,
-    card,
-  }));
 
-  function card({ date, title, text }) {
+  function card({ date, title, text, link, linkText }) {
     const article = document.createElement("article");
     article.className = "ann";
     const when = document.createElement("time");
@@ -20,17 +16,30 @@
     heading.textContent = title;
     const body = document.createElement("p");
     body.textContent = text;
+    if (link) {
+      const anchor = document.createElement("a");
+      anchor.href = link;
+      anchor.textContent = linkText || "Read more";
+      body.append(" ", anchor);
+    }
     article.append(when, heading, body);
     return article;
   }
 
   fetch("announcements.json")
-    .then((response) => (response.ok ? response.json() : []))
-    .then((posted) => {
-      if (posted.length === 0) return;
-      const all = [...posted.map((item) => ({ date: item.date, added: item.added, card: card(item) })), ...builtIn];
-      all.sort((a, b) => b.date.localeCompare(a.date) || b.added - a.added);
-      list.replaceChildren(...all.slice(0, SHOW).map((item) => item.card));
+    .then((response) => {
+      if (!response.ok) throw new Error("no list");
+      return response.json();
+    })
+    .then((items) => {
+      if (items.length === 0) {
+        const none = document.createElement("p");
+        none.className = "lede";
+        none.textContent = "No announcements right now. Follow us on Instagram for the latest.";
+        list.replaceChildren(none);
+        return;
+      }
+      list.replaceChildren(...items.slice(0, SHOW).map(card));
     })
     .catch(() => {});
 })();

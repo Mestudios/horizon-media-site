@@ -89,8 +89,23 @@ export function createStudio() {
     return entry.count > 5;
   }
 
+  // The announcements that were written into index.html before the studio could
+  // manage them. They are copied into the store once, so they can be edited or
+  // removed like any other.
+  const STARTING_ANNOUNCEMENTS = [
+    { id: "0000000000000001", date: "2026-11-02", title: "Indoor track and cross country", text: "Indoor track joins our coverage this winter, and cross country follows in fall 2027.", link: "", linkText: "" },
+    { id: "0000000000000002", date: "2026-11-13", title: "Car photography is here", text: "Horizon Media now photographs cars. Book a shoot through our booking form.", link: "cars.html", linkText: "See car shoots" },
+  ];
+
+  async function seedAnnouncements() {
+    if (await store().get("ann-seeded")) return;
+    await Promise.all(STARTING_ANNOUNCEMENTS.map((a, i) => store().setJSON(`ann/${a.id}`, { ...a, added: i + 1 })));
+    await store().set("ann-seeded", "1");
+  }
+
   // Newest date first; on the same date, the most recently added first.
   async function listAnnouncements() {
+    await seedAnnouncements();
     const { blobs } = await store().list({ prefix: "ann/" });
     const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
     return items.sort((a, b) => b.date.localeCompare(a.date) || b.added - a.added);
@@ -186,15 +201,34 @@ export function createStudio() {
       return json({ ok: true, photo });
     }
 
+    if (url.pathname === "/studio/announce" || url.pathname === "/studio/announce-delete") await seedAnnouncements();
+
     if (url.pathname === "/studio/announce") {
       const title = clean(form.get("title"), 80);
       const text = clean(form.get("text"), 400);
       const today = new Date(now).toISOString().slice(0, 10);
       const date = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get("date") || "")) ? String(form.get("date")) : today;
       if (!title || !text) return json({ error: "Give the announcement a headline and some text." }, 400);
-      if ((await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
+      if (!form.get("id") && (await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
+      // An optional link: a page of this site (cars.html, portfolio.html#x) or an https address.
+      const rawLink = String(form.get("link") || "").trim();
+      const link = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?)$/i.test(rawLink) ? rawLink : "";
+      if (rawLink && !link) return json({ error: "The link must be a page of this site, like cars.html, or start with https://." }, 400);
+      const linkText = link ? clean(form.get("linkText"), 40) || "Read more" : "";
+
+      // Editing: an existing id keeps its place; otherwise a new announcement.
+      const editing = String(form.get("id") || "");
+      if (editing) {
+        if (!/^[0-9a-f]{16}$/.test(editing)) return json({ error: "Unknown announcement." }, 400);
+        const old = await store().get(`ann/${editing}`, { type: "json" });
+        if (!old) return json({ error: "That announcement no longer exists." }, 404);
+        const announcement = { ...old, title, text, date, link, linkText };
+        await store().setJSON(`ann/${editing}`, announcement);
+        console.log(`studio: edited announcement ${editing}`);
+        return json({ ok: true, announcement });
+      }
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const announcement = { id, title, text, date, added: now };
+      const announcement = { id, title, text, date, link, linkText, added: now };
       await store().setJSON(`ann/${id}`, announcement);
       console.log(`studio: added announcement ${id}`);
       return json({ ok: true, announcement });

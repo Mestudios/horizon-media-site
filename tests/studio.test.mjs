@@ -226,6 +226,33 @@ test("announcements: signed-in only, stored as plain text, newest date first, an
   assert.ok(!(await call("/announcements.json")).body.some((a) => a.id === newer.body.announcement.id));
 });
 
+test("the two built-in announcements start in the list and can be edited or removed for good", async () => {
+  const first = (await call("/announcements.json")).body;
+  assert.deepEqual(first.map((a) => a.title), ["Car photography is here", "Indoor track and cross country"]);
+  assert.equal(first[0].link, "cars.html");
+  const cookie = await signIn();
+  const car = first[0];
+  const edited = await call("/studio/announce", { method: "POST", cookie, form: { id: car.id, title: "Car shoots now booking", text: "Edited text.", date: car.date, link: "cars.html", linkText: "See the car page" } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.announcement.added, car.added, "editing keeps its place");
+  await call("/studio/announce-delete", { method: "POST", cookie, form: { id: first[1].id } });
+  const after = (await call("/announcements.json")).body;
+  assert.deepEqual(after.map((a) => [a.title, a.text, a.linkText]), [["Car shoots now booking", "Edited text.", "See the car page"]]);
+  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { id: "0123456789abcdef", title: "x", text: "y" } })).status, 404);
+});
+
+test("announcement links must be a page of this site or an https address", async () => {
+  const cookie = await signIn();
+  for (const link of ["javascript:alert(1)", "http://example.com", "//evil.example", "cars.html\"onmouseover=x", "data:text/html,x"]) {
+    assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "t", text: "x", link } })).status, 400, link);
+  }
+  for (const link of ["cars.html", "portfolio.html#top", "https://www.instagram.com/hor1zonmedia/"]) {
+    assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "t", text: "x", link } })).status, 200, link);
+  }
+  const noLinkText = await call("/studio/announce", { method: "POST", cookie, form: { title: "t", text: "x", link: "cars.html" } });
+  assert.equal(noLinkText.body.announcement.linkText, "Read more");
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
