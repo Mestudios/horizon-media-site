@@ -8,7 +8,7 @@ export default {
     "saver": "img/saver/cars/cockpit.jpg"
   },
   "img/cars/green-machine.jpg": {
-    "source": "2364218df8840599",
+    "source": "558885a640332622",
     "lite": "img/lite/cars/green-machine.jpg",
     "saver": "img/saver/cars/green-machine.jpg"
   },
@@ -38,12 +38,12 @@ export default {
     "saver": "img/saver/cars/pulling-in.jpg"
   },
   "img/cars/rear-wing.jpg": {
-    "source": "2d566789ab9fda4e",
+    "source": "dd1101a940229fdc",
     "lite": "img/lite/cars/rear-wing.jpg",
     "saver": "img/saver/cars/rear-wing.jpg"
   },
   "img/cars/rolling-out.jpg": {
-    "source": "9cf85591d82c5e52",
+    "source": "6673cf6a9ea32413",
     "lite": "img/lite/cars/rolling-out.jpg",
     "saver": "img/saver/cars/rolling-out.jpg"
   },
@@ -51,7 +51,7 @@ export default {
     "source": "e7ae4abee9e8eec5"
   },
   "img/cars/thumb/green-machine.jpg": {
-    "source": "2364218df8840599"
+    "source": "558885a640332622"
   },
   "img/cars/thumb/grille.jpg": {
     "source": "138d7e3d9df3a447"
@@ -69,16 +69,16 @@ export default {
     "source": "8ed89444bc048335"
   },
   "img/cars/thumb/rear-wing.jpg": {
-    "source": "2d566789ab9fda4e"
+    "source": "dd1101a940229fdc"
   },
   "img/cars/thumb/rolling-out.jpg": {
-    "source": "9cf85591d82c5e52"
+    "source": "6673cf6a9ea32413"
   },
   "img/cars/thumb/wheel.jpg": {
-    "source": "4ec0224ab2131375"
+    "source": "0d13051c24f0bdbe"
   },
   "img/cars/wheel.jpg": {
-    "source": "4ec0224ab2131375",
+    "source": "0d13051c24f0bdbe",
     "lite": "img/lite/cars/wheel.jpg",
     "saver": "img/saver/cars/wheel.jpg"
   },

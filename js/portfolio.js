@@ -25,7 +25,8 @@
     const link = document.createElement("a");
     link.href = shot.dataset.post;
     link.textContent = shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
-    caption.append(title, `Photo by @${shot.dataset.credit}. `, link);
+    const owner = shot.dataset.owner ? ` Car: @${shot.dataset.owner}.` : "";
+    caption.append(title, `Photo by @${shot.dataset.credit}.${owner} `, link);
     count.textContent = `${open + 1} / ${list.length}`;
   }
 
@@ -65,6 +66,7 @@
         shot.dataset.full = `uploads/${photo.id}/full.jpg`;
         shot.dataset.title = photo.title;
         shot.dataset.credit = photo.credit;
+        if (photo.owner) shot.dataset.owner = photo.owner;
         shot.dataset.post = `https://www.instagram.com/${encodeURIComponent(photo.credit)}/`;
         const image = document.createElement("img");
         image.src = `uploads/${photo.id}/thumb.jpg`;
@@ -75,7 +77,7 @@
         const title = document.createElement("b");
         title.textContent = photo.title;
         const credit = document.createElement("span");
-        credit.textContent = `Photo by @${photo.credit}`;
+        credit.textContent = `Photo by @${photo.credit}` + (photo.owner ? ` · Car: @${photo.owner}` : "");
         info.append(title, credit);
         shot.append(image, info);
         wire(shot);

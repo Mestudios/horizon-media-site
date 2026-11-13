@@ -141,6 +141,8 @@ export function createStudio() {
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now };
+      const owner = clean(form.get("owner"), 40).replace(/^@+/, "");
+      if (sport === "cars" && owner) photo.owner = owner; // the car's owner, credited on the car page
       await Promise.all([
         store().set(`photo/${id}/full`, fullBytes.buffer),
         store().set(`photo/${id}/thumb`, thumbBytes.buffer),

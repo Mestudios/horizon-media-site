@@ -179,6 +179,15 @@ test("every season's sports and cars can be chosen, and the form offers exactly 
   }
 });
 
+test("a car photo can credit the car's owner; other photos ignore it", async () => {
+  const cookie = await signIn();
+  await call("/studio/upload", { method: "POST", cookie, form: photo({ sport: "cars", owner: "@@<b>owner</b>" }) });
+  await call("/studio/upload", { method: "POST", cookie, form: photo({ sport: "football", owner: "someone" }) });
+  const photos = (await call("/portfolio-photos.json")).body;
+  assert.equal(photos.find((p) => p.sport === "cars").owner, "bowner/b");
+  assert.equal(photos.find((p) => p.sport === "football").owner, undefined);
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
