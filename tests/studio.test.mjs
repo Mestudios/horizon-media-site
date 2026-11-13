@@ -150,7 +150,7 @@ test("a signed-in upload appears in the public list and can be fetched", async (
   assert.match(id, /^[0-9a-f]{16}$/);
 
   const list = await call("/portfolio-photos.json");
-  assert.equal(list.headers.get("cache-control"), "public, max-age=60");
+  assert.equal(list.headers.get("cache-control"), "no-cache", "removals show on the next page load");
   assert.equal(list.body.length, 1);
   assert.deepEqual({ ...list.body[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 });
 
@@ -217,7 +217,7 @@ test("announcements: signed-in only, stored as plain text, newest date first, an
   const bad = await call("/studio/announce", { method: "POST", cookie, form: { title: "No date", text: "Three", date: "tomorrow" } });
   assert.match(bad.body.announcement.date, /^\d{4}-\d{2}-\d{2}$/, "a bad date falls back to today");
   const list = await call("/announcements.json");
-  assert.equal(list.headers.get("cache-control"), "public, max-age=60");
+  assert.equal(list.headers.get("cache-control"), "no-cache", "removals show on the next page load");
   assert.deepEqual(list.body.map((a) => a.title).slice(0, 1), ["bNewer/b"]);
   assert.equal(list.body[0].text, "Two scriptx/script");
   assert.equal(list.body.at(-1).title, "Older");

@@ -123,10 +123,12 @@ export function createStudio() {
 
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
-      return json(await listPhotos(), 200, { "cache-control": "public, max-age=60" });
+      // Not kept by browsers: a photo or announcement removed in the studio
+      // disappears from the site on the next page load.
+      return json(await listPhotos(), 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
-      return json(await listAnnouncements(), 200, { "cache-control": "public, max-age=60" });
+      return json(await listAnnouncements(), 200, { "cache-control": "no-cache" });
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
