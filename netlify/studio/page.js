@@ -1,4 +1,5 @@
 import { SEASONS } from "./sports.js";
+import { MAX_REQUESTS } from "./limits.js";
 
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
 const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
@@ -37,7 +38,8 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .requests li{display:grid;grid-template-columns:72px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
 .studio .requests li img{aspect-ratio:3/4}
 .studio .requests p{margin:2px 0;font-size:14px;color:var(--dim)}
-.studio .requests p b{color:var(--chalk)}
+.studio .requests p b{display:inline;margin:0;color:var(--chalk)}
+.studio .note.full{color:var(--danger);font-weight:600}
 /* Signed in: a dashboard with a side menu (a bottom bar on phones). */
 .shell{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 61px)}
 .side{border-right:1px solid var(--line);background:var(--panel);padding:22px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:61px;height:calc(100vh - 61px)}
@@ -130,6 +132,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <ul id="site-photos"></ul></section>
 <section data-view="requests" hidden><div class="view-top"><h1>Photo requests</h1></div>
 <p class="note">Visitors who asked for a photo. Reach out to them, then press Done to delete the request.</p>
+<p class="note" id="requests-room"></p>
 <ul id="requests" class="requests"></ul></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
 <p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
@@ -307,6 +310,10 @@ async function refreshRequests() {
   const items = await (await fetch("/studio/requests.json", { cache: "no-store" })).json();
   requestList.textContent = "";
   setText("stat-requests", items.length);
+  const full = items.length >= ${MAX_REQUESTS};
+  const room = document.getElementById("requests-room");
+  room.textContent = items.length + " of ${MAX_REQUESTS} waiting." + (full ? " The inbox is full: visitors can\u2019t send new requests until you press Done on some." : "");
+  room.className = "note" + (full ? " full" : "");
   const badge = document.getElementById("nav-requests");
   badge.textContent = items.length;
   badge.hidden = items.length === 0;

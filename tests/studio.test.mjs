@@ -313,6 +313,22 @@ test("visitors can request a photo; only the team can read requests, and Done de
   assert.equal((await call("/studio/requests.json", { cookie })).body.length, 1);
 });
 
+test("when 20 requests are waiting, new ones get a plain one-sentence message until the team presses Done", async () => {
+  const ask = (i) => call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: `Visitor ${i}`, contact: "a@b.c" }, ip: `192.0.2.${i}` });
+  for (let i = 1; i <= 20; i++) assert.equal((await ask(i)).status, 200, `request ${i}`);
+  const full = await ask(21);
+  assert.equal(full.status, 503);
+  assert.equal(full.body.full, true);
+  assert.equal(full.body.error.split(/[.!?](\s|$)/).filter((part) => part && part.trim()).length, 1, "one sentence");
+  assert.match(full.body.error, /try again/);
+  const cookie = await signIn();
+  const waiting = (await call("/studio/requests.json", { cookie })).body;
+  assert.equal(waiting.length, 20, "nothing was deleted");
+  assert.ok(waiting.some((r) => r.name === "Visitor 1"), "the oldest is kept");
+  await call("/studio/request-done", { method: "POST", cookie, form: { id: waiting[0].id } });
+  assert.equal((await ask(22)).status, 200, "Done makes room again");
+});
+
 test("one address can send only a few photo requests an hour", async () => {
   const ask = () => call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "A", contact: "a@b.c" }, ip: "203.0.113.7" });
   for (let i = 0; i < 5; i++) assert.equal((await ask()).status, 200);

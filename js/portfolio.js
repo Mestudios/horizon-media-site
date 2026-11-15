@@ -11,6 +11,18 @@
   const requestButton = viewer.querySelector(".viewer-request");
   const requestForm = viewer.querySelector(".request");
   const requestStatus = requestForm.querySelector("[role=status]");
+  const requestAlert = requestForm.querySelector(".request-alert");
+  // A problem sending a request pops up over the form in one plain sentence.
+  function showProblem(message) {
+    requestStatus.textContent = "";
+    requestAlert.querySelector(".request-alert-text").textContent = message;
+    requestAlert.hidden = false;
+    requestAlert.querySelector(".request-alert-ok").focus();
+  }
+  requestAlert.querySelector(".request-alert-ok").addEventListener("click", () => {
+    requestAlert.hidden = true;
+    requestForm.querySelector("button[type=submit]").focus();
+  });
   let open = -1; // position in shots of the photo being shown
   let opener = null;
   let loading = 0; // counts loads, so a slow photo never replaces a newer one
@@ -113,6 +125,7 @@
     requestForm.elements.title.value = shot.dataset.title;
     requestForm.querySelector(".request-photo").textContent = shot.dataset.title;
     requestStatus.textContent = "";
+    requestAlert.hidden = true;
     requestForm.querySelector(".request-done").hidden = true;
     requestForm.querySelector(".request-fields").hidden = false;
     requestForm.hidden = false;
@@ -136,10 +149,11 @@
         requestForm.querySelector(".request-fields").hidden = true;
         requestForm.querySelector(".request-done").hidden = false;
       } else {
-        requestStatus.textContent = (await response.json()).error;
+        const reply = await response.json().catch(() => ({}));
+        showProblem(reply.error || "Something went wrong on our end, so please try again later or message us on Instagram.");
       }
     } catch (error) {
-      requestStatus.textContent = "That didn't send. Check your connection, or message us on Instagram.";
+      showProblem("Your request didn't go through because of a connection problem, so please check your internet and try again.");
     }
     send.disabled = false;
   });
@@ -198,7 +212,7 @@
   });
   document.addEventListener("keydown", (event) => {
     if (viewer.hidden) return;
-    if (event.key === "Escape") return requestForm.hidden ? close() : closeRequest();
+    if (event.key === "Escape") return requestForm.hidden ? close() : !requestAlert.hidden ? (requestAlert.hidden = true) : closeRequest();
     if (!requestForm.hidden) return; // typing in the form
     if (event.key === "ArrowLeft") show(open - 1);
     if (event.key === "ArrowRight") show(open + 1);

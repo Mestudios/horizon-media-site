@@ -39,7 +39,7 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 `portfolio.html` shows the portfolio: a grid and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
 
-The viewer draws each photo onto a canvas with the Horizon Media mark on it, so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 200 wait in the inbox at once, and a hidden field catches simple bots.
+The viewer draws each photo onto a canvas with the Horizon Media mark on it, so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 20 wait in the inbox at once (`netlify/studio/limits.js`); when it is full, visitors see a one-sentence message asking them to try again later or message on Instagram, and a hidden field catches simple bots.
 
 `cars.html` is the car photography page. It uses the same grid and viewer; its photos go in `photos/cars/` and are listed in the page like the portfolio's.
 

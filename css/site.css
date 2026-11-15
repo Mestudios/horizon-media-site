@@ -316,6 +316,11 @@ footer p { margin: 8px 0 0; }
 .request-note { font-size: 13px; color: var(--dim); margin: 14px 0 0; }
 .request a { color: var(--accent-2); }
 .request [role=status] { min-height: 1.2em; margin: 10px 0 0; color: var(--accent-2); font-size: 14px; }
+.request-alert { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 20px; background: rgba(5,5,5,.72); border-radius: 12px; }
+.request-alert-box { width: 100%; background: var(--night); border: 1px solid var(--line); border-top: 3px solid var(--danger); border-radius: 10px; padding: 22px; }
+.request-alert-box h3 { margin: 0 0 8px; font-family: var(--display); font-weight: 800; font-size: 26px; text-transform: uppercase; letter-spacing: .02em; }
+.request-alert-box p { margin: 0; color: var(--soft); font-size: 15px; }
+.request-alert .btns { margin-top: 18px; }
 .request-trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .viewer .request-close { top: 12px; right: 12px; width: 40px; height: 40px; font-size: 24px; }
 

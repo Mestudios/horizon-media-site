@@ -16,6 +16,7 @@
 import { getStore } from "@netlify/blobs";
 import { studioPage } from "./page.js";
 import { SPORTS } from "./sports.js";
+import { MAX_REQUESTS } from "./limits.js";
 
 const SESSION_HOURS = 12;
 const COOKIE = "hm_studio";
@@ -23,7 +24,6 @@ const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending the
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
-const MAX_REQUESTS = 200; // photo requests waiting in the studio; more are refused until some are handled
 const REQUESTS_PER_HOUR = 5; // from one address
 // Announcements go up on their date and come down after their end date, by the
 // calendar in this time zone.
@@ -173,7 +173,7 @@ export function createStudio() {
     if (url.pathname === "/photo-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);
       if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
-      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "Too many requests from here. Try again later, or message us on Instagram." }, 429);
+      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
       const form = await request.formData();
       // A field people never see: forms that fill it in are bots.
       if (String(form.get("website") || "") !== "") return json({ ok: true });
@@ -183,7 +183,7 @@ export function createStudio() {
       const photoPath = String(form.get("photo") || "");
       if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
-      if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ error: "We have too many requests right now. Message us on Instagram instead." }, 503);
+      if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
       console.log(`studio: photo request ${id}`);
