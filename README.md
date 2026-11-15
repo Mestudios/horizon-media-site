@@ -45,6 +45,7 @@ The viewer draws each photo onto a canvas with the Horizon Media mark on it, so 
 
 The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
+- Once signed in, the studio is a dashboard: a side menu (a bar along the bottom on phones) with Overview, Add photos, All photos, Requests and Announcements. Overview shows the counts and the latest of each.
 - Several photos can be picked and uploaded at once; they share the title, credit and category.
 - **On the site** lists every photo built into the portfolio and car pages. Remove takes one off the site (it is listed in Netlify Blobs and the pages leave it out); Put back shows it again. Its file stays in the repository; to delete it for good, remove it from the page in code.
 - **Photo requests** lists what visitors asked for. Done deletes a request.
