@@ -41,7 +41,7 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 `portfolio.html` shows the portfolio: a grid and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
 
-Opening a photo gives it its own address (`#photo=<name>`), and **Share** opens the phone's share menu with it (on computers it copies the link), so a shared link opens straight on that photo. The viewer draws each photo onto a canvas covered in faint, slanted Horizon Media marks (`TILE` in `js/portfolio.js` sets their size, strength and spacing), so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 20 wait in the inbox at once (`netlify/studio/limits.js`); from 15 the studio's overview shows a warning; when it is full, visitors see a one-sentence message asking them to try again later or message on Instagram, and a hidden field catches simple bots.
+Each tile shows a tiny blurry preview (`--ph`, from `tools/make_placeholders.py`) until its photo arrives and fades in; photos added in the studio in the last week get a "New" tag; on phones, swiping left or right moves between open photos. Opening a photo gives it its own address (`#photo=<name>`), and **Share** opens the phone's share menu with it (on computers it copies the link), so a shared link opens straight on that photo. The viewer draws each photo onto a canvas covered in faint, slanted Horizon Media marks (`TILE` in `js/portfolio.js` sets their size, strength and spacing), so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 20 wait in the inbox at once (`netlify/studio/limits.js`); from 15 the studio's overview shows a warning; when it is full, visitors see a one-sentence message asking them to try again later or message on Instagram, and a hidden field catches simple bots.
 
 `cars.html` is the car photography page. It uses the same grid and viewer; its photos go in `photos/cars/` and are listed in the page like the portfolio's.
 
@@ -49,7 +49,11 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 - Once signed in, the studio is a dashboard: a side menu (a bar along the bottom on phones) with Overview, Add photos, All photos, Requests and Announcements. Overview shows the counts and the latest of each.
 - Several photos can be picked and uploaded at once; they share the title, credit and category.
-- **Blur plates:** under each picked photo, Blur plates opens the photo; drag a box over each license plate. The boxes are pixelated on the device before upload, so a readable plate never leaves the phone.
+- **Edit before upload:** under each picked photo, Edit opens it to **rotate**, **crop** (drag what to keep) and **blur plates** (drag a box over each license plate). All of it happens on the device before upload, so a readable plate never leaves the phone.
+- **Already on the site?** Each picked photo is compared with the photos already on the site (a tiny fingerprint of each, made on the device), and a likely repeat is flagged by name.
+- **All photos** has a search box (title or photographer) and a Show menu: sports, cars, pinned, most requested, taken off the site, or the homepage photo. Each photo shows how many times visitors requested it; the overview names the most requested one (counts are kept after requests are handled, in `request-counts`).
+- **Use on homepage** makes any photo the homepage background. The guard swaps it into the homepage (re-reading the choice at most once a minute), and busy mode still uses its smaller copies.
+- **Announcements** show a live preview of the homepage card as you type.
 - **Share from the gallery:** once the site is added to an Android phone's home screen, Horizon Media appears in the phone's Share menu. Photos shared to it open in Add photos, ready to fill in. `sw.js` (the site's service worker) passes them over; it caches nothing else. iPhones do not support this yet.
 - **Edit** changes an added photo's title, credit, category or car owner. **Pin to top** puts any photo first on its page; the Pinned list sets their order (up to 24).
 - **Remove** on an added photo or an announcement takes effect after 10 seconds, with an Undo button until then (leaving the page carries it out at once).
@@ -101,7 +105,7 @@ The script can also add a visible Horizon Media watermark to every copy: set `WA
 
 1. Put the original in `photos/`, at the same path the page will use under `img/`. For example, `photos/game-day.jpg` is shown as `img/game-day.jpg`.
 2. Add it to the page (`index.html` or `portfolio.html`) using the `img/` path.
-3. Run `python3 tools/make_photo_variants.py`. It needs Pillow (`pip install pillow`).
+3. Run `python3 tools/make_photo_variants.py`, then `python3 tools/make_placeholders.py` (which gives each portfolio and car tile its tiny blurry preview). Both need Pillow (`pip install pillow`).
 4. Commit everything it changed, including the original in `photos/`.
 
 `npm test` fails if a photo on a page has no original, or if its copies are out of date.

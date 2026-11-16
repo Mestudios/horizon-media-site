@@ -19,6 +19,7 @@ import { studioPage } from "./page.js";
 import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 import { createBanList } from "../guard/bans.js";
+import { HERO_PATH } from "../guard/homepage.js";
 
 const SESSION_HOURS = 12;
 const REMEMBER_DAYS = 30; // "Keep me signed in on this device"
@@ -204,9 +205,10 @@ export function createStudio() {
   // change ever reached storage without rebuilding it.
   const INDEX_MINUTES = 10;
   async function rebuildPhotoIndex() {
-    const [photos, hidden, pins] = await Promise.all([listPhotos(), listHidden(), listPins()]);
-    await store().setJSON("index/photos", { built: Date.now(), data: { photos, hidden, pins } });
-    return { photos, hidden, pins };
+    const [photos, hidden, pins, hero] = await Promise.all([listPhotos(), listHidden(), listPins(), store().get("hero", { type: "json" })]);
+    const data = { photos, hidden, pins, hero: hero ? hero.path : "" };
+    await store().setJSON("index/photos", { built: Date.now(), data });
+    return data;
   }
   async function rebuildAnnouncementIndex() {
     const items = await listAnnouncements();
@@ -263,6 +265,10 @@ export function createStudio() {
       if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
+      // How often each photo is asked for, kept after requests are handled.
+      const counts = (await store().get("request-counts", { type: "json" })) || {};
+      counts[photoPath] = (counts[photoPath] || 0) + 1;
+      await store().setJSON("request-counts", counts);
       console.log(`studio: photo request ${id}`);
       return json({ ok: true });
     }
@@ -292,8 +298,9 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json") {
+      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json" || url.pathname === "/studio/stats.json") {
         if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+        if (url.pathname === "/studio/stats.json") return json({ requestCounts: (await store().get("request-counts", { type: "json" })) || {} });
         if (url.pathname === "/studio/requests.json") return json(await listRequests());
         return json({ today: todayIn(now), items: await listAnnouncements() });
       }
@@ -381,6 +388,17 @@ export function createStudio() {
 
     // Pinned photos show first on their page, in this order. Any photo can be
     // pinned: a built-in one by its img/ path, an added one by its uploads/ path.
+    // The homepage background: any photo of the site, or "" for the default.
+    if (url.pathname === "/studio/hero") {
+      const path = String(form.get("path") || "");
+      if (path && !HERO_PATH.test(path)) return json({ error: "Unknown photo." }, 400);
+      if (path) await store().setJSON("hero", { path, set: now });
+      else await store().delete("hero");
+      await rebuildPhotoIndex();
+      console.log(`studio: homepage photo set to ${path || "the default"}`);
+      return json({ ok: true, hero: path });
+    }
+
     if (url.pathname === "/studio/pins") {
       let pins;
       try { pins = JSON.parse(String(form.get("pins") || "[]")); } catch { pins = null; }

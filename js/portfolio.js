@@ -164,6 +164,29 @@
   });
   shots.forEach(wire);
 
+  // Photos fade in over their blurry preview as they arrive.
+  function fadeIn(image) {
+    if (image.complete) return;
+    image.classList.add("is-loading");
+    const done = () => image.classList.remove("is-loading");
+    image.addEventListener("load", done, { once: true });
+    image.addEventListener("error", done, { once: true });
+  }
+  shots.forEach((shot) => fadeIn(shot.querySelector("img")));
+
+  // Phones: swipe left or right on an open photo to go to the next or previous one.
+  let touch = null;
+  viewer.addEventListener("touchstart", (event) => {
+    touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+  }, { passive: true });
+  viewer.addEventListener("touchend", (event) => {
+    if (!touch || !requestForm.hidden) return;
+    const dx = event.changedTouches[0].clientX - touch.x;
+    const dy = event.changedTouches[0].clientY - touch.y;
+    touch = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) show(open + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+
   // ---- "Request this photo": a short form; requests appear in the studio.
   function openRequest() {
     const shot = shots[open];
@@ -235,6 +258,7 @@
         image.src = `uploads/${photo.id}/thumb.jpg`;
         image.alt = photo.title;
         image.loading = "lazy";
+        fadeIn(image);
         const info = document.createElement("span");
         info.className = "shot-info";
         const title = document.createElement("b");
@@ -243,6 +267,13 @@
         credit.textContent = `Photo by @${photo.credit}` + (photo.owner ? ` · Car: @${photo.owner}` : "");
         info.append(title, credit);
         shot.append(image, info);
+        // A "New" tag for the first week.
+        if (Date.now() - photo.added < 7 * 86_400_000) {
+          const tag = document.createElement("span");
+          tag.className = "shot-new";
+          tag.textContent = "New";
+          shot.append(tag);
+        }
         wire(shot);
         return shot;
       });

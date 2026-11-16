@@ -337,6 +337,32 @@ test("an address that keeps hammering after the timeout is kicked off every page
   assert.equal((await visit(later, { ...attacker })).status, 200);
 });
 
+test("the homepage shows the photo chosen in the studio, with busy mode still swapping it", async () => {
+  await getStore("studio-photos").setJSON("hero", { path: "img/cars/grille.jpg" });
+  const handler = newInstance();
+  const normal = await visit(handler, newVisitor());
+  assert.match(normal.body, /class="hero-photo"[^>]*url\('img\/cars\/grille\.jpg'\)/);
+  const busy = await visit(handler, newVisitor(), { path: "/?busy=lite" });
+  assert.match(busy.body, /class="hero-photo"[^>]*url\('img\/lite\/cars\/grille\.jpg'\)/);
+  // Something odd in storage is ignored.
+  await getStore("studio-photos").setJSON("hero", { path: "x');background:url('evil" });
+  assert.doesNotMatch((await visit(newInstance(), newVisitor())).body, /evil/);
+  await getStore("studio-photos").delete("hero");
+});
+
+test("every photo tile on the portfolio and car pages has its tiny blurry preview", () => {
+  for (const page of ["portfolio.html", "cars.html"]) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const tiles = [...html.matchAll(/<button class="shot"[^>]*>/g)].map((m) => m[0]);
+    assert.ok(tiles.length > 0, page);
+    for (const tile of tiles) {
+      const preview = /style="--ph:url\(data:image\/jpeg;base64,([A-Za-z0-9+/=]+)\)"/.exec(tile);
+      assert.ok(preview, `${page}: a tile has no preview; run: python3 tools/make_placeholders.py\n${tile.slice(0, 160)}`);
+      assert.ok(preview[1].length < 1200, "the preview stays tiny");
+    }
+  }
+});
+
 test("pages without photos only get the checks, not busy mode", async () => {
   const handler = newInstance();
   const reply = await visit(handler, newVisitor(), { path: "/book.html" });

@@ -92,6 +92,23 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .has-picks label.drop{min-height:0;padding:14px;flex-direction:row}
 .studio .has-picks label.drop b{font-size:20px}
 .studio .has-picks label.drop span{display:none}
+.photo-tools{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 0}
+.studio .photo-tools input{flex:1 1 260px;width:auto}
+.studio .photo-tools select{flex:0 1 220px;width:auto}
+.studio li .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.studio li .tags .tag{margin:0}
+.studio .tool-bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.studio .tool-modes{display:flex;gap:0}
+.studio .tool-bar .btn{margin:0;padding:9px 14px;font-size:14px}
+.studio .tool-modes .btn:first-child{border-radius:4px 0 0 4px}.studio .tool-modes .btn:last-child{border-radius:0 4px 4px 0;margin-left:-1px}
+.studio .tool-modes .btn[aria-pressed=true]{background:var(--flare);border-color:var(--flare);color:#1a1402}
+.studio .tool-note{margin:10px 0 0}
+.studio ul.picked li img{transition:transform .2s}
+.studio p.twin{margin:4px 0 0;font-size:12px;font-weight:600;color:var(--danger)}
+.ann-preview{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.studio .preview-label{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ann-preview .ann-list{grid-template-columns:minmax(0,380px)}
+.ann-preview .ann a{pointer-events:none}
 .studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
@@ -201,12 +218,13 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
   const options = sports.map(([value, label]) => `<option value="${value}">${label.replace("&", "&amp;")}</option>`).join("");
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
 }).join("")}</select>
-<label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Car photos: press Blur plates under each photo above and drag a box over every license plate. The site's privacy page promises plates are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
+<label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Car photos: press Edit under each photo above, choose Blur plates, and drag a box over every license plate. The site's privacy page promises plates are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
 </div></div>
 <div class="form-end"><button class="btn btn-hot">Add to the portfolio</button>
 <p class="note">Photos are shrunk to website size on this device before they are sent. They appear on the site right away.</p></div>
 <p role="status"></p></form></div></section>
 <section data-view="photos" hidden><div class="view-top"><h1>All photos</h1><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button></div>
+<div class="photo-tools"><input type="search" id="photo-search" placeholder="Search by title or photographer" aria-label="Search photos"><select id="photo-filter" aria-label="Show"><option value="all">All photos</option><option value="sports">Sports only</option><option value="cars">Cars only</option><option value="pinned">Pinned</option><option value="requested">Most requested</option><option value="removed">Taken off the site</option><option value="homepage">Homepage photo</option></select></div>
 <p role="status" id="photos-status"></p>
 <h2 style="margin-top:20px">Pinned</h2>
 <p class="note">Pinned photos show first on their page, in this order.</p>
@@ -235,10 +253,11 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <label for="ann-photo">Photo (optional)</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
 <div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
 </div></div>
+<div class="ann-preview"><p class="preview-label">Preview: how it looks on the homepage</p><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
 <div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
 <p role="status"></p></form></div>
 <ul id="announcements" class="ann-admin"></ul></section>
-<div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Blur license plates</h2><p class="note">Drag a box over each plate. Everything inside a box is blurred on this device before upload.</p><canvas aria-label="The photo; drag to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
+<div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Edit photo</h2><div class="tool-bar"><div class="tool-modes" role="group" aria-label="What dragging does"><button type="button" class="btn" data-mode="crop" aria-pressed="false">Crop</button><button type="button" class="btn" data-mode="blur" aria-pressed="true">Blur plates</button></div><button type="button" class="btn tool-rotate">Rotate &#8635;</button><button type="button" class="btn tool-reset">Start over</button></div><p class="note tool-note"></p><canvas aria-label="The photo; drag on it to crop or to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
 <div id="undo" class="undo" role="status" hidden><span></span><button type="button" class="btn btn-hot">Undo</button></div>
 <script>
 // The side menu: one section shows at a time, and the address remembers which.
@@ -315,9 +334,10 @@ function shrink(image, width, quality, boxes) {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
-// ---- Plate blur: boxes drawn over a photo are pixelated on this device before
-// upload, so a readable plate never leaves the phone. Boxes are kept as
-// fractions of the photo, so they fit every size it is shrunk to.
+// ---- Photo editing before upload: rotate, crop and blur plates, all on this
+// device. A photo is rotated first, then cropped (the crop is kept as fractions
+// of the rotated photo), then blurred (boxes are fractions of the cropped photo),
+// so the same edits fit every size the photo is shrunk to.
 function pixelate(context, width, height, boxes) {
   for (const box of boxes) {
     const x = Math.round(box.x * width), y = Math.round(box.y * height);
@@ -334,12 +354,40 @@ function pixelate(context, width, height, boxes) {
   }
 }
 
-let picks = []; // the photos chosen for upload: { file, boxes }
+// The photo turned by pick.rotate degrees, at most "longest" pixels on its long side.
+function turned(image, rotate, longest) {
+  const scale = Math.min(1, longest / Math.max(image.width, image.height));
+  const w = Math.round(image.width * scale), h = Math.round(image.height * scale);
+  const sideways = rotate % 180 !== 0;
+  const canvas = document.createElement("canvas");
+  canvas.width = sideways ? h : w;
+  canvas.height = sideways ? w : h;
+  const g = canvas.getContext("2d");
+  g.translate(canvas.width / 2, canvas.height / 2);
+  g.rotate(rotate * Math.PI / 180);
+  g.drawImage(image, -w / 2, -h / 2, w, h);
+  return canvas;
+}
+// The rotated photo cut down to the crop.
+function cropped(source, crop) {
+  if (!crop) return source;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(crop.w * source.width));
+  canvas.height = Math.max(1, Math.round(crop.h * source.height));
+  canvas.getContext("2d").drawImage(source, crop.x * source.width, crop.y * source.height, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+// What gets uploaded: rotated and cropped (blur is added when it is shrunk).
+const prepare = (image, pick) => cropped(turned(image, pick.rotate, 2400), pick.crop);
+
+let picks = []; // the photos chosen for upload: { file, rotate, crop, boxes, twin }
+const newPick = (file) => ({ file, rotate: 0, crop: null, boxes: [], twin: "" });
 const pickedList = document.getElementById("picked");
 const photoInput = document.getElementById("photo");
 photoInput.addEventListener("change", () => {
-  picks = [...photoInput.files].map((file) => ({ file, boxes: [] }));
+  picks = [...photoInput.files].map(newPick);
   showPicks();
+  findTwins();
 });
 // Photos dragged onto the box count as picked.
 const drop = document.getElementById("drop");
@@ -349,9 +397,17 @@ drop.addEventListener("drop", (event) => {
   event.preventDefault();
   const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
   if (!files.length) return;
-  picks = files.map((file) => ({ file, boxes: [] }));
+  picks = files.map(newPick);
   showPicks();
+  findTwins();
 });
+function summary(pick) {
+  const done = [];
+  if (pick.rotate) done.push("rotated");
+  if (pick.crop) done.push("cropped");
+  if (pick.boxes.length) done.push(pick.boxes.length + (pick.boxes.length === 1 ? " area blurred" : " areas blurred"));
+  return done.join(", ");
+}
 function showPicks() {
   drop.closest(".col").classList.toggle("has-picks", picks.length > 0);
   drop.querySelector("b").textContent = picks.length ? "Choose different photos" : "Choose photos";
@@ -361,32 +417,119 @@ function showPicks() {
     const image = document.createElement("img");
     image.src = URL.createObjectURL(pick.file);
     image.alt = "";
+    if (pick.rotate) image.style.transform = "rotate(" + pick.rotate + "deg)";
     const label = document.createElement("b");
-    label.textContent = pick.boxes.length ? pick.boxes.length + (pick.boxes.length === 1 ? " area blurred" : " areas blurred") : "Photo " + (i + 1);
-    item.append(image, label, button(pick.boxes.length ? "Edit blur" : "Blur plates", "", () => openBlur(pick)));
+    label.textContent = summary(pick) || "Photo " + (i + 1);
+    item.append(image, label);
+    if (pick.twin) {
+      const warn = document.createElement("p");
+      warn.className = "twin";
+      warn.textContent = "Already on the site? Looks like \\u201c" + pick.twin + "\\u201d.";
+      item.append(warn);
+    }
+    item.append(button("Edit", "", () => openTool(pick)));
     pickedList.append(item);
   });
 }
 
+// ---- Duplicate warning: compares a tiny fingerprint of each picked photo with
+// those of the photos already on the site (made from their small copies).
+// Shrunk in two smooth steps, so the same photo at different sizes gives
+// nearly the same fingerprint (a few bits apart) and different photos don't.
+function fingerprint(source) {
+  const middle = document.createElement("canvas");
+  middle.width = 64;
+  middle.height = 64;
+  const m = middle.getContext("2d");
+  m.imageSmoothingQuality = "high";
+  m.filter = "blur(2px)";
+  m.drawImage(source, 0, 0, 64, 64);
+  const canvas = document.createElement("canvas");
+  canvas.width = 9;
+  canvas.height = 8;
+  const g = canvas.getContext("2d");
+  g.imageSmoothingQuality = "high";
+  g.drawImage(middle, 0, 0, 9, 8);
+  const d = g.getImageData(0, 0, 9, 8).data;
+  const light = (i) => d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+  let bits = "";
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits += light((y * 9 + x) * 4) > light((y * 9 + x + 1) * 4) ? "1" : "0";
+  return bits;
+}
+const apart = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++; return n; };
+let siteFingerprints = null;
+async function loadFingerprints() {
+  if (siteFingerprints) return siteFingerprints;
+  await loadBuiltIn();
+  const known = everyPhoto().filter((p) => !state.hidden.includes(p.path));
+  siteFingerprints = (await Promise.all(known.map(async (photo) => {
+    try {
+      const image = new Image();
+      image.src = photo.thumb;
+      await image.decode();
+      return { title: photo.title, bits: fingerprint(image) };
+    } catch (error) {
+      return null;
+    }
+  }))).filter(Boolean);
+  return siteFingerprints;
+}
+async function findTwins() {
+  const mine = picks;
+  const known = await loadFingerprints();
+  for (const pick of mine) {
+    try {
+      const bits = fingerprint(await createImageBitmap(pick.file, { imageOrientation: "from-image" }));
+      const match = known.find((k) => apart(k.bits, bits) <= 10);
+      pick.twin = match ? match.title : "";
+    } catch (error) {}
+  }
+  if (mine === picks) showPicks();
+}
+
+// ---- The editing panel.
 const blurTool = document.getElementById("blur-tool");
 const blurCanvas = blurTool.querySelector("canvas");
-let blurPick = null, blurImage = null, dragFrom = null, dragBox = null;
-async function openBlur(pick) {
+const modeButtons = [...blurTool.querySelectorAll("[data-mode]")];
+const toolNote = blurTool.querySelector(".tool-note");
+let blurPick = null, blurImage = null, preview = null, mode = "blur", dragFrom = null, dragBox = null;
+async function openTool(pick) {
   blurPick = pick;
   blurImage = await createImageBitmap(pick.file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, 1400 / Math.max(blurImage.width, blurImage.height));
-  blurCanvas.width = Math.round(blurImage.width * scale);
-  blurCanvas.height = Math.round(blurImage.height * scale);
+  preview = turned(blurImage, pick.rotate, 1400);
+  setMode("blur");
   blurTool.hidden = false;
-  drawBlur();
 }
-function drawBlur() {
+function setMode(next) {
+  mode = next;
+  modeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+  toolNote.textContent = mode === "crop" ? "Drag across the photo to choose what to keep. Changing the crop clears any blurred areas." : "Drag a box over each license plate. Everything inside a box is blurred on this device before upload.";
+  drawTool();
+}
+function drawTool() {
+  const shown = mode === "crop" ? preview : cropped(preview, blurPick.crop);
+  blurCanvas.width = shown.width;
+  blurCanvas.height = shown.height;
   const context = blurCanvas.getContext("2d");
+  context.drawImage(shown, 0, 0);
   const { width, height } = blurCanvas;
-  context.drawImage(blurImage, 0, 0, width, height);
-  pixelate(context, width, height, blurPick.boxes);
   context.lineWidth = Math.max(2, width / 300);
   context.strokeStyle = "#ffc61a";
+  if (mode === "crop") {
+    const crop = dragBox || blurPick.crop;
+    if (crop) {
+      context.save();
+      context.fillStyle = "rgba(0, 0, 0, 0.6)";
+      context.beginPath();
+      context.rect(0, 0, width, height);
+      context.rect(crop.x * width, crop.y * height, crop.w * width, crop.h * height);
+      context.fill("evenodd");
+      context.restore();
+      context.strokeRect(crop.x * width, crop.y * height, crop.w * width, crop.h * height);
+    }
+    return;
+  }
+  pixelate(context, width, height, blurPick.boxes);
   for (const box of blurPick.boxes.concat(dragBox ? [dragBox] : [])) context.strokeRect(box.x * width, box.y * height, box.w * width, box.h * height);
 }
 const at = (event) => {
@@ -401,15 +544,35 @@ blurCanvas.addEventListener("pointermove", (event) => {
   if (!dragFrom) return;
   const to = at(event);
   dragBox = { x: Math.min(dragFrom.x, to.x), y: Math.min(dragFrom.y, to.y), w: Math.abs(to.x - dragFrom.x), h: Math.abs(to.y - dragFrom.y) };
-  drawBlur();
+  drawTool();
 });
 blurCanvas.addEventListener("pointerup", () => {
-  if (dragBox && dragBox.w > 0.01 && dragBox.h > 0.005) blurPick.boxes.push(dragBox);
+  if (dragBox && dragBox.w > 0.03 && dragBox.h > 0.03 && mode === "crop") {
+    blurPick.crop = dragBox;
+    blurPick.boxes = [];
+  } else if (dragBox && dragBox.w > 0.01 && dragBox.h > 0.005 && mode === "blur") {
+    blurPick.boxes.push(dragBox);
+  }
   dragFrom = null;
   dragBox = null;
-  drawBlur();
+  drawTool();
 });
-blurTool.querySelector(".blur-undo").addEventListener("click", () => { blurPick.boxes.pop(); drawBlur(); });
+modeButtons.forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+blurTool.querySelector(".tool-rotate").addEventListener("click", () => {
+  blurPick.rotate = (blurPick.rotate + 90) % 360;
+  blurPick.crop = null;
+  blurPick.boxes = [];
+  preview = turned(blurImage, blurPick.rotate, 1400);
+  drawTool();
+});
+blurTool.querySelector(".tool-reset").addEventListener("click", () => {
+  blurPick.rotate = 0;
+  blurPick.crop = null;
+  blurPick.boxes = [];
+  preview = turned(blurImage, 0, 1400);
+  drawTool();
+});
+blurTool.querySelector(".blur-undo").addEventListener("click", () => { blurPick.boxes.pop(); drawTool(); });
 blurTool.querySelector(".blur-done").addEventListener("click", () => { blurTool.hidden = true; showPicks(); });
 
 // ---- Undo: a removal waits 10 seconds, so a wrong tap can be taken back.
@@ -457,31 +620,70 @@ const button = (text, className, onClick) => {
 // ---- Photos: added in the studio, built into the pages, and pinned.
 const sitePhotos = document.getElementById("site-photos");
 const pinnedList = document.getElementById("pinned");
-let state = { photos: [], hidden: [], pins: [] };
-let builtIn = null;
+let state = { photos: [], hidden: [], pins: [], hero: "" };
+let requestCounts = {}; // photo path -> how often it was requested
+async function refreshStats() {
+  try { requestCounts = (await (await fetch("/studio/stats.json", { cache: "no-store" })).json()).requestCounts || {}; } catch (error) {}
+}
+const searchBox = document.getElementById("photo-search");
+const filterBox = document.getElementById("photo-filter");
+searchBox.addEventListener("input", () => render());
+filterBox.addEventListener("change", () => render());
+// Whether a photo matches the search box and the "Show" menu.
+function shown(photo) {
+  const words = searchBox.value.trim().toLowerCase();
+  if (words && !(photo.title + " " + (photo.credit || "")).toLowerCase().includes(words)) return false;
+  const filter = filterBox.value;
+  if (filter === "sports") return !photo.cars;
+  if (filter === "cars") return photo.cars;
+  if (filter === "pinned") return state.pins.includes(photo.path);
+  if (filter === "requested") return (requestCounts[photo.path] || 0) > 0;
+  if (filter === "removed") return state.hidden.includes(photo.path);
+  if (filter === "homepage") return state.hero === photo.path;
+  return true;
+}
+const byRequests = (list) => (filterBox.value === "requested" ? list.slice().sort((a, b) => (requestCounts[b.path] || 0) - (requestCounts[a.path] || 0)) : list);
+async function setHomepage(path) {
+  const response = await post("/studio/hero", { path });
+  const reply = await response.json();
+  if (!response.ok) { status.textContent = reply.error; return; }
+  state.hero = reply.hero;
+  status.textContent = reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.";
+  render();
+}
+function homepageButton(photo) {
+  const on = state.hero === photo.path;
+  return button(on ? "Homepage photo \\u2713" : "Use on homepage", on ? "pin on" : "", () => setHomepage(on ? "" : photo.path));
+}
+let builtIn = []; // filled in by loadBuiltIn()
 const removing = new Set(); // added photos waiting out their 10 seconds
 const uploadPath = (photo) => "uploads/" + photo.id + "/full.jpg";
 
-async function loadBuiltIn() {
-  if (builtIn !== null) return;
-  builtIn = [];
+let builtInLoading = null;
+function loadBuiltIn() {
+  builtInLoading = builtInLoading || readBuiltIn();
+  return builtInLoading;
+}
+async function readBuiltIn() {
+  const found = [];
   for (const page of ["/portfolio.html", "/cars.html"]) {
     const html = await (await fetch(page, { cache: "no-store" })).text();
     const doc = new DOMParser().parseFromString(html, "text/html");
-    for (const shot of doc.querySelectorAll(".shot")) builtIn.push({ path: shot.dataset.full.replace(/^img\\/(lite|saver)\\//, "img/"), title: shot.dataset.title, thumb: "/" + shot.querySelector("img").getAttribute("src").replace(/^img\\/(lite|saver)\\//, "img/"), cars: page === "/cars.html" });
+    for (const shot of doc.querySelectorAll(".shot")) found.push({ path: shot.dataset.full.replace(/^img\\/(lite|saver)\\//, "img/"), title: shot.dataset.title, credit: shot.dataset.credit || "", thumb: "/" + shot.querySelector("img").getAttribute("src").replace(/^img\\/(lite|saver)\\//, "img/"), cars: page === "/cars.html" });
   }
+  builtIn = found;
 }
 
 async function refresh() {
   const data = await (await fetch("/portfolio-photos.json", { cache: "no-store" })).json();
-  state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [] };
-  await loadBuiltIn();
+  state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [], hero: data.hero || "" };
+  await Promise.all([loadBuiltIn(), refreshStats()]);
   render();
 }
 
 // Every photo the studio knows, by the path pins and requests use.
 function everyPhoto() {
-  const added = state.photos.filter((p) => !removing.has(p.id)).map((p) => ({ path: uploadPath(p), title: p.title, thumb: "/uploads/" + p.id + "/thumb.jpg", cars: p.sport === "cars", added: p }));
+  const added = state.photos.filter((p) => !removing.has(p.id)).map((p) => ({ path: uploadPath(p), title: p.title, credit: p.credit, thumb: "/uploads/" + p.id + "/thumb.jpg", cars: p.sport === "cars", added: p }));
   return added.concat(builtIn);
 }
 
@@ -506,6 +708,12 @@ function thumbItem(photo) {
   const title = document.createElement("b");
   title.textContent = photo.title + (photo.cars ? " (cars)" : "");
   item.append(image, title);
+  const asked = requestCounts[photo.path] || 0;
+  const tags = document.createElement("span");
+  tags.className = "tags";
+  if (asked) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "Requested " + asked + "\\u00d7"; tags.append(t); }
+  if (state.hero === photo.path) { const t = document.createElement("span"); t.className = "tag live"; t.textContent = "Homepage"; tags.append(t); }
+  if (tags.children.length) item.append(tags);
   return item;
 }
 
@@ -554,7 +762,7 @@ function render() {
 
   // Added in the studio: Edit, Pin, Remove (with Undo).
   list.textContent = "";
-  for (const photo of all.filter((p) => p.added)) {
+  for (const photo of byRequests(all.filter((p) => p.added && shown(p)))) {
     const item = thumbItem(photo);
     const edit = button("Edit", "", () => openEditor(item, photo.added));
     const remove = button("Remove", "btn-danger", () => {
@@ -565,14 +773,14 @@ function render() {
         () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
-    item.append(edit, pinButton(photo), remove);
+    item.append(edit, pinButton(photo), homepageButton(photo), remove);
     list.append(item);
   }
-  if (!list.children.length) list.append(miniRow("Nothing added in the studio yet.", ""));
+  if (!list.children.length) list.append(miniRow(all.some((p) => p.added) ? "No added photos match." : "Nothing added in the studio yet.", ""));
 
   // Built into the pages: Pin, and Remove / Put back.
   sitePhotos.textContent = "";
-  for (const photo of builtIn) {
+  for (const photo of byRequests(builtIn.filter(shown))) {
     const off = state.hidden.includes(photo.path);
     const item = thumbItem(photo);
     if (off) item.className = "off";
@@ -583,10 +791,11 @@ function render() {
       if (response.ok) { state.hidden = reply.hidden; render(); }
       else { status.textContent = reply.error; toggle.disabled = false; }
     });
-    if (!off) item.append(pinButton(photo));
+    if (!off) item.append(pinButton(photo), homepageButton(photo));
     item.append(toggle);
     sitePhotos.append(item);
   }
+  if (!sitePhotos.children.length) sitePhotos.append(miniRow("No photos on the pages match.", ""));
 }
 
 // Edits an added photo's details in place.
@@ -650,7 +859,13 @@ async function refreshRequests() {
   badge.hidden = items.length === 0;
   const ovRequests = document.getElementById("ov-requests");
   ovRequests.textContent = "";
-  for (const item of items.slice(0, 3)) ovRequests.append(miniRow(item.name, " wants " + (item.title || "a photo") + " · " + item.contact));
+  for (const item of items.slice(0, 3)) ovRequests.append(miniRow(item.name, " wants " + (item.title || "a photo") + " \\u00b7 " + item.contact));
+  await Promise.all([refreshStats(), loadBuiltIn()]);
+  const top = Object.entries(requestCounts).sort((a, b) => b[1] - a[1])[0];
+  if (top) {
+    const known = everyPhoto().find((p) => p.path === top[0]);
+    ovRequests.append(miniRow("Most requested: ", (known ? known.title : top[0].replace(/^.*\\//, "")) + " (" + top[1] + (top[1] === 1 ? " request)" : " requests)")));
+  }
   if (!items.length) ovRequests.append(miniRow("No requests right now.", ""));
   if (!items.length) {
     const none = document.createElement("li");
@@ -698,7 +913,7 @@ document.getElementById("add").addEventListener("submit", async (event) => {
     const of = files.length > 1 ? " " + (i + 1) + " of " + files.length : "";
     try {
       addStatus.textContent = "Preparing photo" + of + "...";
-      const image = await createImageBitmap(file, { imageOrientation: "from-image" });
+      const image = prepare(await createImageBitmap(file, { imageOrientation: "from-image" }), picks[i]);
       const body = new FormData(event.target);
       body.set("full", await shrink(image, 1200, 0.82, picks[i].boxes), "full.jpg");
       body.set("thumb", await shrink(image, 480, 0.7, picks[i].boxes), "thumb.jpg");
@@ -770,6 +985,7 @@ async function refreshAnnouncements() {
       now.hidden = !item.photo;
       if (item.photo) now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo;
       document.getElementById("ann-photo-remove").checked = false;
+      updatePreview();
       document.getElementById("ann-submit").textContent = "Save changes";
       document.getElementById("ann-cancel").hidden = false;
       announceStatus.textContent = "Editing: " + item.title;
@@ -799,6 +1015,7 @@ function stopEditing() {
   document.getElementById("ann-cancel").hidden = true;
   document.getElementById("ann-until").value = "";
   document.getElementById("ann-photo-now").hidden = true;
+  updatePreview();
 }
 document.getElementById("ann-cancel").addEventListener("click", () => { stopEditing(); announceStatus.textContent = ""; });
 
@@ -821,6 +1038,35 @@ announceForm.addEventListener("submit", async (event) => {
   if (response.ok) { stopEditing(); refreshAnnouncements(); }
 });
 
+
+// ---- Live preview of the announcement card, built the same way as the homepage's (js/announcements.js).
+const previewCard = document.getElementById("ann-preview");
+let previewPhoto = "";
+function updatePreview() {
+  const title = document.getElementById("ann-title").value.trim() || "Your headline";
+  const text = document.getElementById("ann-text").value.trim() || "Your announcement text shows here.";
+  const date = dateBox.value || today();
+  const link = document.getElementById("ann-link").value.trim();
+  const linkText = document.getElementById("ann-link-text").value.trim() || "Read more";
+  const picked = document.getElementById("ann-photo").files[0];
+  const keepOld = !document.getElementById("ann-photo-now").hidden && !document.getElementById("ann-photo-remove").checked;
+  if (previewPhoto.startsWith("blob:")) URL.revokeObjectURL(previewPhoto);
+  previewPhoto = picked ? URL.createObjectURL(picked) : keepOld ? document.querySelector("#ann-photo-now img").src : "";
+  previewCard.textContent = "";
+  previewCard.className = "ann" + (previewPhoto ? " has-photo" : "");
+  if (previewPhoto) { const image = document.createElement("img"); image.src = previewPhoto; image.alt = ""; previewCard.append(image); }
+  const when = document.createElement("time");
+  when.textContent = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  const body = document.createElement("p");
+  body.textContent = text;
+  if (link) { const a = document.createElement("a"); a.href = "#"; a.textContent = linkText; body.append(" ", a); }
+  previewCard.append(when, heading, body);
+}
+announceForm.addEventListener("input", updatePreview);
+announceForm.addEventListener("change", updatePreview);
+updatePreview();
 refresh();
 refreshAnnouncements();
 refreshRequests();
@@ -843,8 +1089,9 @@ async function takeShared() {
     files.forEach((file) => transfer.items.add(file));
     photoInput.files = transfer.files;
   } catch (error) {}
-  picks = files.map((file) => ({ file, boxes: [] }));
+  picks = files.map(newPick);
   showPicks();
+  findTwins();
   go("add");
   addStatus.textContent = files.length + (files.length === 1 ? " photo" : " photos") + " ready. Fill in the details and press Add to the portfolio.";
 }

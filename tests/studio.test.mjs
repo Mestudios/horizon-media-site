@@ -142,7 +142,7 @@ test("requests from another site are refused", async () => {
 test("nobody can add or remove photos without signing in", async () => {
   assert.equal((await call("/studio/upload", { method: "POST", form: photo() })).status, 401);
   assert.equal((await call("/studio/delete", { method: "POST", form: { id: "0123456789abcdef" } })).status, 401);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [], hero: "" });
 });
 
 test("a signed-in upload appears in the public list and can be fetched", async () => {
@@ -175,7 +175,7 @@ test("uploads that are not JPEG photos, or are too large, are refused", async ()
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ thumb: html }) })).status, 415);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ full: new Blob([JPEG, new Uint8Array(1_500_001)]) }) })).status, 413);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: { title: "x", credit: "y", sport: "football" } })).status, 400);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [], hero: "" });
 });
 
 test("titles and credits are stored as plain text", async () => {
@@ -192,7 +192,8 @@ test("every season's sports and cars can be chosen, and the form offers exactly 
   assert.deepEqual(SPORTS, ["football", "soccer", "volleyball", "cross-country", "basketball", "wrestling", "indoor-track", "lacrosse", "baseball", "softball", "track-and-field", "cars", "other"]);
   const cookie = await signIn();
   const page = (await call("/studio", { cookie })).body;
-  assert.deepEqual([...page.matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]), SPORTS);
+  const categories = /<select id="sport"[^>]*>([\s\S]*?)<\/select>/.exec(page)[1];
+  assert.deepEqual([...categories.matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]), SPORTS);
   assert.match(page, /<optgroup label="Winter">/);
   assert.match(page, /Track &amp; Field/);
   for (const sport of SPORTS) {
@@ -450,12 +451,35 @@ test("a visitor who keeps hammering after 'slow down' is kicked off for an hour,
   assert.equal((await call("/announcements.json", { ip: "203.0.113.61" })).status, 200, "others are fine");
 });
 
+test("the homepage photo can be chosen in the studio, only from the site's own photos", async () => {
+  assert.equal((await call("/studio/hero", { method: "POST", form: { path: "img/cars/grille.jpg" } })).status, 401);
+  const cookie = await signIn();
+  for (const path of ["https://evil.example/x.jpg", "img/../x.jpg", "img/portfolio/x.jpg');background:url('y"]) {
+    assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path } })).status, 400, path);
+  }
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } })).status, 200);
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "img/cars/grille.jpg");
+  await call("/studio/hero", { method: "POST", cookie, form: { path: "" } });
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "");
+});
+
+test("the studio counts how often each photo is requested, even after requests are done", async () => {
+  const ask = (photo, ip) => call("/photo-request", { method: "POST", form: { photo, name: "A", contact: "a@b.c" }, ip });
+  await ask("img/portfolio/golden-hour.jpg", "192.0.2.101");
+  await ask("img/portfolio/golden-hour.jpg", "192.0.2.102");
+  await ask("img/cars/grille.jpg", "192.0.2.103");
+  assert.equal((await call("/studio/stats.json")).status, 401);
+  const cookie = await signIn();
+  for (const r of (await call("/studio/requests.json", { cookie })).body) await call("/studio/request-done", { method: "POST", cookie, form: { id: r.id } });
+  assert.deepEqual((await call("/studio/stats.json", { cookie })).body.requestCounts, { "img/portfolio/golden-hour.jpg": 2, "img/cars/grille.jpg": 1 });
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id: "not-an-id" } })).status, 400);
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id } })).status, 200);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [], hero: "" });
   assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404);
 });
 

@@ -254,7 +254,12 @@ footer p { margin: 8px 0 0; }
   background: var(--panel); cursor: zoom-in; display: block; width: 100%;
 }
 .shot[hidden] { display: none; }
-.shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease, opacity .35s ease; }
+/* A tiny blurry copy (--ph, from tools/make_placeholders.py) shows while the photo loads. */
+.shot { background: var(--ph, var(--panel)) center / cover no-repeat; }
+.shot img.is-loading { opacity: 0; }
+/* Photos added in the last week. */
+.shot-new { position: absolute; top: 10px; left: 10px; z-index: 1; padding: 4px 9px; border-radius: 999px; background: var(--flare); color: #1a1402; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .shot-info {
   position: absolute; inset: auto 0 0 0; padding: 40px 12px 12px; text-align: left;
   background: linear-gradient(180deg, transparent, rgba(10,10,10,.92)); color: var(--chalk);
