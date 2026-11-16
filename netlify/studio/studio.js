@@ -18,6 +18,7 @@ import { getStore } from "@netlify/blobs";
 import { studioPage } from "./page.js";
 import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
+import { createBanList } from "../guard/bans.js";
 
 const SESSION_HOURS = 12;
 const REMEMBER_DAYS = 30; // "Keep me signed in on this device"
@@ -31,8 +32,11 @@ const MAX_PINS = 24;
 // LOCK_MINUTES. Counted in Netlify Blobs, so it holds across all of Netlify's servers.
 const LOCK_AFTER = 10;
 const LOCK_MINUTES = 15;
-// Public addresses one visitor may load per minute before getting a short "slow down".
-const PUBLIC_PER_MINUTE = { list: 120, image: 600 };
+// Public addresses one visitor may load per minute before getting a short "slow
+// down" (high enough for a whole school on one network), and the number that
+// gets them kicked off the site for an hour (see ../guard/bans.js).
+const PUBLIC_PER_MINUTE = { list: 300, image: 1500 };
+const BAN_PER_MINUTE = { list: 1200, image: 6000 };
 const REQUESTS_PER_HOUR = 5; // from one address
 // Announcements go up on their date and come down after their end date, by the
 // calendar in this time zone.
@@ -102,20 +106,27 @@ export function createStudio() {
   const attempts = new Map(); // address -> { minute, count }
   const requestsFrom = new Map(); // address -> { hour, count }
   const publicLoads = new Map(); // "kind:address" -> { minute, count }
+  const bans = createBanList();
 
-  function tooManyLoads(kind, ip, now) {
+  // Counts a public load. Returns a reply to send instead ("slow down", or
+  // "blocked" once the address keeps going), or nothing to carry on.
+  async function tooManyLoads(kind, ip, now) {
     const minute = Math.floor(now / 60_000);
     const key = `${kind}:${ip}`;
-    const entry = publicLoads.get(key);
+    let entry = publicLoads.get(key);
     if (!entry || entry.minute !== minute) {
       if (publicLoads.size > 5000) publicLoads.clear();
-      publicLoads.set(key, { minute, count: 1 });
-      return false;
+      entry = { minute, count: 0 };
+      publicLoads.set(key, entry);
     }
     entry.count += 1;
-    return entry.count > PUBLIC_PER_MINUTE[kind];
+    if (entry.count > BAN_PER_MINUTE[kind]) {
+      if (entry.count === BAN_PER_MINUTE[kind] + 1) await bans.ban(ip, now, `${entry.count} ${kind} loads in a minute`);
+      return blocked();
+    }
+    if (entry.count > PUBLIC_PER_MINUTE[kind]) return reply("Too many requests. Wait a minute.", 429, { "retry-after": "60", "content-type": "text/plain; charset=utf-8" });
   }
-  const slowDown = () => reply("Too many requests. Wait a minute.", 429, { "retry-after": "60", "content-type": "text/plain; charset=utf-8" });
+  const blocked = () => reply("This network is blocked from Horizon Media for an hour for sending far too many requests.", 403, { "content-type": "text/plain; charset=utf-8" });
 
   // Failed sign-ins per address, kept under a scrambled form of the address.
   const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}`;
@@ -221,14 +232,17 @@ export function createStudio() {
 
     // ---- Public: the list and the photos themselves
     const ip = context.ip || "unknown";
+    // Kicked off the site: nothing here answers a banned address.
+    if (await bans.isBanned(context.ip, now)) return blocked();
+    let limited;
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
-      if (tooManyLoads("list", ip, now)) return slowDown();
+      if ((limited = await tooManyLoads("list", ip, now))) return limited;
       // Not kept by browsers: a photo or announcement removed in the studio
       // disappears from the site on the next page load.
       return json(await photoIndex(), 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
-      if (tooManyLoads("list", ip, now)) return slowDown();
+      if ((limited = await tooManyLoads("list", ip, now))) return limited;
       const today = todayIn(now);
       const up = (await announcementIndex()).filter((item) => isUp(item, today));
       return json(up, 200, { "cache-control": "no-cache" });
@@ -255,7 +269,7 @@ export function createStudio() {
     const annPhoto = /^\/announcement-photos\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
     if (annPhoto) {
       if (request.method !== "GET") return reply("Not allowed", 405);
-      if (tooManyLoads("image", ip, now)) return slowDown();
+      if ((limited = await tooManyLoads("image", ip, now))) return limited;
       const bytes = await store().get(`ann-photo/${annPhoto[1]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
       // The page asks for it with ?v=<when it was added>, so a new photo gets a new address.
@@ -264,7 +278,7 @@ export function createStudio() {
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
       if (request.method !== "GET") return reply("Not allowed", 405);
-      if (tooManyLoads("image", ip, now)) return slowDown();
+      if ((limited = await tooManyLoads("image", ip, now))) return limited;
       const bytes = await store().get(`photo/${file[1]}/${file[2]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
       return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });

@@ -431,9 +431,23 @@ test("public lists cost one storage read per view and still change right away", 
 
 test("one visitor loading the public lists too fast is told to slow down", async () => {
   let last;
-  for (let i = 0; i < 121; i++) last = await call("/announcements.json", { ip: "203.0.113.50" });
+  for (let i = 0; i < 301; i++) last = await call("/announcements.json", { ip: "203.0.113.50" });
   assert.equal(last.status, 429);
   assert.equal((await call("/announcements.json", { ip: "203.0.113.51" })).status, 200);
+});
+
+test("a visitor who keeps hammering after 'slow down' is kicked off for an hour, on every server", async () => {
+  const ip = "203.0.113.60";
+  let last;
+  for (let i = 0; i < 1200; i++) last = await call("/announcements.json", { ip });
+  assert.equal(last.status, 429, "slowed down first");
+  last = await call("/announcements.json", { ip });
+  assert.equal(last.status, 403);
+  assert.match(last.body, /blocked/);
+  assert.equal((await call("/portfolio-photos.json", { ip })).status, 403, "every address is closed to it");
+  studio = createStudio(); // another server
+  assert.equal((await call("/announcements.json", { ip })).status, 403);
+  assert.equal((await call("/announcements.json", { ip: "203.0.113.61" })).status, 200, "others are fine");
 });
 
 test("removing a photo deletes it everywhere", async () => {

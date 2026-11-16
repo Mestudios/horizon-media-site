@@ -18,6 +18,13 @@ export const WINDOW_MS = 2 * 60_000;
 // Keep rateLimit.windowLimit in netlify/edge-functions/guard.js the same.
 export const RATE_LIMIT = 300;
 
+// Kicked off: an address that keeps going after it is refused is banned from
+// the whole site for BAN_MINUTES. For pages, that is BAN_AFTER page loads in
+// a minute; the studio's lists and images have their own numbers in
+// netlify/studio/studio.js.
+export const BAN_AFTER = 2 * RATE_LIMIT;
+export const BAN_MINUTES = 60;
+
 // The anonymous cookie that stops someone who reloads being counted twice.
 export const COOKIE = { name: "hm_visitor", maxAgeSeconds: 30 * 60 };
 

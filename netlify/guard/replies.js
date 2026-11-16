@@ -60,6 +60,18 @@ a{align-self:flex-start;margin:0 5vw;padding:12px 20px;border-radius:4px;backgro
 a:focus-visible{outline:2px solid #ffe27a;outline-offset:3px}
 </style><header>Horizon Media</header><h1>Timeout</h1><p>Too many page loads from your network in the last minute. This page reloads by itself in one minute.</p><a href="">Reload now</a>`;
 
+// Sent on every page to an address that was kicked off for flooding the site.
+const BANNED_PAGE = TIMEOUT_PAGE
+  .replace('<meta http-equiv="refresh" content="60">', "")
+  .replace(/<h1>.*$/s, `<h1>Blocked</h1><p>Your network sent far too many requests to this site, so it is blocked for the next hour. If you think this is a mistake, message us on Instagram.</p><a href="https://ig.me/m/hor1zonmedia">Message @hor1zonmedia</a>`);
+
+export function bannedPage() {
+  return new Response(BANNED_PAGE, {
+    status: 403,
+    headers: { ...SECURITY_HEADERS, "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-busy-mode": "banned" },
+  });
+}
+
 export function timeoutPage() {
   return new Response(TIMEOUT_PAGE, {
     status: 429,

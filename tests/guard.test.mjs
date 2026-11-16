@@ -313,6 +313,36 @@ test("one address hammering the page is cut off with a tiny reply", async () => 
   assert.equal((await visit(handler, { ...attacker })).status, 200, "and the limit resets after a minute");
 });
 
+test("an address that keeps hammering after the timeout is kicked off every page for an hour, on every server", async () => {
+  const handler = newInstance();
+  const attacker = { ip: "192.0.2.90", cookie: null, agent: BROWSER };
+  for (let i = 0; i < 600; i++) await visit(handler, { ...attacker });
+  const kicked = await visit(handler, { ...attacker });
+  assert.equal(kicked.status, 403);
+  assert.equal(kicked.mode, "banned");
+  assert.match(kicked.body, /<h1>Blocked<\/h1>/);
+  assert.match(kicked.body, /blocked for the next hour/);
+  assert.ok(!/http-equiv="refresh"/.test(kicked.body), "it does not reload itself");
+  assert.ok(kicked.body.length < 1500);
+  assert.equal(logs.filter(([level, line]) => level === "warn" && line.includes("192.0.2.90") && line.includes("banned")).length, 1);
+
+  // A different server (fresh instance), a different page, the next minute: still blocked.
+  clock.now += 60 * SECOND;
+  const other = newInstance();
+  assert.equal((await visit(other, { ...attacker }, { path: "/privacy.html" })).status, 403);
+  assert.equal((await visit(other, newVisitor("192.0.2.91"), { path: "/privacy.html" })).passedThrough, true, "other addresses are let through");
+  // After the hour it is lifted.
+  clock.now += 61 * 60 * SECOND;
+  const later = newInstance();
+  assert.equal((await visit(later, { ...attacker })).status, 200);
+});
+
+test("pages without photos only get the checks, not busy mode", async () => {
+  const handler = newInstance();
+  const reply = await visit(handler, newVisitor(), { path: "/book.html" });
+  assert.equal(reply.passedThrough, true);
+});
+
 test("IPv6 addresses are limited per network, not per address", async () => {
   const handler = newInstance();
   for (let i = 0; i < 300; i++) {
@@ -511,12 +541,12 @@ test("without up-to-the-second reads it falls back to the default ones", async (
 
 // ---- Netlify set-up ----------------------------------------------------------
 
-test("the function Netlify runs is the guard, in front of the homepage only", async () => {
+test("the function Netlify runs is the guard, in front of every page", async () => {
   const entry = await import("../netlify/edge-functions/guard.js");
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },
