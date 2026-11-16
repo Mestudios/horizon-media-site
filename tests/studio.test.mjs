@@ -17,10 +17,11 @@ const PASSWORD = "correct horse battery";
 const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6]);
 let blobs, directory, port, site = 0, studio;
+const storageCalls = []; // every request the local storage server receives
 
 before(async () => {
   directory = mkdtempSync(join(tmpdir(), "studio-blobs-"));
-  blobs = new BlobsServer({ directory, token: "t" });
+  blobs = new BlobsServer({ directory, token: "t", onRequest: (event) => storageCalls.push(event) });
   port = (await blobs.start()).port;
 });
 after(async () => {
@@ -398,6 +399,41 @@ test("an announcement can carry a photo, which can be replaced, removed, and goe
   await call("/studio/announce", { method: "POST", cookie, form: { id, title: "Shoot day", text: "y", photo: new Blob([JPEG]) } });
   await call("/studio/announce-delete", { method: "POST", cookie, form: { id } });
   assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 404);
+});
+
+test("ten wrong sign-ins from one address lock it out for 15 minutes, across Netlify's servers", async () => {
+  const wrong = (s, ip = "198.51.100.77") => s(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", "wrong password!!"); return f; })() }), { ip });
+  // Each try goes to a fresh copy of the studio, as if to a different server, so
+  // only the shared count in storage can stop them.
+  for (let i = 0; i < 10; i++) assert.equal((await wrong(createStudio())).status, 401, `try ${i + 1}`);
+  assert.equal((await wrong(createStudio())).status, 429);
+  const right = await createStudio()(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", PASSWORD); return f; })() }), { ip: "198.51.100.77" });
+  assert.equal(right.status, 429, "even the right password waits out the lock");
+  assert.equal((await wrong(createStudio(), "198.51.100.78")).status, 401, "other addresses are not affected");
+});
+
+test("public lists cost one storage read per view and still change right away", async () => {
+  const cookie = await signIn();
+  for (let i = 0; i < 3; i++) await call("/studio/upload", { method: "POST", cookie, form: photo({ title: `P${i}` }) });
+  await call("/studio/announce", { method: "POST", cookie, form: { title: "News", text: "x" } });
+  // The first load after a change may rebuild; after that, one read each.
+  await call("/portfolio-photos.json");
+  await call("/announcements.json");
+  storageCalls.length = 0;
+  await call("/portfolio-photos.json");
+  await call("/announcements.json");
+  assert.deepEqual(storageCalls.map((c) => c.type), ["get", "get"], JSON.stringify(storageCalls));
+  const { photos } = (await call("/portfolio-photos.json")).body;
+  assert.equal(photos.length, 3);
+  await call("/studio/delete", { method: "POST", cookie, form: { id: photos[0].id } });
+  assert.equal((await call("/portfolio-photos.json")).body.photos.length, 2, "a removal shows on the next load");
+});
+
+test("one visitor loading the public lists too fast is told to slow down", async () => {
+  let last;
+  for (let i = 0; i < 121; i++) last = await call("/announcements.json", { ip: "203.0.113.50" });
+  assert.equal(last.status, 429);
+  assert.equal((await call("/announcements.json", { ip: "203.0.113.51" })).status, 200);
 });
 
 test("removing a photo deletes it everywhere", async () => {
