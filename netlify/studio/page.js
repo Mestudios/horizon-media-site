@@ -108,10 +108,49 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
   .view-top #logout-top{display:inline-flex}
 }
 #logout-top{display:none;margin:0;padding:8px 14px;font-size:13px}
-</style></head><body><nav class="nav"><div class="wrap"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a></div></nav>`;
-const plainTop = `<main class="studio"><h1>Studio</h1>`;
 
-const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy. More people can sign in with STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5.</p>`;
+/* Sign-in (and switched-off) page: a photo behind a frosted card. */
+.signin-bg{position:fixed;inset:0;background:#0a0a0a url("/img/portfolio/under-the-lights.jpg") center/cover no-repeat}
+.signin-bg::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 50% 45%,rgba(10,10,10,.35),rgba(10,10,10,.85))}
+.signin{position:relative;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px 48px;
+  --night:#0a0a0a;--panel:#151515;--line:#2b2b2b;--chalk:#f4f4f4;--dim:#b4b4b4;--accent-2:var(--flare-2);color:var(--chalk)}
+.signin-card{width:min(420px,100%);padding:30px;border-radius:16px;background:rgba(18,18,18,.55);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.signin-brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;color:var(--chalk)}
+.signin h1{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:64px;line-height:.9;margin:18px 0 2px}
+.signin-sub{margin:0 0 6px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;font-size:12px;font-weight:600}
+.signin label{display:block;margin:16px 0 6px;font-weight:600;font-size:14px}
+.signin input:not([type=checkbox]){width:100%;padding:13px;font:inherit;font-size:16px;color:var(--chalk);background:rgba(10,10,10,.55);border:1px solid rgba(255,255,255,.18);border-radius:6px}
+.signin input:not([type=checkbox]):focus{outline:none;border-color:var(--flare-2)}
+.signin #login .remember{display:flex;align-items:center;gap:10px;margin-top:18px;font-weight:500}
+.signin #login .remember input{width:20px;height:20px;margin:0;accent-color:var(--flare)}
+.signin .remember-note{margin:6px 0 0 30px;font-size:13px;color:var(--dim)}
+.signin #login button{display:flex;justify-content:center;width:100%;min-width:0;margin:24px 0 0;padding:16px;font-size:18px}
+.signin [role=status]{min-height:1.4em;margin:12px 0 0;text-align:center;color:var(--flare-2)}
+.signin-back{display:block;text-align:center;margin-top:14px;color:var(--dim);font-size:14px;text-decoration:none}
+.signin-back:hover{color:var(--chalk)}
+.signin p.off-note{color:var(--dim);font-size:14px}
+.signin-credit{position:fixed;right:14px;bottom:10px;margin:0;color:rgba(255,255,255,.7);font-size:12px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.signin [role=status]:empty{min-height:0;margin:0}
+@media (max-width:600px){
+  body:has(.signin){background:#0a0a0a}
+  .signin-bg{bottom:auto;height:46vh;background-size:cover;background-position:center 78%}
+  .signin-bg::after{background:linear-gradient(180deg,rgba(10,10,10,.15),rgba(10,10,10,.35) 60%,#0a0a0a)}
+  .signin{align-content:end;padding:24vh 12px 16px}
+  .signin-card{padding:22px 20px;background:rgba(18,18,18,.68)}
+  .signin h1{font-size:48px;margin-top:12px}
+  .signin-brand{font-size:18px}.signin-brand svg{width:32px;height:23px}
+  .signin label{margin-top:12px}
+  .signin .remember-note{display:none}
+  .signin-credit{top:12px;bottom:auto}
+}
+</style></head><body>`;
+const nav = `<nav class="nav"><div class="wrap"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a></div></nav>`;
+const LOGO = `<svg width="40" height="29" viewBox="0 0 150 110" aria-hidden="true"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg>`;
+// The sign-in and switched-off pages: a photo behind a frosted card.
+const signinTop = `<div class="signin-bg" aria-hidden="true"></div><main class="signin"><div class="signin-card"><a class="signin-brand" href="/">${LOGO}<span>Horizon Media</span></a><h1>Studio</h1><p class="signin-sub">Team sign-in</p>`;
+const signinEnd = `<a class="signin-back" href="/">&larr; Back to the site</a></div></main><p class="signin-credit">Photo by @cb.framed.it</p>`;
+
+const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note off-note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy. More people can sign in with STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5.</p>`;
 
 const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
 <script>
@@ -777,6 +816,6 @@ takeShared();
 </script>`;
 
 export function studioPage({ state }) {
-  const body = state === "in" ? signedIn + "</main></div>" : plainTop + (state === "off" ? off : out) + "</main>";
+  const body = state === "in" ? nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
   return head + body + '<script src="/js/site.js"></script></body></html>';
 }
