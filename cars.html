@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap">
@@ -32,6 +33,7 @@
   </div>
 </nav>
 
+<main id="main">
 <header class="page-top">
   <div class="wrap">
     <h1 class="headline">Car photography</h1>
@@ -41,7 +43,7 @@
   </div>
 </header>
 
-<main class="portfolio">
+<div class="portfolio">
   <div class="wrap">
     <!-- Car photos. Photos added through the studio under "Cars" appear here too. -->
     <div class="gallery" data-studio="cars">
@@ -58,7 +60,7 @@
     </div>
     <p class="gallery-empty" hidden>Our first car shoots are coming soon. Follow us on Instagram to see them first.</p>
   </div>
-</main>
+</div>
 
 <section class="cta-band">
   <div class="wrap">
@@ -66,6 +68,7 @@
     <a class="btn btn-hot" href="book.html">Book a car shoot</a>
   </div>
 </section>
+</main>
 
 <div class="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
   <canvas class="viewer-photo" role="img" aria-label=""></canvas>
@@ -83,10 +86,10 @@
       <label for="request-contact">Instagram name or email</label><input id="request-contact" name="contact" maxlength="100" autocapitalize="none" placeholder="@yourname or you@email.com" required>
       <label for="request-message">Anything else? (optional)</label><textarea id="request-message" name="message" maxlength="500" rows="3" placeholder="Which game, who is in it, what you need it for"></textarea>
       <div class="request-trap" aria-hidden="true"><label for="request-website">Leave this empty</label><input id="request-website" name="website" tabindex="-1" autocomplete="off"></div>
-      <p class="request-note">We only use this to reply to you. See our <a href="privacy.html">privacy page</a>.</p>
+      <label class="consent"><input type="checkbox" name="consent" required> I agree that Horizon Media may use these details only to reply to me about this photo. They are deleted once my request is handled (<a href="privacy.html">privacy</a>).</label>
       <div class="btns"><button type="submit" class="btn btn-hot">Send request</button><button type="button" class="btn request-cancel">Cancel</button></div>
     </div>
-    <div class="request-done" hidden>
+    <div class="request-done" tabindex="-1" hidden>
       <p>Thanks! We got your request and will reach out to you.</p>
       <p>In a hurry? <a href="https://ig.me/m/hor1zonmedia">Message us on Instagram</a>.</p>
     </div>
@@ -104,7 +107,7 @@
 <footer>
   <div class="wrap">
     <div class="foot-brand"><a class="logo" href="./"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a><p>Sports content, done right.</p></div>
-    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
+    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a><a href="refunds.html">Refunds</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
     <p class="foot-copy">© 2026 Horizon Media. All photos belong to their photographers.</p>
   </div>
 </footer>

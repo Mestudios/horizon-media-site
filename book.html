@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap">
@@ -32,6 +33,7 @@
   </div>
 </nav>
 
+<main id="main">
 <header class="page-top">
   <div class="wrap">
     <h1 class="headline">Book us</h1>
@@ -40,25 +42,33 @@
   </div>
 </header>
 
-<main class="book">
+<div class="book">
   <div class="wrap">
-    <div class="book-frame">
-      <iframe src="https://forms.gle/Tn4ZsGxT8dV4Ru6B8" title="Horizon Media booking form" loading="lazy" referrerpolicy="strict-origin-when-cross-origin">Loading the booking form…</iframe>
+    <div class="book-consent" id="book-consent">
+      <h2>Booking form</h2>
+      <p>Our booking form is run by Google. Loading it on this page lets Google see your visit and set its own cookies (see <a href="https://policies.google.com/privacy">Google's privacy policy</a>). Nothing from Google loads until you choose.</p>
+      <label class="remember-choice"><input type="checkbox" id="remember-form"> Remember my choice on this device</label>
+      <div class="btns"><button type="button" class="btn btn-hot" id="load-form">Load the booking form</button><a class="btn" href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8">Open it on Google instead</a></div>
     </div>
-    <p class="book-note">Form not showing? <a class="btn" href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8">Open the booking form</a></p>
+    <div class="book-frame" id="book-frame" hidden>
+      <iframe data-src="https://forms.gle/Tn4ZsGxT8dV4Ru6B8" title="Horizon Media booking form" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    </div>
+    <p class="book-note" id="book-fallback" hidden>Form not showing? <a class="btn" href="https://forms.gle/Tn4ZsGxT8dV4Ru6B8">Open the booking form</a></p>
     <p class="book-note">The form is run by Google, so Google's <a href="https://policies.google.com/privacy">privacy policy</a> applies to what you type in it. A request isn't a confirmed booking until we reply: see our <a href="terms.html">terms</a>.</p>
   </div>
+</div>
 </main>
 
 <footer>
   <div class="wrap">
     <div class="foot-brand"><a class="logo" href="./"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a><p>Sports content, done right.</p></div>
-    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
+    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a><a href="refunds.html">Refunds</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
     <p class="foot-copy">© 2026 Horizon Media. All photos belong to their photographers.</p>
   </div>
 </footer>
 
 <script src="js/protect.js"></script>
+<script src="js/book.js"></script>
 <script src="js/site.js"></script>
 </body>
 </html>

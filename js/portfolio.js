@@ -202,7 +202,9 @@
     requestForm.elements.name.focus();
   }
   function closeRequest() {
+    if (requestForm.hidden) return;
     requestForm.hidden = true;
+    if (!viewer.hidden) requestButton.focus();
   }
   requestButton.addEventListener("click", openRequest);
   requestForm.querySelector(".request-cancel").addEventListener("click", closeRequest);
@@ -217,7 +219,9 @@
       if (response.ok) {
         requestStatus.textContent = "";
         requestForm.querySelector(".request-fields").hidden = true;
-        requestForm.querySelector(".request-done").hidden = false;
+        const done = requestForm.querySelector(".request-done");
+        done.hidden = false;
+        done.focus(); // so keyboard and screen-reader users land on the thank-you
       } else {
         const reply = await response.json().catch(() => ({}));
         showProblem(reply.error || "Something went wrong on our end, so please try again later or message us on Instagram.");
@@ -256,7 +260,7 @@
         shot.dataset.post = `https://www.instagram.com/${encodeURIComponent(photo.credit)}/`;
         const image = document.createElement("img");
         image.src = `uploads/${photo.id}/thumb.jpg`;
-        image.alt = photo.title;
+        image.alt = photo.alt || photo.title;
         image.loading = "lazy";
         fadeIn(image);
         const info = document.createElement("span");
@@ -294,6 +298,20 @@
   viewer.querySelector(".viewer-next").addEventListener("click", () => show(open + 1));
   viewer.addEventListener("click", (event) => {
     if (event.target === viewer) close();
+  });
+  // Keyboard: while the viewer is open, Tab and Shift+Tab stay inside it (inside
+  // the request form, or its pop-up, when those are open).
+  function focusables() {
+    const scope = !requestAlert.hidden ? requestAlert : !requestForm.hidden ? requestForm : viewer;
+    return [...scope.querySelectorAll("a[href], button, input, textarea, select")].filter((el) => !el.disabled && el.offsetParent !== null && !el.closest("[hidden]") && el.tabIndex !== -1);
+  }
+  document.addEventListener("keydown", (event) => {
+    if (viewer.hidden || event.key !== "Tab") return;
+    const items = focusables();
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !items.includes(document.activeElement))) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || !items.includes(document.activeElement))) { event.preventDefault(); first.focus(); }
   });
   document.addEventListener("keydown", (event) => {
     if (viewer.hidden) return;

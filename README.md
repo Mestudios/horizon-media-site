@@ -67,9 +67,21 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 - Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute, and ten in 15 minutes locks it out for 15 minutes. The second count is kept in Netlify Blobs (under a scrambled form of the address), so it holds across all of Netlify's servers.
 - The public lists (`/portfolio-photos.json`, `/announcements.json`) are read from one stored copy that the studio rebuilds after every change (and at least every 10 minutes), so a page view costs one storage read however much is in the studio. One visitor can load them 300 times a minute and studio images 1,500 times a minute before being told to slow down (high enough for a whole school on one network), and is kicked off at four times that.
 
+## Cookies, consent and third parties
+
+- `cookies.html` lists everything the site stores. There are no advertising, analytics or tracking cookies, so no cookie banner is needed: `hm_visitor` (busy mode) and `hm_studio` (team sign-in) are needed for the site to work, and `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
+- The only third-party content is the Google booking form. `book.html` doesn't load it until the visitor presses "Load the booking form" (`js/book.js`); "Remember my choice" saves `hm-forms` in their browser.
+- Fonts and photos are served from this site. Instagram is only linked to, never loaded.
+- The photo request form asks only for a name, an Instagram name or email, and an optional message, and must be sent with the consent box ticked (checked on the server too).
+- `refunds.html` explains that Horizon Media takes no payments: each photographer sets their own prices and handles payment and refunds directly.
+
+## Accessibility
+
+Every page starts with a "Skip to content" link, keeps its content inside one `<main>`, and works with the keyboard alone: the photo viewer and request form keep Tab inside them while open, Esc closes them and returns focus to where it was. All photos have alt text; studio uploads can be given a description for screen readers. The pages were checked with axe (WCAG 2.1 AA, light and dark) with no problems found.
+
 ## Booking page and page not found
 
-`book.html` shows the Google booking form inside the site; every "Book" button leads there. If the form ever fails to show, the page has a button that opens it directly. To change forms, replace the forms.gle address in `book.html` (it appears twice).
+`book.html` shows the Google booking form inside the site, once the visitor agrees to load it; every "Book" button leads there. If the form ever fails to show, the page has a button that opens it directly. To change forms, replace the forms.gle address in `book.html` (it appears twice).
 
 `404.html` is what Netlify shows for an address that doesn't exist.
 

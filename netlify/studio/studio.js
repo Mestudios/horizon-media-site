@@ -252,7 +252,6 @@ export function createStudio() {
     if (url.pathname === "/photo-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);
       if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
-      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
       const form = await request.formData();
       // A field people never see: forms that fill it in are bots.
       if (String(form.get("website") || "") !== "") return json({ ok: true });
@@ -262,6 +261,9 @@ export function createStudio() {
       const photoPath = String(form.get("photo") || "");
       if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
+      if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
+      // Counted only for requests that would be saved, so a mistyped form doesn't use up the hour.
+      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
       if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
@@ -356,6 +358,8 @@ export function createStudio() {
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now };
+      const alt = clean(form.get("alt"), 150);
+      if (alt) photo.alt = alt; // read out by screen readers instead of the title
       const owner = clean(form.get("owner"), 40).replace(/^@+/, "");
       if (sport === "cars" && owner) photo.owner = owner; // the car's owner, credited on the car page
       await Promise.all([
@@ -376,6 +380,9 @@ export function createStudio() {
       if (!old) return json({ error: "That photo no longer exists." }, 404);
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { ...old, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport };
+      const alt = clean(form.get("alt"), 150);
+      if (alt) photo.alt = alt;
+      else delete photo.alt;
       const owner = clean(form.get("owner"), 40).replace(/^@+/, "");
       if (sport === "cars" && owner) photo.owner = owner;
       else delete photo.owner;

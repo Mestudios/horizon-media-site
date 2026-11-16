@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap">
@@ -32,6 +33,7 @@
   </div>
 </nav>
 
+<main id="main">
 <header class="page-top">
   <div class="wrap">
     <h1 class="headline">Portfolio</h1>
@@ -41,7 +43,7 @@
   </div>
 </header>
 
-<main class="portfolio">
+<div class="portfolio">
   <div class="wrap">
     <div class="gallery">
       <button class="shot" type="button" data-credit="cb.framed.it" data-sport="football" data-full="img/portfolio/one-hand-grab.jpg" data-post="https://www.instagram.com/p/DenD-lMFpR6/?img_index=1" data-title="One-hand grab" style="--ph:url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAANAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAwb/xAAfEAACAQQCAwAAAAAAAAAAAAABAgMABBEyEpITMVH/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/EABYRAQEBAAAAAAAAAAAAAAAAAAASAf/aAAwDAQACEQMRAD8Ao5rqOB0R5Qskmik7faQzoDjzp2FQzqkuC/I49ZcnFEbaEnVu1FIvH//Z)"><img src="img/portfolio/thumb/one-hand-grab.jpg" alt="A receiver leaps for a one-handed catch over a defender" width="480" height="640" loading="lazy"><span class="shot-info"><b>One-hand grab</b><span>Photo by @cb.framed.it</span></span></button>
@@ -91,7 +93,7 @@
       <button class="shot" type="button" data-sport="football" data-credit="visuals_alex_" data-full="img/portfolio/tryout-day.jpg" data-post="https://www.instagram.com/p/Db8dEPXEW8b/?img_index=10" data-title="Tryout day" style="--ph:url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAANAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAgX/xAAiEAABAwMDBQAAAAAAAAAAAAABAAIDERIhBCIxExQjM9H/xAAUAQEAAAAAAAAAAAAAAAAAAAAC/8QAFxEBAQEBAAAAAAAAAAAAAAAAAQAxAv/aAAwDAQACEQMRAD8AgCecjqB48bbc85RGlmcA4W0OfY36gyQtFvIIT7yVu0FtBgbQmq6wOQwv/9k=)"><img src="img/portfolio/thumb/tryout-day.jpg" alt="A player in number 7 stands with his hands on his hips at dusk" width="480" height="640" loading="lazy"><span class="shot-info"><b>Tryout day</b><span>Photo by @visuals_alex_</span></span></button>
     </div>
   </div>
-</main>
+</div>
 
 <section class="cta-band">
   <div class="wrap">
@@ -99,6 +101,7 @@
     <a class="btn btn-hot" href="book.html">Book coverage</a>
   </div>
 </section>
+</main>
 
 <div class="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
   <canvas class="viewer-photo" role="img" aria-label=""></canvas>
@@ -116,10 +119,10 @@
       <label for="request-contact">Instagram name or email</label><input id="request-contact" name="contact" maxlength="100" autocapitalize="none" placeholder="@yourname or you@email.com" required>
       <label for="request-message">Anything else? (optional)</label><textarea id="request-message" name="message" maxlength="500" rows="3" placeholder="Which game, who is in it, what you need it for"></textarea>
       <div class="request-trap" aria-hidden="true"><label for="request-website">Leave this empty</label><input id="request-website" name="website" tabindex="-1" autocomplete="off"></div>
-      <p class="request-note">We only use this to reply to you. See our <a href="privacy.html">privacy page</a>.</p>
+      <label class="consent"><input type="checkbox" name="consent" required> I agree that Horizon Media may use these details only to reply to me about this photo. They are deleted once my request is handled (<a href="privacy.html">privacy</a>).</label>
       <div class="btns"><button type="submit" class="btn btn-hot">Send request</button><button type="button" class="btn request-cancel">Cancel</button></div>
     </div>
-    <div class="request-done" hidden>
+    <div class="request-done" tabindex="-1" hidden>
       <p>Thanks! We got your request and will reach out to you.</p>
       <p>In a hurry? <a href="https://ig.me/m/hor1zonmedia">Message us on Instagram</a>.</p>
     </div>
@@ -137,7 +140,7 @@
 <footer>
   <div class="wrap">
     <div class="foot-brand"><a class="logo" href="./"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a><p>Sports content, done right.</p></div>
-    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
+    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a><a href="refunds.html">Refunds</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
     <p class="foot-copy">© 2026 Horizon Media. All photos belong to their photographers.</p>
   </div>
 </footer>

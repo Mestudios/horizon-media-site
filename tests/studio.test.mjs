@@ -41,6 +41,8 @@ async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "1
   if (cookie) headers.set("cookie", cookie);
   if (method === "POST" && origin) headers.set("origin", origin);
   let body;
+  // Photo requests tick the consent box unless a test says otherwise.
+  if (form && path === "/photo-request" && !("consent" in form)) form = { ...form, consent: "on" };
   if (form) {
     body = new FormData();
     for (const [key, value] of Object.entries(form)) value instanceof Blob ? body.set(key, value, `${key}.jpg`) : body.set(key, value);
@@ -300,6 +302,9 @@ test("visitors can request a photo; only the team can read requests, and Done de
   assert.equal((await ask({ photo: "netlify/studio/studio.js" })).status, 400);
   assert.equal((await ask({ name: "" })).status, 400);
   assert.equal((await ask({ contact: "" })).status, 400);
+  const noConsent = await ask({ consent: "" });
+  assert.equal(noConsent.status, 400, "the consent box must be ticked");
+  assert.match(noConsent.body.error, /tick the box/);
   assert.equal((await ask({ website: "spam.example" })).status, 200, "a bot gets a quiet yes");
   assert.equal((await ask({ name: "<b>Sam</b>", message: "For my <script>mom</script>" })).status, 200);
   assert.equal((await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" })).status, 200);

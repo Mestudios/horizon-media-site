@@ -88,7 +88,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio label.drop b{font-family:var(--display);font-weight:800;font-size:30px;text-transform:uppercase;color:var(--chalk)}
 .studio label.drop:hover,.studio label.drop.over{border-color:var(--flare);color:var(--chalk)}
 .studio .drop-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.studio .drop-input:focus-visible+ul,.studio label.drop:focus-within{outline:2px solid var(--flare-2)}
+.studio label.drop:focus-within{outline:2px solid var(--flare-2);outline-offset:3px}
 .studio .has-picks label.drop{min-height:0;padding:14px;flex-direction:row}
 .studio .has-picks label.drop b{font-size:20px}
 .studio .has-picks label.drop span{display:none}
@@ -106,7 +106,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio ul.picked li img{transition:transform .2s}
 .studio p.twin{margin:4px 0 0;font-size:12px;font-weight:600;color:var(--danger)}
 .ann-preview{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
-.studio .preview-label{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.studio h2.preview-label{font-family:var(--body);margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .ann-preview .ann-list{grid-template-columns:minmax(0,380px)}
 .ann-preview .ann a{pointer-events:none}
 .studio li .ph{position:relative}
@@ -154,11 +154,12 @@ body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 #logout-top{display:none;margin:0;padding:8px 14px;font-size:13px}
 
 /* Sign-in (and switched-off) page: a photo behind a frosted card. */
+body:has(.signin){background:#0a0a0a}
 .signin-bg{position:fixed;inset:0;background:#0a0a0a url("/img/portfolio/under-the-lights.jpg") center/cover no-repeat}
 .signin-bg::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 50% 45%,rgba(10,10,10,.35),rgba(10,10,10,.85))}
 .signin{position:relative;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px 48px;
   --night:#0a0a0a;--panel:#151515;--line:#2b2b2b;--chalk:#f4f4f4;--dim:#b4b4b4;--accent-2:var(--flare-2);color:var(--chalk)}
-.signin-card{width:min(420px,100%);padding:30px;border-radius:16px;background:rgba(18,18,18,.55);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.signin-card{width:min(420px,100%);padding:30px;border-radius:16px;background:rgba(18,18,18,.7);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.5)}
 .signin-brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;color:var(--chalk)}
 .signin h1{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:64px;line-height:.9;margin:18px 0 2px}
 .signin-sub{margin:0 0 6px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;font-size:12px;font-weight:600}
@@ -176,7 +177,6 @@ body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 .signin-credit{position:fixed;right:14px;bottom:10px;margin:0;color:rgba(255,255,255,.7);font-size:12px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
 .signin [role=status]:empty{min-height:0;margin:0}
 @media (max-width:600px){
-  body:has(.signin){background:#0a0a0a}
   .signin-bg{bottom:auto;height:46vh;background-size:cover;background-position:center 78%}
   .signin-bg::after{background:linear-gradient(180deg,rgba(10,10,10,.15),rgba(10,10,10,.35) 60%,#0a0a0a)}
   .signin{align-content:end;padding:24vh 12px 16px}
@@ -187,12 +187,12 @@ body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
   .signin .remember-note{display:none}
   .signin-credit{top:12px;bottom:auto}
 }
-</style></head><body>`;
+</style></head><body><a class="skip" href="#main">Skip to content</a>`;
 const nav = `<nav class="nav"><div class="wrap"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a></div></nav>`;
 const LOGO = `<svg width="40" height="29" viewBox="0 0 150 110" aria-hidden="true"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg>`;
 // The sign-in and switched-off pages: a photo behind a frosted card.
-const signinTop = `<div class="signin-bg" aria-hidden="true"></div><main class="signin"><div class="signin-card"><a class="signin-brand" href="/">${LOGO}<span>Horizon Media</span></a><h1>Studio</h1><p class="signin-sub">Team sign-in</p>`;
-const signinEnd = `<a class="signin-back" href="/">&larr; Back to the site</a></div></main><p class="signin-credit">Photo by @cb.framed.it</p>`;
+const signinTop = `<div class="signin-bg" aria-hidden="true"></div><main class="signin" id="main"><div class="signin-card"><a class="signin-brand" href="/">${LOGO}<span>Horizon Media</span></a><h1>Studio</h1><p class="signin-sub">Team sign-in</p>`;
+const signinEnd = `<a class="signin-back" href="/">&larr; Back to the site</a></div><p class="signin-credit">Photo by @cb.framed.it</p></main>`;
 
 const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note off-note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy. More people can sign in with STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5.</p>`;
 
@@ -206,7 +206,7 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 });
 </script>`;
 
-const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" id="logout">Sign out</button></aside><main class="studio">
+const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
 <section data-view="overview">
 <div class="view-top"><h1>Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
 <div class="inbox-warn" id="ov-warn" role="status" hidden><p></p><button class="btn" type="button" data-go="requests">Answer requests</button></div>
@@ -217,10 +217,11 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
 <div class="card"><form id="add"><div class="form-cols"><div class="col">
-<label for="photo" class="drop" id="drop"><b>Choose photos</b><span>Tap here to pick one or several, or drag them in from your computer.</span></label><input id="photo" class="drop-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple>
+<label class="drop" id="drop"><b>Choose photos</b><span>Tap here to pick one or several, or drag them in from your computer.</span><input id="photo" class="drop-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple></label>
 <ul id="picked" class="picked"></ul>
 </div><div class="col">
 <label for="title">Title (several photos share it)</label><input id="title" name="title" maxlength="60" required>
+<label for="alt">Describe the photo for people who can't see it (optional)</label><input id="alt" name="alt" maxlength="150" placeholder="A receiver leaps for a one-handed catch over a defender">
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
 <label for="sport">Category</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
@@ -262,7 +263,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <label for="ann-photo">Photo (optional)</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
 <div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
 </div></div>
-<div class="ann-preview"><p class="preview-label">Preview: how it looks on the homepage</p><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
+<div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
 <div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
 <p role="status"></p></form></div>
 <ul id="announcements" class="ann-admin"></ul></section>
@@ -508,7 +509,11 @@ async function openTool(pick) {
   preview = turned(blurImage, pick.rotate, 1400);
   setMode("blur");
   blurTool.hidden = false;
+  blurTool.querySelector(".blur-done").focus();
 }
+blurTool.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { blurTool.hidden = true; showPicks(); }
+});
 function setMode(next) {
   mode = next;
   modeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
@@ -856,7 +861,7 @@ function openEditor(item, photo) {
   save.textContent = "Save";
   const note = document.createElement("p");
   note.className = "note";
-  form.append(field("Title", "title", photo.title, 60), field("Photographer", "credit", photo.credit, 40), sportLabel, field("Car owner (cars only)", "owner", photo.owner, 40), save, button("Cancel", "", () => form.remove()), note);
+  form.append(field("Title", "title", photo.title, 60), field("Description (for screen readers)", "alt", photo.alt, 150), field("Photographer", "credit", photo.credit, 40), sportLabel, field("Car owner (cars only)", "owner", photo.owner, 40), save, button("Cancel", "", () => form.remove()), note);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const body = new FormData(form);

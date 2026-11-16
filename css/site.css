@@ -412,3 +412,34 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 
 /* Page not found */
 .not-found .btns { margin-top: 28px; }
+
+/* "Skip to content": the first thing a keyboard user reaches; hidden until then. */
+.skip { position: absolute; left: 12px; top: -60px; z-index: 50; padding: 10px 16px; border-radius: 6px; background: var(--flare); color: #1a1402; font-weight: 700; text-decoration: none; transition: top .15s; }
+.skip:focus { top: 12px; }
+/* Buttons inside legal pages keep their own colors (the page's link color is gold). */
+.legal a.btn { color: var(--chalk); }
+.legal a.btn-hot { color: #1a1402; }
+/* Booking page: the Google Form only loads once the visitor asks for it. */
+.book-consent { display: grid; justify-items: start; gap: 14px; padding: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.book-consent h2 { font-size: 30px; margin: 0; }
+.book-consent p { margin: 0; color: var(--soft); max-width: 60ch; }
+.book-consent a:not(.btn) { color: var(--accent-2); }
+/* Photo request consent */
+.request .consent { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; font-size: 14px; margin: 16px 0 0; }
+.request .consent input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; accent-color: var(--flare); }
+/* Cookie page table */
+.table-wrap { overflow-x: auto; margin: 8px 0 0; }
+.cookie-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.cookie-table th, .cookie-table td { text-align: left; vertical-align: top; padding: 12px 10px; border-bottom: 1px solid var(--line); }
+.cookie-table th { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.cookie-table td { color: var(--soft-2); }
+.cookie-table td:first-child { white-space: nowrap; color: var(--chalk); }
+@media (max-width: 640px) {
+  .cookie-table thead { display: none; }
+  .cookie-table tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .cookie-table td { display: block; border: 0; padding: 3px 0; }
+  .cookie-table td:first-child { white-space: normal; font-weight: 600; }
+}
+.book-consent .remember-choice { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--soft); }
+.book-consent .remember-choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--flare); }
+.request-done:focus { outline: none; }
