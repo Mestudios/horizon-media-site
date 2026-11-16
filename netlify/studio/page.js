@@ -72,11 +72,29 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .side .short{display:none}
 .side #logout{margin-top:auto;border:1px solid var(--line);justify-content:center}
 .badge{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;margin-left:auto;border-radius:999px;background:var(--flare);color:#1a1402;font-size:12px;font-weight:700}
-.shell .studio{width:min(980px,100% - 48px);margin:0 auto;padding:32px 0 80px}
+.shell .studio{width:min(1400px,100% - 64px);margin:0 auto;padding:32px 0 80px}
 .shell .studio h1{font-size:clamp(36px,5vw,48px);margin:0}
 .view-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 .view-top .btn{margin:0}
 .narrow{max-width:640px}
+/* Forms use the whole width on computers: two columns side by side. */
+.form-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 36px}
+.form-cols .col>label:first-child{margin-top:0}
+.studio .form-end{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.studio .form-end .btn{margin:0}
+.studio .form-end .note{margin:0;flex:1 1 280px}
+.studio ul.picked{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.studio label.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:230px;margin:0;padding:24px;text-align:center;border:2px dashed var(--line);border-radius:12px;background:var(--night);cursor:pointer;color:var(--dim);font-weight:500}
+.studio label.drop b{font-family:var(--display);font-weight:800;font-size:30px;text-transform:uppercase;color:var(--chalk)}
+.studio label.drop:hover,.studio label.drop.over{border-color:var(--flare);color:var(--chalk)}
+.studio .drop-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.studio .drop-input:focus-visible+ul,.studio label.drop:focus-within{outline:2px solid var(--flare-2)}
+.studio .has-picks label.drop{min-height:0;padding:14px;flex-direction:row}
+.studio .has-picks label.drop b{font-size:20px}
+.studio .has-picks label.drop span{display:none}
+.studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
+body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
+@media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
 .card h2{font-size:24px;margin:0 0 6px}
 .card input,.card select,.card textarea{background:var(--night)}
@@ -172,9 +190,10 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="card"><h2>Latest photos</h2><ul class="latest" id="ov-photos"></ul><button class="btn" type="button" data-go="photos">See all photos</button></div>
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
-<div class="card narrow"><form id="add">
-<label for="photo">Photos (pick one or several)</label><input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple>
+<div class="card"><form id="add"><div class="form-cols"><div class="col">
+<label for="photo" class="drop" id="drop"><b>Choose photos</b><span>Tap here to pick one or several, or drag them in from your computer.</span></label><input id="photo" class="drop-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple>
 <ul id="picked" class="picked"></ul>
+</div><div class="col">
 <label for="title">Title (several photos share it)</label><input id="title" name="title" maxlength="60" required>
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
@@ -183,8 +202,9 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
 }).join("")}</select>
 <label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Car photos: press Blur plates under each photo above and drag a box over every license plate. The site's privacy page promises plates are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
-<button class="btn btn-hot">Add to the portfolio</button>
-<p class="note">Photos are shrunk to website size on this device before they are sent. They appear on the site right away.</p>
+</div></div>
+<div class="form-end"><button class="btn btn-hot">Add to the portfolio</button>
+<p class="note">Photos are shrunk to website size on this device before they are sent. They appear on the site right away.</p></div>
 <p role="status"></p></form></div></section>
 <section data-view="photos" hidden><div class="view-top"><h1>All photos</h1><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button></div>
 <p role="status" id="photos-status"></p>
@@ -203,9 +223,10 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <ul id="requests" class="requests"></ul></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
 <p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
-<div class="card narrow"><form id="announce"><input type="hidden" name="id" id="ann-id">
+<div class="card"><form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
 <label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
-<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="4" required></textarea>
+<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="9" required></textarea>
+</div><div class="col">
 <label for="ann-date">Goes up on</label><input id="ann-date" name="date" type="date" required>
 <label for="ann-until">Comes down after (optional)</label><input id="ann-until" name="until" type="date">
 <p class="note">Pick a future date to schedule it. Leave the second date empty to keep it up.</p>
@@ -213,7 +234,8 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
 <label for="ann-photo">Photo (optional)</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
 <div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
-<button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button>
+</div></div>
+<div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
 <p role="status"></p></form></div>
 <ul id="announcements" class="ann-admin"></ul></section>
 <div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Blur license plates</h2><p class="note">Drag a box over each plate. Everything inside a box is blurred on this device before upload.</p><canvas aria-label="The photo; drag to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
@@ -319,7 +341,20 @@ photoInput.addEventListener("change", () => {
   picks = [...photoInput.files].map((file) => ({ file, boxes: [] }));
   showPicks();
 });
+// Photos dragged onto the box count as picked.
+const drop = document.getElementById("drop");
+["dragenter", "dragover"].forEach((type) => drop.addEventListener(type, (event) => { event.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((type) => drop.addEventListener(type, () => drop.classList.remove("over")));
+drop.addEventListener("drop", (event) => {
+  event.preventDefault();
+  const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
+  if (!files.length) return;
+  picks = files.map((file) => ({ file, boxes: [] }));
+  showPicks();
+});
 function showPicks() {
+  drop.closest(".col").classList.toggle("has-picks", picks.length > 0);
+  drop.querySelector("b").textContent = picks.length ? "Choose different photos" : "Choose photos";
   pickedList.textContent = "";
   picks.forEach((pick, i) => {
     const item = document.createElement("li");
@@ -619,6 +654,7 @@ async function refreshRequests() {
   if (!items.length) ovRequests.append(miniRow("No requests right now.", ""));
   if (!items.length) {
     const none = document.createElement("li");
+    none.className = "empty";
     none.textContent = "No requests right now.";
     requestList.append(none);
   }
