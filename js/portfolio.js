@@ -31,21 +31,19 @@
   // studio and requests always name the photo by its normal path.
   const original = (path) => path.replace(/^img\/(lite|saver)\//, "img/");
 
-  // The Horizon Media mark drawn on every photo in the viewer: the logo's three
-  // slashes and the name, right-aligned, its bottom edge 76% of the way down,
-  // 30% of the photo's width. The same design as tools/make_photo_variants.py.
-  function watermark(context, width, height) {
-    const size = Math.max(8, Math.round((width * 0.3) / 5.2));
+  // The Horizon Media mark (the logo's three slashes and the name) drawn at
+  // (x0, y0), with its letters `size` pixels tall. Returns how wide it is.
+  function mark(context, x0, y0, size, alpha) {
     context.font = "800 " + size + 'px "Big Shoulders Display", "Arial Narrow", Impact, sans-serif';
     const text = "HORIZON MEDIA";
     const metrics = context.measureText(text);
     const cap = metrics.actualBoundingBoxAscent || size * 0.7;
     const slash = cap * 0.62, gap = cap * 0.18;
-    const markWidth = 3 * slash + 2 * gap + cap * 0.35 + metrics.width;
-    const x0 = width * 0.95 - markWidth, y0 = height * 0.76 - cap;
+    const width = 3 * slash + 2 * gap + cap * 0.35 + metrics.width;
+    if (alpha === 0) return width;
     context.save();
-    context.fillStyle = "rgba(255, 255, 255, 0.72)";
-    context.shadowColor = "rgba(0, 0, 0, 0.45)";
+    context.fillStyle = "rgba(255, 255, 255, " + alpha + ")";
+    context.shadowColor = "rgba(0, 0, 0, " + alpha * 0.6 + ")";
     context.shadowBlur = Math.max(1, cap * 0.16);
     for (let i = 0; i < 3; i++) {
       const x = x0 + i * (slash + gap);
@@ -58,6 +56,25 @@
       context.fill();
     }
     context.fillText(text, x0 + 3 * slash + 2 * gap + cap * 0.35, y0 + cap);
+    context.restore();
+    return width;
+  }
+
+  // Covers the whole photo in the viewer with faint, slanted marks in staggered
+  // rows, so no part of it can be cropped out unmarked.
+  const TILE = { size: 0.055, alpha: 0.28, angle: -Math.PI / 7, across: 1.5, down: 4.2 };
+  function watermark(context, width, height) {
+    const size = Math.max(10, Math.round(width * TILE.size));
+    context.save();
+    context.translate(width / 2, height / 2);
+    context.rotate(TILE.angle);
+    const stepX = mark(context, 0, 0, size, 0) * TILE.across;
+    const stepY = size * TILE.down;
+    const reach = Math.hypot(width, height) / 2 + stepX;
+    let row = 0;
+    for (let y = -reach; y < reach; y += stepY, row++) {
+      for (let x = -reach + (row % 2) * (stepX / 2); x < reach; x += stepX) mark(context, x, y, size, TILE.alpha);
+    }
     context.restore();
   }
   const fontReady = document.fonts ? document.fonts.load('800 40px "Big Shoulders Display"').catch(() => {}) : Promise.resolve();
