@@ -1,5 +1,5 @@
 import { SEASONS } from "./sports.js";
-import { MAX_REQUESTS } from "./limits.js";
+import { MAX_REQUESTS, WARN_REQUESTS } from "./limits.js";
 
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
 const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
@@ -40,6 +40,10 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .requests p{margin:2px 0;font-size:14px;color:var(--dim)}
 .studio .requests p b{display:inline;margin:0;color:var(--chalk)}
 .studio .note.full{color:var(--danger);font-weight:600}
+.inbox-warn{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 0;padding:14px 18px;border:1px solid var(--flare);border-left-width:5px;border-radius:8px;background:color-mix(in srgb,var(--flare) 12%,var(--panel))}
+.inbox-warn p{margin:0;flex:1 1 260px;font-weight:600;font-size:15px;color:var(--chalk)}
+.studio .inbox-warn .btn{margin:0;padding:9px 16px;font-size:14px}
+.inbox-warn.full{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 14%,var(--panel))}
 /* Signed in: a dashboard with a side menu (a bottom bar on phones). */
 .shell{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 61px)}
 .side{border-right:1px solid var(--line);background:var(--panel);padding:22px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:61px;height:calc(100vh - 61px)}
@@ -77,7 +81,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
   .side button[aria-current=page]{box-shadow:inset 0 3px var(--flare)}
   .side .long{display:none}.side .short{display:inline}
   .side #logout{display:none}
-  .side .badge{position:absolute;top:2px;right:12%;margin:0;min-width:18px;height:18px;font-size:11px}
+  .side .badge{position:absolute;top:-9px;right:2px;margin:0;min-width:20px;height:20px;padding:0 5px;font-size:11px;box-shadow:0 0 0 2px var(--panel)}
   .shell .studio{width:calc(100% - 32px);padding:24px 0 110px}
   .stats{grid-template-columns:1fr 1fr 1fr;gap:8px}.stats .card{padding:12px}.stats b{font-size:32px}.stats span{font-size:10px;letter-spacing:.04em}
   .two{grid-template-columns:1fr}
@@ -103,6 +107,7 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" id="logout">Sign out</button></aside><main class="studio">
 <section data-view="overview">
 <div class="view-top"><h1>Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
+<div class="inbox-warn" id="ov-warn" role="status" hidden><p></p><button class="btn" type="button" data-go="requests">Answer requests</button></div>
 <div class="stats"><button type="button" class="card" data-go="requests"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
 <div class="two"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
 <div class="card"><h2>Announcements</h2><ul class="mini" id="ov-ann"></ul><button class="btn" type="button" data-go="announcements">+ New announcement</button></div></div>
@@ -314,6 +319,13 @@ async function refreshRequests() {
   const room = document.getElementById("requests-room");
   room.textContent = items.length + " of ${MAX_REQUESTS} waiting." + (full ? " The inbox is full: visitors can\u2019t send new requests until you press Done on some." : "");
   room.className = "note" + (full ? " full" : "");
+  // The overview warns from ${WARN_REQUESTS} waiting requests, and louder when the inbox is full.
+  const warn = document.getElementById("ov-warn");
+  warn.hidden = items.length < ${WARN_REQUESTS};
+  warn.className = "inbox-warn" + (full ? " full" : "");
+  warn.querySelector("p").textContent = full
+    ? "The request inbox is full (" + items.length + " of ${MAX_REQUESTS}), so visitors can\u2019t ask for photos until you answer some and press Done."
+    : items.length + " of ${MAX_REQUESTS} photo requests are waiting. Answer some soon: at ${MAX_REQUESTS}, visitors can\u2019t send new ones.";
   const badge = document.getElementById("nav-requests");
   badge.textContent = items.length;
   badge.hidden = items.length === 0;
