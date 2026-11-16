@@ -39,6 +39,10 @@
   prefersLight.addEventListener("change", update);
   update();
 
+  // The service worker (sw.js) lets photos be shared from a phone's gallery
+  // straight into the studio once the site is on the home screen.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
   // Android and computer browsers offer to install the site; iPhones do it from the Share menu.
   let installPrompt = null;
   const brand = document.querySelector(".foot-brand");

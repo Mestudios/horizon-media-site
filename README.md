@@ -39,7 +39,7 @@ The thresholds, the two-minute window, the rate limit and the cookie are in `net
 
 `portfolio.html` shows the portfolio: a grid and a full-size viewer (`js/portfolio.js`). Its photos are in `img/portfolio/`, with small copies for the grid in `img/portfolio/thumb/`.
 
-The viewer draws each photo onto a canvas covered in faint, slanted Horizon Media marks (`TILE` in `js/portfolio.js` sets their size, strength and spacing), so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 20 wait in the inbox at once (`netlify/studio/limits.js`); from 15 the studio's overview shows a warning; when it is full, visitors see a one-sentence message asking them to try again later or message on Instagram, and a hidden field catches simple bots.
+Opening a photo gives it its own address (`#photo=<name>`), and **Share** opens the phone's share menu with it (on computers it copies the link), so a shared link opens straight on that photo. The viewer draws each photo onto a canvas covered in faint, slanted Horizon Media marks (`TILE` in `js/portfolio.js` sets their size, strength and spacing), so the photo people see (or save) there always carries the mark; the files themselves stay unmarked. Under each photo, **Request this photo** opens a short form (name, Instagram or email, a message). Requests go to the studio's inbox. One address can send 5 an hour, at most 20 wait in the inbox at once (`netlify/studio/limits.js`); from 15 the studio's overview shows a warning; when it is full, visitors see a one-sentence message asking them to try again later or message on Instagram, and a hidden field catches simple bots.
 
 `cars.html` is the car photography page. It uses the same grid and viewer; its photos go in `photos/cars/` and are listed in the page like the portfolio's.
 
@@ -47,13 +47,24 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 - Once signed in, the studio is a dashboard: a side menu (a bar along the bottom on phones) with Overview, Add photos, All photos, Requests and Announcements. Overview shows the counts and the latest of each.
 - Several photos can be picked and uploaded at once; they share the title, credit and category.
+- **Blur plates:** under each picked photo, Blur plates opens the photo; drag a box over each license plate. The boxes are pixelated on the device before upload, so a readable plate never leaves the phone.
+- **Share from the gallery:** once the site is added to an Android phone's home screen, Horizon Media appears in the phone's Share menu. Photos shared to it open in Add photos, ready to fill in. `sw.js` (the site's service worker) passes them over; it caches nothing else. iPhones do not support this yet.
+- **Edit** changes an added photo's title, credit, category or car owner. **Pin to top** puts any photo first on its page; the Pinned list sets their order (up to 24).
+- **Remove** on an added photo or an announcement takes effect after 10 seconds, with an Undo button until then (leaving the page carries it out at once).
+- "Keep me signed in on this device" at sign-in keeps that person signed in for 30 days instead of 12 hours.
 - **On the site** lists every photo built into the portfolio and car pages. Remove takes one off the site (it is listed in Netlify Blobs and the pages leave it out); Put back shows it again. Its file stays in the repository; to delete it for good, remove it from the page in code.
 - **Photo requests** lists what visitors asked for. Done deletes a request.
 
 - The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public. To give more people their own sign-in, add `STUDIO_USERNAME_2` and `STUDIO_PASSWORD_2`, then `_3`, up to `_5`; changing one person's password signs out only that person.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page, or on the car page when their category is Cars.
-- Signed-in team members can also post, edit and remove **announcements**, each with an optional link to a page of the site or an https address. An announcement goes up on its date (a future date schedules it) and, if it has a "comes down after" date, comes down after that day. Days follow New York time (`TIME_ZONE` in `netlify/studio/studio.js`). They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
+- Signed-in team members can also post, edit and remove **announcements**, each with an optional photo (served at `/announcement-photos/<id>.jpg`) and an optional link to a page of the site or an https address. An announcement goes up on its date (a future date schedules it) and, if it has a "comes down after" date, comes down after that day. Days follow New York time (`TIME_ZONE` in `netlify/studio/studio.js`). They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
 - Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute.
+
+## Booking page and page not found
+
+`book.html` shows the Google booking form inside the site; every "Book" button leads there. If the form ever fails to show, the page has a button that opens it directly. To change forms, replace the forms.gle address in `book.html` (it appears twice).
+
+`404.html` is what Netlify shows for an address that doesn't exist.
 
 ## Presets page
 

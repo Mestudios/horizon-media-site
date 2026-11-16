@@ -141,7 +141,7 @@ test("requests from another site are refused", async () => {
 test("nobody can add or remove photos without signing in", async () => {
   assert.equal((await call("/studio/upload", { method: "POST", form: photo() })).status, 401);
   assert.equal((await call("/studio/delete", { method: "POST", form: { id: "0123456789abcdef" } })).status, 401);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
 });
 
 test("a signed-in upload appears in the public list and can be fetched", async () => {
@@ -174,7 +174,7 @@ test("uploads that are not JPEG photos, or are too large, are refused", async ()
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ thumb: html }) })).status, 415);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo({ full: new Blob([JPEG, new Uint8Array(1_500_001)]) }) })).status, 413);
   assert.equal((await call("/studio/upload", { method: "POST", cookie, form: { title: "x", credit: "y", sport: "football" } })).status, 400);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
 });
 
 test("titles and credits are stored as plain text", async () => {
@@ -336,12 +336,76 @@ test("one address can send only a few photo requests an hour", async () => {
   assert.equal((await call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "B", contact: "b" }, ip: "203.0.113.8" })).status, 200);
 });
 
+test("'keep me signed in' lasts 30 days; otherwise a session lasts 12 hours", async () => {
+  const short = await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD } });
+  assert.match(short.headers.get("set-cookie"), /Max-Age=43200;/);
+  const long = await call("/studio/login", { method: "POST", form: { username: USERNAME, password: PASSWORD, remember: "on" } });
+  assert.match(long.headers.get("set-cookie"), /Max-Age=2592000;/);
+  const cookie = long.headers.get("set-cookie").split(";")[0];
+  const expires = Number(/=(\d{13})\./.exec(cookie)[1]);
+  assert.ok(expires > Date.now() + 29 * 86_400_000, "the signed expiry matches 30 days");
+  assert.match((await call("/studio", { cookie })).body, /id="add"/);
+});
+
+test("an added photo's details can be edited, as plain text, by signed-in team members only", async () => {
+  const cookie = await signIn();
+  const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
+  const form = { id, title: "<b>New</b> title", credit: "@@createddbyabby", sport: "cars", owner: "@car_owner" };
+  assert.equal((await call("/studio/edit-photo", { method: "POST", form })).status, 401);
+  assert.equal((await call("/studio/edit-photo", { method: "POST", cookie, form: { ...form, id: "nope" } })).status, 400);
+  assert.equal((await call("/studio/edit-photo", { method: "POST", cookie, form: { ...form, id: "0123456789abcdef" } })).status, 404);
+  assert.equal((await call("/studio/edit-photo", { method: "POST", cookie, form: { ...form, credit: "" } })).status, 400);
+  assert.equal((await call("/studio/edit-photo", { method: "POST", cookie, form })).status, 200);
+  let [stored] = (await call("/portfolio-photos.json")).body.photos;
+  assert.deepEqual([stored.id, stored.title, stored.credit, stored.sport, stored.owner], [id, "bNew/b title", "createddbyabby", "cars", "car_owner"]);
+  await call("/studio/edit-photo", { method: "POST", cookie, form: { ...form, sport: "soccer" } });
+  [stored] = (await call("/portfolio-photos.json")).body.photos;
+  assert.equal(stored.owner, undefined, "only car photos credit an owner");
+});
+
+test("photos can be pinned in order; only real photo paths, by signed-in team members", async () => {
+  const pins = JSON.stringify(["img/cars/grille.jpg", "uploads/0123456789abcdef/full.jpg", "img/portfolio/golden-hour.jpg"]);
+  assert.equal((await call("/studio/pins", { method: "POST", form: { pins } })).status, 401);
+  const cookie = await signIn();
+  for (const bad of ["nope", JSON.stringify(["../netlify/x.jpg"]), JSON.stringify([5]), JSON.stringify(Array.from({ length: 25 }, (_, i) => `img/cars/p${i}.jpg`))]) {
+    assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins: bad } })).status, 400, bad);
+  }
+  assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins } })).status, 200);
+  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, JSON.parse(pins));
+  await call("/studio/pins", { method: "POST", cookie, form: { pins: "[]" } });
+  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, []);
+});
+
+test("an announcement can carry a photo, which can be replaced, removed, and goes with it", async () => {
+  const cookie = await signIn();
+  const posted = await call("/studio/announce", { method: "POST", cookie, form: { title: "Shoot day", text: "x", photo: new Blob([JPEG]) } });
+  assert.equal(posted.status, 200);
+  const { id, photo: version } = posted.body.announcement;
+  assert.ok(version > 0);
+  const image = await call(`/announcement-photos/${id}.jpg?v=${version}`);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get("content-type"), "image/jpeg");
+  assert.equal((await call("/studio/announce", { method: "POST", cookie, form: { title: "Bad", text: "x", photo: new Blob(["<svg/>"]) } })).status, 415);
+  const shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photo, version);
+  // Editing without a new photo keeps it; ticking Remove drops it.
+  await call("/studio/announce", { method: "POST", cookie, form: { id, title: "Shoot day", text: "y" } });
+  assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 200);
+  await call("/studio/announce", { method: "POST", cookie, form: { id, title: "Shoot day", text: "y", removePhoto: "1" } });
+  assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 404);
+  assert.equal((await call("/announcements.json")).body.find((a) => a.id === id).photo, undefined);
+  // Removing the announcement removes its photo.
+  await call("/studio/announce", { method: "POST", cookie, form: { id, title: "Shoot day", text: "y", photo: new Blob([JPEG]) } });
+  await call("/studio/announce-delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 404);
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id: "not-an-id" } })).status, 400);
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id } })).status, 200);
-  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [] });
+  assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [] });
   assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404);
 });
 

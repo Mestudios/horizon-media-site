@@ -295,7 +295,9 @@ footer p { margin: 8px 0 0; }
 .viewer .btn { position: static; width: auto; height: auto; border-radius: 4px; font-size: 14px; padding: 10px 18px; }
 .viewer .btn-hot { background: var(--flare); border-color: var(--flare); color: #1a1402; }
 .viewer .btn-hot:hover { background: var(--flare-2); border-color: var(--flare-2); }
-.viewer-request { flex: none; }
+.viewer-request, .viewer-share { flex: none; }
+.viewer-toast { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); padding: 0; color: var(--chalk); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.viewer-toast:not(:empty) { padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
 @media (max-width: 640px) {
   .viewer { padding-bottom: 200px; }
   .viewer-photo { max-height: calc(100dvh - 264px); }
@@ -375,6 +377,8 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 /* Presets page */
 .preset-state { margin-top: 14px !important; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent) !important; }
 .ann a { color: var(--accent-2); }
+.ann.has-photo { padding-top: 0; overflow: hidden; }
+.ann.has-photo img { display: block; width: calc(100% + 48px); max-width: none; margin: 0 -24px 18px; aspect-ratio: 16 / 10; object-fit: cover; }
 /* Phones: room for the logo, Portfolio, Book coverage and the light/dark switch. */
 @media (max-width: 640px) {
   .nav .wrap { gap: 10px; width: min(1120px, 100% - 28px); }
@@ -391,3 +395,15 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
   .logo { font-size: 17px; gap: 6px; }
   .nav-cta { padding: 7px 9px; font-size: 13px; }
 }
+
+/* Booking page: the Google Form shown inside the site */
+.book { padding: 32px 0 72px; }
+.book .wrap { width: min(760px, 100% - 32px); }
+.book-frame { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.book-frame iframe { display: block; width: 100%; height: 1700px; border: 0; }
+.book-note { color: var(--dim); font-size: 14px; margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.book-note a:not(.btn) { color: var(--accent-2); }
+.book-note .btn { padding: 9px 16px; font-size: 14px; }
+
+/* Page not found */
+.not-found .btns { margin-top: 28px; }

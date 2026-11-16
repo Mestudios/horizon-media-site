@@ -7,6 +7,7 @@
 //   /announcements.json      announcements that are up today (public; the homepage reads it)
 //   /uploads/<id>/full.jpg   an added photo (public), and /thumb.jpg its small copy
 //   /photo-request           visitors ask for a photo (public form; the studio lists them)
+//   /announcement-photos/<id>.jpg  an announcement's optional photo (public)
 //
 // Each sign-in is a pair of environment variables in Netlify: STUDIO_USERNAME and
 // STUDIO_PASSWORD, then STUDIO_USERNAME_2 / STUDIO_PASSWORD_2 and so on up to _5
@@ -19,11 +20,13 @@ import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 
 const SESSION_HOURS = 12;
+const REMEMBER_DAYS = 30; // "Keep me signed in on this device"
 const COOKIE = "hm_studio";
 const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending them
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
+const MAX_PINS = 24;
 const REQUESTS_PER_HOUR = 5; // from one address
 // Announcements go up on their date and come down after their end date, by the
 // calendar in this time zone.
@@ -147,6 +150,7 @@ export function createStudio() {
 
   // Built-in photos taken off the site in the studio, by their img/ path.
   const listHidden = async () => (await store().get("hidden", { type: "json" })) || [];
+  const listPins = async () => (await store().get("pins", { type: "json" })) || [];
 
   async function listRequests() {
     const { blobs } = await store().list({ prefix: "req/" });
@@ -160,10 +164,10 @@ export function createStudio() {
 
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
-      const [photos, hidden] = await Promise.all([listPhotos(), listHidden()]);
+      const [photos, hidden, pins] = await Promise.all([listPhotos(), listHidden(), listPins()]);
       // Not kept by browsers: a photo or announcement removed in the studio
       // disappears from the site on the next page load.
-      return json({ photos, hidden }, 200, { "cache-control": "no-cache" });
+      return json({ photos, hidden, pins }, 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       const today = todayIn(now);
@@ -188,6 +192,14 @@ export function createStudio() {
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
       console.log(`studio: photo request ${id}`);
       return json({ ok: true });
+    }
+    const annPhoto = /^\/announcement-photos\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
+    if (annPhoto) {
+      if (request.method !== "GET") return reply("Not allowed", 405);
+      const bytes = await store().get(`ann-photo/${annPhoto[1]}`, { type: "arrayBuffer" });
+      if (!bytes) return reply("Not found", 404);
+      // The page asks for it with ?v=<when it was added>, so a new photo gets a new address.
+      return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
@@ -235,9 +247,10 @@ export function createStudio() {
         return json({ error: "Wrong username or password." }, 401);
       }
       console.log(`studio: ${account.username} signed in`);
-      const expires = now + SESSION_HOURS * 3_600_000;
+      const seconds = form.get("remember") === "on" ? REMEMBER_DAYS * 86_400 : SESSION_HOURS * 3600;
+      const expires = now + seconds * 1000;
       return json({ ok: true }, 200, {
-        "set-cookie": `${COOKIE}=${expires}.${account.n}.${await sign(expires, account)}; Max-Age=${SESSION_HOURS * 3600}; Path=/studio; Secure; HttpOnly; SameSite=Strict`,
+        "set-cookie": `${COOKIE}=${expires}.${account.n}.${await sign(expires, account)}; Max-Age=${seconds}; Path=/studio; Secure; HttpOnly; SameSite=Strict`,
       });
     }
     if (url.pathname === "/studio/logout") {
@@ -269,6 +282,34 @@ export function createStudio() {
       return json({ ok: true, photo });
     }
 
+    // Changes an added photo's title, credit, category or car owner.
+    if (url.pathname === "/studio/edit-photo") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      const old = await store().get(`meta/${id}`, { type: "json" });
+      if (!old) return json({ error: "That photo no longer exists." }, 404);
+      const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
+      const photo = { ...old, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport };
+      const owner = clean(form.get("owner"), 40).replace(/^@+/, "");
+      if (sport === "cars" && owner) photo.owner = owner;
+      else delete photo.owner;
+      if (!photo.credit) return json({ error: "Give the photographer's Instagram name." }, 400);
+      await store().setJSON(`meta/${id}`, photo);
+      console.log(`studio: edited photo ${id}`);
+      return json({ ok: true, photo });
+    }
+
+    // Pinned photos show first on their page, in this order. Any photo can be
+    // pinned: a built-in one by its img/ path, an added one by its uploads/ path.
+    if (url.pathname === "/studio/pins") {
+      let pins;
+      try { pins = JSON.parse(String(form.get("pins") || "[]")); } catch { pins = null; }
+      if (!Array.isArray(pins) || pins.length > MAX_PINS || !pins.every((p) => typeof p === "string" && REQUESTABLE.test(p))) return json({ error: `Pin up to ${MAX_PINS} photos.` }, 400);
+      pins = [...new Set(pins)];
+      await store().setJSON("pins", pins);
+      return json({ ok: true, pins });
+    }
+
     if (url.pathname === "/studio/announce" || url.pathname === "/studio/announce-delete") await seedAnnouncements();
 
     if (url.pathname === "/studio/announce") {
@@ -286,6 +327,15 @@ export function createStudio() {
       const link = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?)$/i.test(rawLink) ? rawLink : "";
       if (rawLink && !link) return json({ error: "The link must be a page of this site, like cars.html, or start with https://." }, 400);
       const linkText = link ? clean(form.get("linkText"), 40) || "Read more" : "";
+      // An optional photo, shrunk on the device like portfolio photos.
+      const upload = form.get("photo");
+      let photoBytes = null;
+      if (upload instanceof Blob && upload.size > 0) {
+        if (upload.size > MAX_FULL) return json({ error: "That photo is too large." }, 413);
+        photoBytes = new Uint8Array(await upload.arrayBuffer());
+        if (!isJpeg(photoBytes)) return json({ error: "Only JPEG photos are accepted." }, 415);
+      }
+      const dropPhoto = form.get("removePhoto") === "1";
 
       // Editing: an existing id keeps its place; otherwise a new announcement.
       const editing = String(form.get("id") || "");
@@ -294,12 +344,23 @@ export function createStudio() {
         const old = await store().get(`ann/${editing}`, { type: "json" });
         if (!old) return json({ error: "That announcement no longer exists." }, 404);
         const announcement = { ...old, title, text, date, until, link, linkText };
+        if (photoBytes) {
+          await store().set(`ann-photo/${editing}`, photoBytes.buffer);
+          announcement.photo = now;
+        } else if (dropPhoto && old.photo) {
+          await store().delete(`ann-photo/${editing}`);
+          delete announcement.photo;
+        }
         await store().setJSON(`ann/${editing}`, announcement);
         console.log(`studio: edited announcement ${editing}`);
         return json({ ok: true, announcement });
       }
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const announcement = { id, title, text, date, until, link, linkText, added: now };
+      if (photoBytes) {
+        await store().set(`ann-photo/${id}`, photoBytes.buffer);
+        announcement.photo = now;
+      }
       await store().setJSON(`ann/${id}`, announcement);
       console.log(`studio: added announcement ${id}`);
       return json({ ok: true, announcement });
@@ -308,7 +369,7 @@ export function createStudio() {
     if (url.pathname === "/studio/announce-delete") {
       const id = String(form.get("id") || "");
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown announcement." }, 400);
-      await store().delete(`ann/${id}`);
+      await Promise.all([store().delete(`ann/${id}`), store().delete(`ann-photo/${id}`)]);
       console.log(`studio: removed announcement ${id}`);
       return json({ ok: true });
     }

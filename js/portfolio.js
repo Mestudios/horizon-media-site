@@ -98,9 +98,16 @@
     image.src = src;
   }
 
+  // Each photo has its own link: the page address plus #photo=<name>, where the
+  // name is the photo's file name (golden-hour) or, for studio photos, its id.
+  const nameOf = (shot) => original(shot.dataset.full).replace(/^uploads\/([0-9a-f]{16})\/full\.jpg$/, "$1").replace(/^.*\//, "").replace(/\.jpg$/, "");
+  const linkTo = (shot) => location.href.split("#")[0] + "#photo=" + nameOf(shot);
+  const setAddress = (hash) => history.replaceState(null, "", location.pathname + location.search + hash);
+
   function show(index) {
     open = (index + shots.length) % shots.length;
     const shot = shots[open];
+    setAddress("#photo=" + nameOf(shot));
     draw(shot.dataset.full);
     canvas.setAttribute("aria-label", shot.querySelector("img").alt);
     caption.textContent = "";
@@ -117,21 +124,44 @@
 
   function close() {
     viewer.hidden = true;
+    setAddress("");
     loading++;
     closeRequest();
     document.body.style.overflow = "";
     if (opener) opener.focus();
   }
 
-  function wire(shot) {
-    shot.addEventListener("click", () => {
-      opener = shot;
-      show(shots.indexOf(shot));
-      viewer.hidden = false;
-      document.body.style.overflow = "hidden";
-      viewer.querySelector(".viewer-close").focus();
-    });
+  function openShot(shot) {
+    opener = shot;
+    show(shots.indexOf(shot));
+    viewer.hidden = false;
+    document.body.style.overflow = "hidden";
+    viewer.querySelector(".viewer-close").focus();
   }
+  function wire(shot) {
+    shot.addEventListener("click", () => openShot(shot));
+  }
+  // Opens the photo a shared link points at, once every photo is on the page.
+  function openFromLink() {
+    const wanted = /^#photo=([a-z0-9-]{1,60})$/.exec(location.hash);
+    const shot = wanted && shots.find((s) => nameOf(s) === wanted[1]);
+    if (shot) openShot(shot);
+  }
+
+  // ---- Share: the phone's own share menu, or copy the link on computers.
+  const toast = viewer.querySelector(".viewer-toast");
+  let toastTimer = 0;
+  const say = (text) => { toast.textContent = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.textContent = ""; }, 2500); };
+  viewer.querySelector(".viewer-share").addEventListener("click", async () => {
+    const shot = shots[open];
+    const data = { title: shot.dataset.title + " · Horizon Media", text: shot.dataset.title + ", photo by @" + shot.dataset.credit, url: linkTo(shot) };
+    if (navigator.share) {
+      try { await navigator.share(data); } catch (error) {}
+      return;
+    }
+    try { await navigator.clipboard.writeText(data.url); say("Link copied"); }
+    catch (error) { window.prompt("Copy this link:", data.url); }
+  });
   shots.forEach(wire);
 
   // ---- "Request this photo": a short form; requests appear in the studio.
@@ -184,7 +214,7 @@
   };
   fetch("portfolio-photos.json")
     .then((response) => (response.ok ? response.json() : {}))
-    .then(({ photos = [], hidden = [] }) => {
+    .then(({ photos = [], hidden = [], pins = [] }) => {
       for (const shot of [...shots]) {
         if (hidden.includes(original(shot.dataset.full))) {
           shot.remove();
@@ -218,9 +248,16 @@
       });
       gallery.prepend(...added);
       shots.unshift(...added);
+      // Pinned photos come first, in the studio's order.
+      const pinned = pins.map((path) => shots.find((shot) => original(shot.dataset.full) === path)).filter(Boolean);
+      if (pinned.length) {
+        gallery.prepend(...pinned);
+        shots.splice(0, shots.length, ...pinned, ...shots.filter((shot) => !pinned.includes(shot)));
+      }
       showEmpty();
+      openFromLink();
     })
-    .catch(showEmpty);
+    .catch(() => { showEmpty(); openFromLink(); });
   viewer.querySelector(".viewer-close").addEventListener("click", close);
   viewer.querySelector(".viewer-prev").addEventListener("click", () => show(open - 1));
   viewer.querySelector(".viewer-next").addEventListener("click", () => show(open + 1));
