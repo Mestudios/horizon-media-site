@@ -32,7 +32,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .team{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .studio .team button{margin:0;padding:8px 14px;min-height:40px;font:600 14px/1 var(--body);color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-radius:999px;cursor:pointer}
 .studio .team button[aria-pressed=true]{background:var(--flare);border-color:var(--flare);color:#1a1402}
-.studio li.off img{opacity:.35}
+.studio li.off .ph img{opacity:.35}
 .studio .tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
 .studio .tag.live{background:var(--flare);border-color:var(--flare);color:#1a1402}
 .studio .requests{display:block}
@@ -109,6 +109,15 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .preview-label{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .ann-preview .ann-list{grid-template-columns:minmax(0,380px)}
 .ann-preview .ann a{pointer-events:none}
+.studio li .ph{position:relative}
+.studio li .ph .flag{position:absolute;top:8px;left:8px;margin:0}
+.studio li .bar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;gap:4px}
+.studio .ib{display:inline-grid;place-items:center;width:38px;height:38px;min-height:0;margin:0;padding:0;border:0;border-radius:50%;background:rgba(10,10,10,.72);color:#fff;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.studio .ib:hover{background:rgba(10,10,10,.9)}
+.studio .ib.on{background:var(--flare);color:#1a1402}
+.studio .ib.danger{color:#ff8a80}
+.studio .ib.danger:hover{background:#b3261e;color:#fff}
+.studio .ib:disabled{opacity:.35;cursor:default}
 .studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
@@ -608,6 +617,26 @@ const post = (path, fields) => {
   for (const key in fields) body.set(key, fields[key]);
   return fetch(path, { method: "POST", body, keepalive: true });
 };
+// Small round icon buttons on photos. The label shows as a tooltip and is read out by screen readers.
+const ICONS = {
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  pin: '<path d="M12 17v5M9 3h6l-1 6 4 4H6l4-4z"/>',
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  back: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  down: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+};
+function iconButton(icon, label, className, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "ib" + (className ? " " + className : "");
+  b.setAttribute("aria-label", label);
+  b.title = label;
+  b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[icon] + "</svg>";
+  b.addEventListener("click", onClick);
+  return b;
+}
 const button = (text, className, onClick) => {
   const b = document.createElement("button");
   b.type = "button";
@@ -653,7 +682,7 @@ async function setHomepage(path) {
 }
 function homepageButton(photo) {
   const on = state.hero === photo.path;
-  return button(on ? "Homepage photo \\u2713" : "Use on homepage", on ? "pin on" : "", () => setHomepage(on ? "" : photo.path));
+  return iconButton("home", on ? "Homepage photo (press to go back to the usual one)" : "Use on homepage", on ? "on" : "", () => setHomepage(on ? "" : photo.path));
 }
 let builtIn = []; // filled in by loadBuiltIn()
 const removing = new Set(); // added photos waiting out their 10 seconds
@@ -696,18 +725,26 @@ async function savePins(pins) {
 }
 function pinButton(photo) {
   const pinned = state.pins.includes(photo.path);
-  return button(pinned ? "Unpin" : "Pin to top", pinned ? "pin on" : "pin", () => savePins(pinned ? state.pins.filter((p) => p !== photo.path) : state.pins.concat(photo.path)));
+  return iconButton("pin", pinned ? "Unpin" : "Pin to top", pinned ? "on" : "", () => savePins(pinned ? state.pins.filter((p) => p !== photo.path) : state.pins.concat(photo.path)));
 }
 
-function thumbItem(photo) {
+function thumbItem(photo, actions) {
   const item = document.createElement("li");
+  const frame = document.createElement("div");
+  frame.className = "ph";
   const image = document.createElement("img");
   image.src = photo.thumb;
   image.alt = "";
   image.loading = "lazy";
+  frame.append(image);
+  if (state.pins.includes(photo.path)) { const flag = document.createElement("span"); flag.className = "tag live flag"; flag.textContent = "Pinned"; frame.append(flag); }
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.append(...actions);
+  frame.append(bar);
   const title = document.createElement("b");
   title.textContent = photo.title + (photo.cars ? " (cars)" : "");
-  item.append(image, title);
+  item.append(frame, title);
   const asked = requestCounts[photo.path] || 0;
   const tags = document.createElement("span");
   tags.className = "tags";
@@ -747,25 +784,21 @@ function render() {
     pinnedList.append(none);
   }
   pinned.forEach((photo, i) => {
-    const item = thumbItem(photo);
     const order = pinned.map((p) => p.path);
     const move = (to) => { const next = order.slice(); next.splice(i, 1); next.splice(to, 0, photo.path); savePins(next); };
-    const up = button("↑", "arrow", () => move(i - 1));
-    up.setAttribute("aria-label", "Move up");
+    const up = iconButton("up", "Move up", "", () => move(i - 1));
     up.disabled = i === 0;
-    const down = button("↓", "arrow", () => move(i + 1));
-    down.setAttribute("aria-label", "Move down");
+    const down = iconButton("down", "Move down", "", () => move(i + 1));
     down.disabled = i === pinned.length - 1;
-    item.append(up, down, pinButton(photo));
-    pinnedList.append(item);
+    pinnedList.append(thumbItem(photo, [up, down, pinButton(photo)]));
   });
 
   // Added in the studio: Edit, Pin, Remove (with Undo).
   list.textContent = "";
   for (const photo of byRequests(all.filter((p) => p.added && shown(p)))) {
-    const item = thumbItem(photo);
-    const edit = button("Edit", "", () => openEditor(item, photo.added));
-    const remove = button("Remove", "btn-danger", () => {
+    let item;
+    const edit = iconButton("edit", "Edit details", "", () => openEditor(item, photo.added));
+    const remove = iconButton("trash", "Remove", "danger", () => {
       const id = photo.added.id;
       removing.add(id);
       render();
@@ -773,7 +806,7 @@ function render() {
         () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
-    item.append(edit, pinButton(photo), homepageButton(photo), remove);
+    item = thumbItem(photo, [edit, pinButton(photo), homepageButton(photo), remove]);
     list.append(item);
   }
   if (!list.children.length) list.append(miniRow(all.some((p) => p.added) ? "No added photos match." : "Nothing added in the studio yet.", ""));
@@ -782,17 +815,15 @@ function render() {
   sitePhotos.textContent = "";
   for (const photo of byRequests(builtIn.filter(shown))) {
     const off = state.hidden.includes(photo.path);
-    const item = thumbItem(photo);
-    if (off) item.className = "off";
-    const toggle = button(off ? "Put back" : "Remove", off ? "" : "btn-danger", async () => {
+    const toggle = iconButton(off ? "back" : "trash", off ? "Put back" : "Remove", off ? "" : "danger", async () => {
       toggle.disabled = true;
       const response = await post(off ? "/studio/unhide" : "/studio/hide", { path: photo.path });
       const reply = await response.json();
       if (response.ok) { state.hidden = reply.hidden; render(); }
       else { status.textContent = reply.error; toggle.disabled = false; }
     });
-    if (!off) item.append(pinButton(photo), homepageButton(photo));
-    item.append(toggle);
+    const item = thumbItem(photo, off ? [toggle] : [pinButton(photo), homepageButton(photo), toggle]);
+    if (off) item.className = "off";
     sitePhotos.append(item);
   }
   if (!sitePhotos.children.length) sitePhotos.append(miniRow("No photos on the pages match.", ""));
