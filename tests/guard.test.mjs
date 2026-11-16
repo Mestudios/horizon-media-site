@@ -457,7 +457,7 @@ test("the smallest mode falls back to the small copy when a photo has no smalles
 test("every photo on the page has up-to-date watermarked copies made from an original in photos/", () => {
   const hint = "run: python3 tools/make_photo_variants.py";
   assert.ok(pagePhotos.length >= 8, `found the page's photos: ${pagePhotos}`);
-  assert.ok(pagePhotos.includes("img/hero-sunset.jpg"), "including the hero photo");
+  assert.ok(pagePhotos.includes("img/portfolio/golden-hour.jpg"), "including the hero photo");
   for (const photo of pagePhotos) {
     const entry = photoVariants[photo];
     assert.ok(entry, `${photo} has no smaller copies (${hint})`);
