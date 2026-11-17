@@ -54,7 +54,7 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 - **All photos** has a search box (title or photographer) and a Show menu: sports, cars, pinned, most requested, taken off the site, or the homepage photo. Each photo shows how many times visitors requested it; the overview names the most requested one (counts are kept after requests are handled, in `request-counts`).
 - **Use on homepage** makes any photo the homepage background. The guard swaps it into the homepage (re-reading the choice at most once a minute), and busy mode still uses its smaller copies.
 - **Announcements** show a live preview of the homepage card as you type.
-- **Share from the gallery:** once the site is added to an Android phone's home screen, Horizon Media appears in the phone's Share menu. Photos shared to it open in Add photos, ready to fill in. `sw.js` (the site's service worker) passes them over; it caches nothing else. iPhones do not support this yet.
+- **Share from the gallery:** once the site is added to an Android phone's home screen, Horizon Media appears in the phone's Share menu. Photos shared to it open in Add photos, ready to fill in. `sw.js` (a service worker installed only when the studio is opened, covering only `/studio/`) passes them over; it caches nothing else. iPhones do not support this yet.
 - **Edit** changes an added photo's title, credit, category or car owner. **Pin to top** puts any photo first on its page; the Pinned list sets their order (up to 24).
 - **Remove** on an added photo or an announcement takes effect after 10 seconds, with an Undo button until then (leaving the page carries it out at once).
 - "Keep me signed in on this device" at sign-in keeps that person signed in for 30 days instead of 12 hours.
@@ -71,7 +71,10 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 - `cookies.html` lists everything the site stores. There are no advertising, analytics or tracking cookies, so no cookie banner is needed: `hm_visitor` (busy mode) and `hm_studio` (team sign-in) are needed for the site to work, and `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
 - The only third-party content is the Google booking form. `book.html` doesn't load it until the visitor presses "Load the booking form" (`js/book.js`); "Remember my choice" saves `hm-forms` in their browser.
-- Fonts and photos are served from this site. Instagram is only linked to, never loaded.
+- Fonts and photos are served from this site. Instagram is only linked to, never loaded. `npm test` fails if any page starts loading something from another company.
+- **Removal:** every opened photo has a "Request removal" link (an email or Instagram message to the team with the photo named), the portfolio and car pages say so above the photos, and every footer links to the removal steps on the privacy page.
+- **Studio link:** no page links to `/studio`. `js/site.js` adds a "Studio" footer link only on devices that have signed in to the studio (`hm-team` in that browser). The service worker is installed only by the studio and only covers `/studio/`.
+- **Terms** include the client license (what people may do with photos from a booking), cancellations and rain-outs, delivery, athletes under 18, and Maryland governing law. Horizon Media takes no payments, so there is no payment section.
 - The photo request form asks only for a name, an Instagram name or email, and an optional message, and must be sent with the consent box ticked (checked on the server too).
 - `refunds.html` explains that Horizon Media takes no payments: each photographer sets their own prices and handles payment and refunds directly.
 

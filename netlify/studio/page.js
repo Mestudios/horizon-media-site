@@ -270,6 +270,8 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Edit photo</h2><div class="tool-bar"><div class="tool-modes" role="group" aria-label="What dragging does"><button type="button" class="btn" data-mode="crop" aria-pressed="false">Crop</button><button type="button" class="btn" data-mode="blur" aria-pressed="true">Blur plates</button></div><button type="button" class="btn tool-rotate">Rotate &#8635;</button><button type="button" class="btn tool-reset">Start over</button></div><p class="note tool-note"></p><canvas aria-label="The photo; drag on it to crop or to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
 <div id="undo" class="undo" role="status" hidden><span></span><button type="button" class="btn btn-hot">Undo</button></div>
 <script>
+// Remembers that this device belongs to the team, so the site's footer shows the studio link here.
+try { localStorage.setItem("hm-team", "1"); } catch (error) {}
 // The side menu: one section shows at a time, and the address remembers which.
 const views = [...document.querySelectorAll("section[data-view]")];
 const menu = [...document.querySelectorAll(".side button[data-view]")];

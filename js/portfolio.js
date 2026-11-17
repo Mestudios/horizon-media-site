@@ -9,7 +9,9 @@
   const caption = viewer.querySelector(".viewer-cap");
   const count = viewer.querySelector(".viewer-count");
   const requestButton = viewer.querySelector(".viewer-request");
-  const requestForm = viewer.querySelector(".request");
+  const requestForm = viewer.querySelector("form.request");
+  const removal = viewer.querySelector(".removal");
+  const removalButton = viewer.querySelector(".viewer-removal");
   const requestStatus = requestForm.querySelector("[role=status]");
   const requestAlert = requestForm.querySelector(".request-alert");
   // A problem sending a request pops up over the form in one plain sentence.
@@ -119,14 +121,16 @@
     const owner = shot.dataset.owner ? ` Car: @${shot.dataset.owner}.` : "";
     caption.append(title, `Photo by @${shot.dataset.credit}.${owner} `, link);
     count.textContent = `${open + 1} / ${shots.length}`;
-    closeRequest();
+    requestForm.hidden = true;
+    removal.hidden = true;
   }
 
   function close() {
     viewer.hidden = true;
     setAddress("");
     loading++;
-    closeRequest();
+    requestForm.hidden = true;
+    removal.hidden = true;
     document.body.style.overflow = "";
     if (opener) opener.focus();
   }
@@ -180,7 +184,7 @@
     touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
   }, { passive: true });
   viewer.addEventListener("touchend", (event) => {
-    if (!touch || !requestForm.hidden) return;
+    if (!touch || !requestForm.hidden || !removal.hidden) return;
     const dx = event.changedTouches[0].clientX - touch.x;
     const dy = event.changedTouches[0].clientY - touch.y;
     touch = null;
@@ -190,6 +194,7 @@
   // ---- "Request this photo": a short form; requests appear in the studio.
   function openRequest() {
     const shot = shots[open];
+    removal.hidden = true;
     requestForm.reset();
     requestForm.elements.photo.value = original(shot.dataset.full);
     requestForm.elements.title.value = shot.dataset.title;
@@ -207,6 +212,34 @@
     if (!viewer.hidden) requestButton.focus();
   }
   requestButton.addEventListener("click", openRequest);
+
+  // ---- "Request removal": starts an email or an Instagram message to the team
+  // that names the photo, so anyone pictured (or a parent or guardian, or a
+  // car's owner) can have it taken down without hunting for how.
+  function openRemoval() {
+    const shot = shots[open];
+    requestForm.hidden = true;
+    removal.querySelector(".removal-photo").textContent = shot.dataset.title;
+    const email = removal.querySelector(".removal-email");
+    const subject = "Please remove a photo: " + shot.dataset.title;
+    const body = "Please remove this photo from the Horizon Media website:\n\n" + shot.dataset.title + "\n" + linkTo(shot) + "\n\nI am (in the photo / a parent or guardian / the car's owner): ";
+    email.href = email.href.split("?")[0] + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    removal.hidden = false;
+    email.focus();
+  }
+  function closeRemoval() {
+    if (removal.hidden) return;
+    removal.hidden = true;
+    if (!viewer.hidden) removalButton.focus();
+  }
+  removalButton.addEventListener("click", openRemoval);
+  removal.querySelector(".removal-close").addEventListener("click", closeRemoval);
+  // Instagram can't be opened with a message filled in, so the photo's name and
+  // link are copied, ready to paste.
+  removal.querySelector(".removal-dm").addEventListener("click", () => {
+    const shot = shots[open];
+    if (navigator.clipboard) navigator.clipboard.writeText("Please remove this photo: " + shot.dataset.title + " " + linkTo(shot)).catch(() => {});
+  });
   requestForm.querySelector(".request-cancel").addEventListener("click", closeRequest);
   requestForm.querySelector(".request-close").addEventListener("click", closeRequest);
   requestForm.addEventListener("submit", async (event) => {
@@ -300,9 +333,9 @@
     if (event.target === viewer) close();
   });
   // Keyboard: while the viewer is open, Tab and Shift+Tab stay inside it (inside
-  // the request form, or its pop-up, when those are open).
+  // the request form, its pop-up or the removal box when one of those is open).
   function focusables() {
-    const scope = !requestAlert.hidden ? requestAlert : !requestForm.hidden ? requestForm : viewer;
+    const scope = !requestAlert.hidden ? requestAlert : !requestForm.hidden ? requestForm : !removal.hidden ? removal : viewer;
     return [...scope.querySelectorAll("a[href], button, input, textarea, select")].filter((el) => !el.disabled && el.offsetParent !== null && !el.closest("[hidden]") && el.tabIndex !== -1);
   }
   document.addEventListener("keydown", (event) => {
@@ -315,8 +348,11 @@
   });
   document.addEventListener("keydown", (event) => {
     if (viewer.hidden) return;
-    if (event.key === "Escape") return requestForm.hidden ? close() : !requestAlert.hidden ? (requestAlert.hidden = true) : closeRequest();
-    if (!requestForm.hidden) return; // typing in the form
+    if (event.key === "Escape") {
+      if (!removal.hidden) return closeRemoval();
+      return requestForm.hidden ? close() : !requestAlert.hidden ? (requestAlert.hidden = true) : closeRequest();
+    }
+    if (!requestForm.hidden || !removal.hidden) return; // a box is open
     if (event.key === "ArrowLeft") show(open - 1);
     if (event.key === "ArrowRight") show(open + 1);
   });

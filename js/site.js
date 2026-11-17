@@ -39,9 +39,24 @@
   prefersLight.addEventListener("change", update);
   update();
 
-  // The service worker (sw.js) lets photos be shared from a phone's gallery
-  // straight into the studio once the site is on the home screen.
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  // The service worker (sw.js) lets team members share photos from a phone's
+  // gallery straight into the studio. Only the studio installs it, and it only
+  // covers /studio/, so visitors' browsers never get it.
+  const inStudio = location.pathname === "/studio" || location.pathname.startsWith("/studio/");
+  if (inStudio && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/studio/" }).catch(() => {});
+
+  // The studio link is not written into any page. It is added to the footer
+  // only on devices that have signed in to the studio (which saves "hm-team"
+  // in that browser), so visitors never see it.
+  let team = false;
+  try { team = localStorage.getItem("hm-team") === "1"; } catch (error) {}
+  const footLinks = document.querySelector(".foot-links");
+  if (team && footLinks) {
+    const studio = document.createElement("a");
+    studio.href = "/studio";
+    studio.textContent = "Studio";
+    footLinks.append(studio);
+  }
 
   // Android and computer browsers offer to install the site; iPhones do it from the Share menu.
   let installPrompt = null;

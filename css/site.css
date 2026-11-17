@@ -301,11 +301,18 @@ footer p { margin: 8px 0 0; }
 .viewer .btn-hot { background: var(--flare); border-color: var(--flare); color: #1a1402; }
 .viewer .btn-hot:hover { background: var(--flare-2); border-color: var(--flare-2); }
 .viewer-request, .viewer-share { flex: none; }
+/* "Request removal" under every opened photo: a plain text link, always there. */
+.viewer .viewer-removal { position: static; flex: none; width: auto; height: auto; min-height: 28px; padding: 4px 2px; border: 0; border-radius: 0; background: none; color: var(--dim); font: inherit; font-size: 13px; line-height: 1.3; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.viewer .viewer-removal:hover { background: none; color: var(--chalk); }
+.removal-text { margin: 10px 0 0; color: var(--soft); font-size: 15px; }
+/* The same link above the photos on the portfolio and car pages. */
+.removal-note { margin: 0 0 18px; font-size: 14px; color: var(--dim); }
+.removal-note a { color: var(--accent-2); }
 .viewer-toast { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); padding: 0; color: var(--chalk); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .viewer-toast:not(:empty) { padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
 @media (max-width: 640px) {
-  .viewer { padding-bottom: 200px; }
-  .viewer-photo { max-height: calc(100dvh - 264px); }
+  .viewer { padding-bottom: 236px; }
+  .viewer-photo { max-height: calc(100dvh - 300px); }
   .viewer-bar { flex-wrap: wrap; bottom: 76px; padding: 0 16px; gap: 8px 14px; }
 }
 .request {
@@ -443,3 +450,9 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 .book-consent .remember-choice { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--soft); }
 .book-consent .remember-choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--flare); }
 .request-done:focus { outline: none; }
+/* Booking page: what the form collects and why, shown above the form. */
+.book-privacy { margin: 0 0 18px; }
+.book-privacy p { margin: 0 0 8px; font-size: 15px; color: var(--soft); max-width: 70ch; }
+.book-privacy a { color: var(--accent-2); }
+.request a.btn { color: var(--chalk); }
+.request a.btn-hot { color: #1a1402; }

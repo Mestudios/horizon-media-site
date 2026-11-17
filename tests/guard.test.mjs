@@ -363,6 +363,67 @@ test("every photo tile on the portfolio and car pages has its tiny blurry previe
   }
 });
 
+// ---- What the privacy and cookie pages promise ---------------------------------
+
+const SITE_PAGES = readdirSync(ROOT).filter((name) => name.endsWith(".html"));
+const SITE_FILES = [
+  ...SITE_PAGES,
+  ...readdirSync(join(ROOT, "css")).map((name) => `css/${name}`),
+  ...readdirSync(join(ROOT, "js")).map((name) => `js/${name}`),
+  "sw.js",
+  "manifest.webmanifest",
+];
+
+test("the site loads nothing from other companies, except the Google booking form after the visitor agrees", async () => {
+  const { studioPage } = await import("../netlify/studio/page.js");
+  const sources = Object.fromEntries(SITE_FILES.map((file) => [file, readFileSync(join(ROOT, file), "utf8")]));
+  for (const state of ["in", "out", "off"]) sources[`studio (${state})`] = studioPage({ state });
+  const LOADS = [
+    /<(?:script|img|iframe|video|audio|source|embed|object)\b[^>]*\s(?:src|srcset|data-src)="((?:https?:)?\/\/[^"]+)/g,
+    /<link\b[^>]*\brel="(?:stylesheet|preload|preconnect|dns-prefetch|modulepreload|icon|apple-touch-icon|manifest)"[^>]*\bhref="((?:https?:)?\/\/[^"]+)/g,
+    /url\(\s*["']?((?:https?:)?\/\/[^)"']+)/g,
+    /@import\s+["']((?:https?:)?\/\/[^"']+)/g,
+    /(?:fetch|sendBeacon|importScripts|import|WebSocket|EventSource)\s*\(\s*["'`]((?:https?:)?\/\/[^"'`]+)/g,
+  ];
+  const found = [];
+  for (const [file, text] of Object.entries(sources)) {
+    for (const pattern of LOADS) for (const match of text.matchAll(pattern)) found.push(`${file}: ${match[1]}`);
+  }
+  assert.deepEqual(found, ["book.html: https://forms.gle/Tn4ZsGxT8dV4Ru6B8"], "the only outside content is the booking form");
+  const book = sources["book.html"];
+  assert.match(book, /<iframe data-src="https:\/\/forms\.gle\//, "the form's address waits in data-src");
+  assert.doesNotMatch(book, /<iframe[^>]*\ssrc=/, "so nothing loads from Google until the visitor presses the button");
+  for (const [file, text] of Object.entries(sources)) {
+    assert.doesNotMatch(text, /googletagmanager|google-analytics|gtag\(|fbq\(|hotjar|clarity\.ms|cdninstagram|fbcdn|fonts\.googleapis|fonts\.gstatic/i, `${file} has no tracker, Instagram image or Google font`);
+  }
+  // Fonts are served from this site.
+  const fonts = [...sources["css/site.css"].matchAll(/@font-face[^}]*url\("([^"]+)"\)/g)].map((m) => m[1]);
+  assert.ok(fonts.length >= 2);
+  for (const font of fonts) {
+    assert.match(font, /^\.\.\/fonts\//);
+    assert.ok(existsSync(join(ROOT, "css", font)), `${font} exists`);
+  }
+});
+
+test("every page links to the policies and to photo removal, and none links to the team sign-in", () => {
+  for (const page of SITE_PAGES) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const footer = /<nav class="foot-links"[^>]*>(.*?)<\/nav>/s.exec(html)?.[1] ?? "";
+    for (const link of ["privacy.html#removal", "privacy.html", "terms.html", "cookies.html", "refunds.html"]) {
+      assert.match(footer, new RegExp(`href="/?${link.replace(".", "\\.")}"`), `${page} footer links to ${link}`);
+    }
+    assert.doesNotMatch(html, /href="\/?studio/, `${page} has no link to the studio (js/site.js adds one on team devices only)`);
+  }
+  for (const page of ["portfolio.html", "cars.html"]) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    assert.match(html, /class="removal-note"[^>]*>[^<]*<a href="privacy\.html#removal"|class="removal-note">.*privacy\.html#removal/s, `${page} shows how to have a photo taken down`);
+    assert.match(html, /class="viewer-removal">Request removal</, `${page}: every opened photo has a Request removal link`);
+  }
+  assert.match(readFileSync(join(ROOT, "privacy.html"), "utf8"), /<h2 id="removal">/);
+  const site = readFileSync(join(ROOT, "js/site.js"), "utf8");
+  assert.match(site, /register\("\/sw\.js", \{ scope: "\/studio\/" \}\)/, "the service worker only covers the studio");
+});
+
 test("pages without photos only get the checks, not busy mode", async () => {
   const handler = newInstance();
   const reply = await visit(handler, newVisitor(), { path: "/book.html" });

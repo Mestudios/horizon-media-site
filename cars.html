@@ -45,6 +45,7 @@
 
 <div class="portfolio">
   <div class="wrap">
+    <p class="removal-note">Is this your car, or are you in one of these photos? Open the photo and press "Request removal", or see <a href="privacy.html#removal">how to have a photo taken down</a>.</p>
     <!-- Car photos. Photos added through the studio under "Cars" appear here too. -->
     <div class="gallery" data-studio="cars">
       <button class="shot" type="button" data-credit="connors.visualss" data-owner="thatdernrs7" data-sport="cars" data-full="img/cars/mountain-meet.jpg" data-post="https://www.instagram.com/p/Dfi9wfvjam3/?img_index=1" data-title="Mountain meet" style="--ph:url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAANAAoDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwUG/8QAIhAAAQMDAwUAAAAAAAAAAAAAAQACEQMFIQQVQSNRgZLR/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAwDAQACEQMRAD8AtuulvYBNUGe2UW/W/gvI46Y+rANqOacR5EphqqoES31VCv/Z)"><img src="img/cars/thumb/mountain-meet.jpg" alt="A purple sedan parked at a mountain overlook among other cars" width="480" height="640" loading="lazy"><span class="shot-info"><b>Mountain meet</b><span>Photo by @connors.visualss · Car: @thatdernrs7</span></span></button>
@@ -75,7 +76,7 @@
   <button type="button" class="viewer-close" aria-label="Close">&times;</button>
   <button type="button" class="viewer-prev" aria-label="Previous photo">&lsaquo;</button>
   <button type="button" class="viewer-next" aria-label="Next photo">&rsaquo;</button>
-  <div class="viewer-bar"><p class="viewer-cap"></p><span class="viewer-count"></span><button type="button" class="btn viewer-share">Share</button><button type="button" class="btn btn-hot viewer-request">Request this photo</button><span class="viewer-toast" role="status"></span></div>
+  <div class="viewer-bar"><p class="viewer-cap"></p><span class="viewer-count"></span><button type="button" class="btn viewer-share">Share</button><button type="button" class="btn btn-hot viewer-request">Request this photo</button><button type="button" class="viewer-removal">Request removal</button><span class="viewer-toast" role="status"></span></div>
   <form class="request" hidden>
     <button type="button" class="request-close" aria-label="Close the request form">&times;</button>
     <h2>Request this photo</h2>
@@ -102,12 +103,20 @@
     </div>
     <p role="status"></p>
   </form>
+  <div class="request removal" role="group" aria-labelledby="removal-title" hidden>
+    <button type="button" class="request-close removal-close" aria-label="Close the removal box">&times;</button>
+    <h2 id="removal-title">Request removal</h2>
+    <p class="request-for">Photo: <b class="removal-photo"></b></p>
+    <p class="removal-text">If you are in this photo, you are the parent or guardian of someone who is, or it shows your car, we will take it off this site. You don't need to give a reason.</p>
+    <div class="btns"><a class="btn btn-hot removal-email" href="mailto:horzion.media418@gmail.com">Email us</a><a class="btn removal-dm" href="https://ig.me/m/hor1zonmedia">Message us on Instagram</a></div>
+    <p class="request-note">Both name this photo for you: the email comes filled in, and the photo's link is copied so you can paste it into your Instagram message. <a href="privacy.html#removal">How removal works</a>.</p>
+  </div>
 </div>
 
 <footer>
   <div class="wrap">
     <div class="foot-brand"><a class="logo" href="./"><span class="logo-mark" aria-hidden="true"><svg width="30" height="22" viewBox="0 0 150 110"><polygon points="38,0 66,0 28,110 0,110" fill="#ffe27a"/><polygon points="80,0 108,0 70,110 42,110" fill="#ffc61a"/><polygon points="122,0 150,0 112,110 84,110" fill="#e0a000"/></svg></span>Horizon Media</a><p>Sports content, done right.</p></div>
-    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a><a href="refunds.html">Refunds</a><a href="mailto:horzion.media418@gmail.com">Email</a><a href="/studio">Team sign-in</a></nav>
+    <nav class="foot-links" aria-label="Footer"><a href="./">Home</a><a href="cars.html">Cars</a><a href="presets.html">Presets</a><a href="book.html">Book coverage</a><a href="https://www.instagram.com/hor1zonmedia/">Instagram</a><a href="privacy.html#removal">Remove a photo</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a><a href="refunds.html">Refunds</a><a href="mailto:horzion.media418@gmail.com">Email</a></nav>
     <p class="foot-copy">© 2026 Horizon Media. All photos belong to their photographers.</p>
   </div>
 </footer>
