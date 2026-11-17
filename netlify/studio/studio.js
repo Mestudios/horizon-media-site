@@ -14,6 +14,7 @@
 import { getStore } from "@netlify/blobs";
 import { studioPage } from "./page.js";
 import { SPORTS } from "./sports.js";
+import { createBanList } from "../guard/bans.js";
 
 const SESSION_HOURS = 12;
 const COOKIE = "hm_studio";
@@ -21,6 +22,10 @@ const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending the
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
+// Password guessing: this many wrong sign-ins from one address locks it out for
+// LOCK_MINUTES. Counted in Netlify Blobs, so it holds across all of Netlify's servers.
+const LOCK_AFTER = 10;
+const LOCK_MINUTES = 15;
 const SECURITY = { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
 
 const encoder = new TextEncoder();
@@ -89,6 +94,23 @@ export function createStudio() {
     return entry.count > 5;
   }
 
+  // Failed sign-ins per address, kept under a scrambled form of the address.
+  const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}`;
+  async function lockedOut(ip, now) {
+    const entry = await store().get(await lockKey(ip), { type: "json" });
+    return !!entry && entry.count >= LOCK_AFTER && now - entry.since < LOCK_MINUTES * 60_000;
+  }
+  async function countFailure(ip, now) {
+    const key = await lockKey(ip);
+    const entry = await store().get(key, { type: "json" });
+    const fresh = !entry || now - entry.since >= LOCK_MINUTES * 60_000;
+    await store().setJSON(key, fresh ? { since: now, count: 1 } : { since: entry.since, count: entry.count + 1 });
+  }
+
+  // Addresses kicked off the site for flooding it (see ../guard/bans.js).
+  const bans = createBanList();
+  const blocked = () => reply("This network is blocked from Horizon Media for an hour for sending far too many requests.", 403, { "content-type": "text/plain; charset=utf-8" });
+
   // The announcements that were written into index.html before the studio could
   // manage them. They are copied into the store once, so they can be edited or
   // removed like any other.
@@ -120,6 +142,9 @@ export function createStudio() {
   return async function studio(request, context) {
     const url = new URL(request.url);
     const now = Date.now();
+    const ip = context.ip || "unknown";
+    // Kicked off the site: nothing here answers a banned address.
+    if (await bans.isBanned(context.ip, now)) return blocked();
 
     // ---- Public: the list and the photos themselves
     if (request.method === "GET" && url.pathname === "/portfolio-photos.json") {
@@ -152,7 +177,8 @@ export function createStudio() {
     if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
 
     if (url.pathname === "/studio/login") {
-      if (tooManyAttempts(context.ip || "unknown", now)) return json({ error: "Too many tries. Wait a minute." }, 429);
+      if (tooManyAttempts(ip, now)) return json({ error: "Too many tries. Wait a minute." }, 429);
+      if (await lockedOut(ip, now)) return json({ error: `Too many wrong tries from here. Wait ${LOCK_MINUTES} minutes.` }, 429);
       const form = await request.formData();
       // Check every account, both fields each time, so the reply does not reveal
       // which account exists or which field was wrong.
@@ -166,9 +192,11 @@ export function createStudio() {
       }
       if (account === undefined) {
         console.warn(`studio: failed sign-in from ${context.ip}`);
+        await countFailure(ip, now);
         return json({ error: "Wrong username or password." }, 401);
       }
       console.log(`studio: ${account.username} signed in`);
+      await store().delete(await lockKey(ip));
       const expires = now + SESSION_HOURS * 3_600_000;
       return json({ ok: true }, 200, {
         "set-cookie": `${COOKIE}=${expires}.${account.n}.${await sign(expires, account)}; Max-Age=${SESSION_HOURS * 3600}; Path=/studio; Secure; HttpOnly; SameSite=Strict`,

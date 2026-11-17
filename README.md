@@ -10,7 +10,7 @@ Everything at the top of the repository counts as part of the website, except th
 
 ## Site guard
 
-The guard runs on Netlify in front of the homepage. Its code is in `netlify/guard/` (start with `guard.js`), and `netlify/edge-functions/guard.js` plugs it into Netlify. If it ever fails, Netlify serves the page without it.
+The guard runs on Netlify in front of every page (busy mode only on the pages with photos). Its code is in `netlify/guard/` (start with `guard.js`), and `netlify/edge-functions/guard.js` plugs it into Netlify. If it ever fails, Netlify serves the page without it.
 
 **Busy mode.** The guard counts the visitors who opened the page in the last two minutes.
 
@@ -21,7 +21,9 @@ The guard runs on Netlify in front of the homepage. Its code is in `netlify/guar
 
 Visitors are told apart by an anonymous cookie, `hm_visitor`: a random id that lasts 30 minutes. Counting stores no IP addresses.
 
-**Rate limit.** An address that loads the page more than 300 times in a minute gets a small "Timeout" page instead, which reloads itself after a minute. That address is written to the function's log, so it can be blocked in Netlify if it keeps coming back.
+**Rate limit.** An address that loads a page more than 300 times in a minute gets a small "Timeout" page instead, which reloads itself after a minute. That address is written to the function's log.
+
+**Kicked off.** An address that keeps going (600 page loads in a minute) is banned from the whole site for an hour: every page shows it a short "Blocked" page, and the studio and its photos answer it with nothing. The ban list is kept in Netlify Blobs (`netlify/guard/bans.js`, addresses scrambled), so every server and both edge functions share it; each server re-reads it in the background once a minute, so checking it costs almost nothing. The numbers are `BAN_AFTER` and `BAN_MINUTES` in `netlify/guard/settings.js`.
 
 **Security headers.** Other sites cannot show this one inside a frame, browsers may not guess file types, and the site asks for no device features. The headers are listed twice and must match: in `netlify.toml` (for every file) and in `netlify/guard/settings.js` (for the homepage).
 
@@ -47,7 +49,7 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 - Up to 20 photos can be picked and uploaded at once; they share the title, credit and category.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page, or on the car page when their category is Cars.
 - Signed-in team members can also post, edit and remove **announcements**, each with an optional link to a page of the site or an https address. They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
-- Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute.
+- Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute, and ten in 15 minutes locks it out for 15 minutes. The second count is kept in Netlify Blobs (under a scrambled form of the address), so it holds across all of Netlify's servers.
 
 ## Photo protection
 

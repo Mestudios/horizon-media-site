@@ -253,6 +253,29 @@ test("announcement links must be a page of this site or an https address", async
   assert.equal(noLinkText.body.announcement.linkText, "Read more");
 });
 
+test("ten wrong sign-ins from one address lock it out for 15 minutes, across Netlify's servers", async () => {
+  const form = (password) => { const f = new FormData(); f.set("username", USERNAME); f.set("password", password); return f; };
+  const login = (s, password, ip = "198.51.100.77") => s(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: form(password) }), { ip });
+  // Each try goes to a fresh copy of the studio, as if to a different server, so
+  // only the shared count in storage can stop them.
+  for (let i = 0; i < 10; i++) assert.equal((await login(createStudio(), "wrong password!!")).status, 401, `try ${i + 1}`);
+  assert.equal((await login(createStudio(), "wrong password!!")).status, 429);
+  assert.equal((await login(createStudio(), PASSWORD)).status, 429, "even the right password waits out the lock");
+  assert.equal((await login(createStudio(), "wrong password!!", "198.51.100.78")).status, 401, "other addresses are not affected");
+  assert.equal((await login(createStudio(), PASSWORD, "198.51.100.78")).status, 200, "and signing in clears the count");
+});
+
+test("an address banned for flooding the site gets nothing from the studio", async () => {
+  const { createBanList } = await import("../netlify/guard/bans.js");
+  await createBanList().ban("203.0.113.60", Date.now(), "test");
+  studio = createStudio(); // a server that has not read the ban list yet
+  const blocked = await call("/announcements.json", { ip: "203.0.113.60" });
+  assert.equal(blocked.status, 403);
+  assert.match(blocked.body, /blocked/);
+  assert.equal((await call("/portfolio-photos.json", { ip: "203.0.113.60" })).status, 403);
+  assert.equal((await call("/announcements.json", { ip: "203.0.113.61" })).status, 200, "others are fine");
+});
+
 test("removing a photo deletes it everywhere", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
