@@ -94,7 +94,7 @@ Every page starts with a "Skip to content" link, keeps its content inside one `<
 
 ## Presets page
 
-`presets.html` will hold free Lightroom presets. For now it says they are coming soon. To add one, put the .dng and .xmp files in a folder such as `presets/`, add a before-and-after photo, and replace a "Coming soon" card with download links. The terms page already covers how the presets may be used.
+`presets.html` shows the free Lightroom presets added in the studio's **Presets** section (`js/presets.js` reads `/presets.json`); until there are any, it says they are coming soon. The terms page already covers how the presets may be used.
 
 ## Light and dark mode, and the app icon
 
