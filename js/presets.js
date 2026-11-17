@@ -1,6 +1,6 @@
 // Presets page: shows the free presets added in the studio (/presets.json),
 // each with a before/after slider and its downloads. Until there are any, the
-// "coming soon" cards written into presets.html stay.
+// "Coming December 2026" cards written into presets.html stay.
 (() => {
   const list = document.querySelector(".presets-list");
   if (!list) return;

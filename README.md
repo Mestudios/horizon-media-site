@@ -94,7 +94,7 @@ Every page starts with a "Skip to content" link, keeps its content inside one `<
 
 ## Presets page
 
-`presets.html` shows the free Lightroom presets added in the studio's **Presets** section (`js/presets.js` reads `/presets.json`); until there are any, it says they are coming soon. The terms page already covers how the presets may be used.
+`presets.html` shows the free Lightroom presets added in the studio's **Presets** section (`js/presets.js` reads `/presets.json`); until there are any, it says they are coming in December 2026. The terms page already covers how the presets may be used.
 
 ## Light and dark mode, and the app icon
 
