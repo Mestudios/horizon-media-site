@@ -15,16 +15,22 @@
 // never written in this code, because this code is public. Photos are kept
 // in Netlify Blobs.
 import { getStore } from "@netlify/blobs";
-import { studioPage } from "./page.js";
+import { studioPage, TEAM } from "./page.js";
 import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 import { createBanList } from "../guard/bans.js";
 import { HERO_PATH } from "../guard/homepage.js";
+import { NOTICE_LINK } from "../guard/notice.js";
 
 const SESSION_HOURS = 12;
 const REMEMBER_DAYS = 30; // "Keep me signed in on this device"
 const COOKIE = "hm_studio";
 const MAX_FULL = 1_500_000; // bytes; the page shrinks photos before sending them
+// Free presets added in the studio: the Lightroom files and a before/after pair.
+const MAX_PRESETS = 30;
+const MAX_DNG = 8_000_000; // a .dng preset is a small sample photo
+const MAX_XMP = 512_000; // a .xmp preset is a short text file
+const PRESET_KINDS = { dng: "application/octet-stream", xmp: "application/octet-stream", before: "image/jpeg", after: "image/jpeg" };
 const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
@@ -86,11 +92,23 @@ async function sign(expires, account) {
   return hex(await crypto.subtle.sign("HMAC", key, encoder.encode(`${account.n}:${expires}`)));
 }
 
+// The Instagram name an account's photos are credited to by default: what they
+// saved in the studio, else their username when it is a team member's
+// Instagram name, else nothing (they type it in).
+async function creditOf(account) {
+  try {
+    const saved = await store().get(`profile/${account.n}`, { type: "json" });
+    if (saved && saved.credit) return saved.credit;
+  } catch (error) {}
+  return TEAM.includes(account.username) ? account.username : "";
+}
+
+// The signed-in account (who it is: account.n and account.username), or null.
 async function signedIn(request, list, now) {
   const match = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.([1-9])\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
-  if (!match || Number(match[1]) <= now) return false;
+  if (!match || Number(match[1]) <= now) return null;
   const account = list.find((a) => a.n === Number(match[2]));
-  return account !== undefined && same(match[3], await sign(match[1], account));
+  return account !== undefined && (await same(match[3], await sign(match[1], account))) ? account : null;
 }
 
 const reply = (body, status = 200, headers = {}) =>
@@ -99,6 +117,12 @@ const json = (data, status = 200, headers = {}) => reply(JSON.stringify(data), s
 const isJpeg = (bytes) => bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 const clean = (value, max) => String(value || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, max);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+// A scheduled go-live time (milliseconds, sent by the studio page): only a time
+// in the future, at most a year ahead, counts. Anything else means "now".
+const liveTime = (value, now) => {
+  const at = Number(value);
+  return Number.isFinite(at) && at > now && at < now + 366 * 86_400_000 ? Math.round(at) : 0;
+};
 const todayIn = (now) => new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
 // Whether an announcement is up on the given day: from its date to its end date, if it has one.
 const isUp = (item, today) => item.date <= today && (!item.until || item.until >= today);
@@ -204,10 +228,19 @@ export function createStudio() {
   // Each copy is also rebuilt when it is older than INDEX_MINUTES, in case a
   // change ever reached storage without rebuilding it.
   const INDEX_MINUTES = 10;
-  async function rebuildPhotoIndex() {
+  // Everything the studio knows about photos, scheduled ones included.
+  async function allPhotoData() {
     const [photos, hidden, pins, hero] = await Promise.all([listPhotos(), listHidden(), listPins(), store().get("hero", { type: "json" })]);
-    const data = { photos, hidden, pins, hero: hero ? hero.path : "" };
-    await store().setJSON("index/photos", { built: Date.now(), data });
+    return { photos, hidden, pins, hero: hero ? hero.path : "" };
+  }
+  // The public copy leaves out photos scheduled for later, and notes when the
+  // next one goes live so it is rebuilt then.
+  async function rebuildPhotoIndex() {
+    const now = Date.now();
+    const all = await allPhotoData();
+    const waiting = all.photos.filter((photo) => photo.liveAt > now).map((photo) => photo.liveAt);
+    const data = { ...all, photos: all.photos.filter((photo) => !(photo.liveAt > now)) };
+    await store().setJSON("index/photos", { built: now, next: waiting.length ? Math.min(...waiting) : 0, data });
     return data;
   }
   async function rebuildAnnouncementIndex() {
@@ -217,10 +250,24 @@ export function createStudio() {
   }
   async function readIndex(key, rebuild) {
     const index = await store().get(key, { type: "json" });
-    return index && Date.now() - index.built < INDEX_MINUTES * 60_000 ? index.data : rebuild();
+    const now = Date.now();
+    const fresh = index && now - index.built < INDEX_MINUTES * 60_000 && !(index.next && now >= index.next);
+    return fresh ? index.data : rebuild();
   }
   const photoIndex = () => readIndex("index/photos", rebuildPhotoIndex);
   const announcementIndex = () => readIndex("index/announcements", rebuildAnnouncementIndex);
+
+  async function listPresets() {
+    const { blobs } = await store().list({ prefix: "preset/" });
+    const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+    return items.sort((a, b) => a.added - b.added);
+  }
+  async function rebuildPresetIndex() {
+    const items = await listPresets();
+    await store().setJSON("index/presets", { built: Date.now(), data: items });
+    return items;
+  }
+  const presetIndex = () => readIndex("index/presets", rebuildPresetIndex);
 
   async function listRequests() {
     const { blobs } = await store().list({ prefix: "req/" });
@@ -274,6 +321,23 @@ export function createStudio() {
       console.log(`studio: photo request ${id}`);
       return json({ ok: true });
     }
+    if (request.method === "GET" && url.pathname === "/presets.json") {
+      if ((limited = await tooManyLoads("list", ip, now))) return limited;
+      return json(await presetIndex(), 200, { "cache-control": "no-cache" });
+    }
+    const presetFile = /^\/preset-files\/([0-9a-f]{16})\/(dng|xmp|before|after)$/.exec(url.pathname);
+    if (presetFile) {
+      if (request.method !== "GET") return reply("Not allowed", 405);
+      if ((limited = await tooManyLoads("image", ip, now))) return limited;
+      const [, id, kind] = presetFile;
+      const meta = await store().get(`preset/${id}`, { type: "json" });
+      const bytes = meta && (await store().get(`preset-file/${id}/${kind}`, { type: "arrayBuffer" }));
+      if (!bytes) return reply("Not found", 404);
+      const headers = { ...SECURITY, "content-type": PRESET_KINDS[kind], "cache-control": "public, max-age=3600" };
+      // Preset files download with a tidy name; they are never shown in the browser.
+      if (kind === "dng" || kind === "xmp") headers["content-disposition"] = `attachment; filename="horizon-${meta.slug}.${kind}"`;
+      return new Response(bytes, { headers });
+    }
     const annPhoto = /^\/announcement-photos\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
     if (annPhoto) {
       if (request.method !== "GET") return reply("Not allowed", 405);
@@ -300,14 +364,17 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json" || url.pathname === "/studio/stats.json") {
+      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json" || url.pathname === "/studio/stats.json" || url.pathname === "/studio/photos.json") {
         if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
         if (url.pathname === "/studio/stats.json") return json({ requestCounts: (await store().get("request-counts", { type: "json" })) || {} });
+        if (url.pathname === "/studio/photos.json") return json(await allPhotoData());
         if (url.pathname === "/studio/requests.json") return json(await listRequests());
-        return json({ today: todayIn(now), items: await listAnnouncements() });
+        return json({ today: todayIn(now), items: await listAnnouncements(), notice: (await store().get("notice", { type: "json" })) || null });
       }
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
-      return reply(studioPage({ state: (await signedIn(request, list, now)) ? "in" : "out" }));
+      const me = await signedIn(request, list, now);
+      if (!me) return reply(studioPage({ state: "out" }));
+      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me) } }));
     }
     if (request.method !== "POST") return reply("Not allowed", 405);
     // Forms must come from this site itself.
@@ -344,8 +411,17 @@ export function createStudio() {
       return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=; Max-Age=0; Path=/studio; Secure; HttpOnly; SameSite=Strict` });
     }
 
-    if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+    const me = await signedIn(request, list, now);
+    if (!me) return json({ error: "Sign in first." }, 401);
     const form = await request.formData();
+
+    // Who you are: the Instagram name your photos are credited to by default.
+    if (url.pathname === "/studio/profile") {
+      const credit = clean(form.get("credit"), 40).replace(/^@+/, "");
+      if (!/^[A-Za-z0-9._]{1,30}$/.test(credit)) return json({ error: "Type your Instagram name, like visuals_alex_." }, 400);
+      await store().setJSON(`profile/${me.n}`, { credit });
+      return json({ ok: true, credit });
+    }
 
     if (url.pathname === "/studio/upload") {
       const [full, thumb] = [form.get("full"), form.get("thumb")];
@@ -357,7 +433,9 @@ export function createStudio() {
 
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
-      const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now };
+      const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now, by: me.username };
+      const liveAt = liveTime(form.get("liveAt"), now);
+      if (liveAt) photo.liveAt = liveAt; // scheduled: hidden from the site until then
       const alt = clean(form.get("alt"), 150);
       if (alt) photo.alt = alt; // read out by screen readers instead of the title
       const owner = clean(form.get("owner"), 40).replace(/^@+/, "");
@@ -379,7 +457,12 @@ export function createStudio() {
       const old = await store().get(`meta/${id}`, { type: "json" });
       if (!old) return json({ error: "That photo no longer exists." }, 404);
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
-      const photo = { ...old, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport };
+      const photo = { ...old, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, editedBy: me.username };
+      if (form.has("liveAt")) {
+        const liveAt = liveTime(form.get("liveAt"), now);
+        if (liveAt) photo.liveAt = liveAt;
+        else delete photo.liveAt; // empty, or a time already past: live now
+      }
       const alt = clean(form.get("alt"), 150);
       if (alt) photo.alt = alt;
       else delete photo.alt;
@@ -395,6 +478,66 @@ export function createStudio() {
 
     // Pinned photos show first on their page, in this order. Any photo can be
     // pinned: a built-in one by its img/ path, an added one by its uploads/ path.
+    // A free preset: name, description, the Lightroom files and a before/after pair.
+    if (url.pathname === "/studio/preset") {
+      const name = clean(form.get("name"), 40);
+      const text = clean(form.get("text"), 200);
+      if (!name) return json({ error: "Give the preset a name." }, 400);
+      const files = {};
+      for (const kind of Object.keys(PRESET_KINDS)) {
+        const file = form.get(kind);
+        if (!(file instanceof Blob) || file.size === 0) continue;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (kind === "dng") {
+          const tiff = (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0) || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0 && bytes[3] === 0x2a);
+          if (!tiff) return json({ error: "That .dng file isn't a Lightroom preset (DNG) file." }, 415);
+          if (bytes.length > MAX_DNG) return json({ error: "That .dng file is too large (8 MB at most)." }, 413);
+        } else if (kind === "xmp") {
+          const head = new TextDecoder().decode(bytes.slice(0, 4096));
+          if (!/x:xmpmeta|<\?xpacket/.test(head)) return json({ error: "That .xmp file isn't a Lightroom preset (XMP) file." }, 415);
+          if (bytes.length > MAX_XMP) return json({ error: "That .xmp file is too large." }, 413);
+        } else {
+          if (!isJpeg(bytes)) return json({ error: "Before and after photos must be JPEG." }, 415);
+          if (bytes.length > MAX_FULL) return json({ error: "That photo is too large." }, 413);
+        }
+        files[kind] = bytes;
+      }
+      if (!files.dng && !files.xmp) return json({ error: "Add the preset's .dng file, its .xmp file, or both." }, 400);
+      if ((await store().list({ prefix: "preset/" })).blobs.length >= MAX_PRESETS) return json({ error: `The studio holds ${MAX_PRESETS} presets at most. Remove some first.` }, 409);
+      const id = hex(crypto.getRandomValues(new Uint8Array(8)));
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "preset";
+      await Promise.all(Object.entries(files).map(([kind, bytes]) => store().set(`preset-file/${id}/${kind}`, bytes.buffer)));
+      const preset = { id, name, slug, text, has: Object.fromEntries(Object.keys(files).map((kind) => [kind, true])), added: now, by: me.username };
+      await store().setJSON(`preset/${id}`, preset);
+      await rebuildPresetIndex();
+      console.log(`studio: ${me.username} added preset ${id}`);
+      return json({ ok: true, preset });
+    }
+    if (url.pathname === "/studio/preset-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown preset." }, 400);
+      await Promise.all([store().delete(`preset/${id}`), ...Object.keys(PRESET_KINDS).map((kind) => store().delete(`preset-file/${id}/${kind}`))]);
+      await rebuildPresetIndex();
+      return json({ ok: true });
+    }
+
+    // The notice bar across the top of every page. Empty text turns it off.
+    if (url.pathname === "/studio/notice") {
+      const text = clean(form.get("text"), 140);
+      if (!text) {
+        await store().delete("notice");
+        console.log(`studio: ${me.username} turned the notice bar off`);
+        return json({ ok: true, notice: null });
+      }
+      const rawLink = String(form.get("link") || "").trim();
+      if (rawLink && !NOTICE_LINK.test(rawLink)) return json({ error: "The link must be a page of this site, like book.html, or start with https://." }, 400);
+      const until = DAY.test(String(form.get("until") || "")) ? String(form.get("until")) : "";
+      const notice = { id: String(now), text, link: rawLink, linkText: rawLink ? clean(form.get("linkText"), 30) || "More" : "", until, by: me.username };
+      await store().setJSON("notice", notice);
+      console.log(`studio: ${me.username} set the notice bar`);
+      return json({ ok: true, notice });
+    }
+
     // The homepage background: any photo of the site, or "" for the default.
     if (url.pathname === "/studio/hero") {
       const path = String(form.get("path") || "");
@@ -463,7 +606,7 @@ export function createStudio() {
         return json({ ok: true, announcement });
       }
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const announcement = { id, title, text, date, until, link, linkText, added: now };
+      const announcement = { id, title, text, date, until, link, linkText, added: now, by: me.username };
       if (photoBytes) {
         await store().set(`ann-photo/${id}`, photoBytes.buffer);
         announcement.photo = now;

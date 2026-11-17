@@ -305,7 +305,7 @@
         info.append(title, credit);
         shot.append(image, info);
         // A "New" tag for the first week.
-        if (Date.now() - photo.added < 7 * 86_400_000) {
+        if (Date.now() - (photo.liveAt || photo.added) < 7 * 86_400_000) {
           const tag = document.createElement("span");
           tag.className = "shot-new";
           tag.textContent = "New";

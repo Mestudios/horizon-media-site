@@ -424,6 +424,25 @@ test("every page links to the policies and to photo removal, and none links to t
   assert.match(site, /register\("\/sw\.js", \{ scope: "\/studio\/" \}\)/, "the service worker only covers the studio");
 });
 
+test("the notice bar from the studio shows at the top of every page, safely, until its last day", async () => {
+  const studioStore = getStore("studio-photos");
+  await studioStore.setJSON("notice", { id: "1", text: "Game moved <script>alert(1)</script>", link: "book.html", linkText: "Book \"now\"", until: "" });
+  const handler = newInstance();
+  for (const path of ["/", "/book.html", "/privacy.html"]) {
+    const reply = await visit(handler, newVisitor(), { path, origin: () => new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<nav></nav></body>`, { headers: { "content-type": "text/html" } }) });
+    assert.match(reply.body, /<a class="skip"[^>]*>Skip to content<\/a><div class="notice-bar"/, `${path} has the bar right after the skip link`);
+    assert.match(reply.body, /Game moved &lt;script&gt;alert\(1\)&lt;\/script&gt; <a href="book\.html">Book &quot;now&quot;<\/a>/);
+    assert.doesNotMatch(reply.body, /<script>alert/);
+  }
+  // A bad link in storage is left out; a notice past its last day disappears.
+  await studioStore.setJSON("notice", { id: "2", text: "Hi", link: "javascript:alert(1)", until: "" });
+  assert.doesNotMatch((await visit(newInstance(), newVisitor(), { path: "/book.html", origin: () => new Response("<body><a class=\"skip\" href=\"#main\">Skip</a></body>", { headers: { "content-type": "text/html" } }) })).body, /javascript:/);
+  await studioStore.setJSON("notice", { id: "3", text: "Old news", until: "2000-01-01" });
+  const old = await visit(newInstance(), newVisitor(), { path: "/book.html" });
+  assert.equal(old.passedThrough, true, "no notice: the page is passed through untouched");
+  await studioStore.delete("notice");
+});
+
 test("pages without photos only get the checks, not busy mode", async () => {
   const handler = newInstance();
   const reply = await visit(handler, newVisitor(), { path: "/book.html" });

@@ -2,7 +2,7 @@ import { SEASONS } from "./sports.js";
 import { MAX_REQUESTS, WARN_REQUESTS } from "./limits.js";
 
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
-const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
+export const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
 
 // The studio's one page. `state` is "off" (no password set in Netlify yet),
 // "out" (show the sign-in form) or "in" (show the add and remove tools).
@@ -118,6 +118,23 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .ib.danger{color:#ff8a80}
 .studio .ib.danger:hover{background:#b3261e;color:#fff}
 .studio .ib:disabled{opacity:.35;cursor:default}
+.side .me{margin:auto 0 8px;padding:0 14px;font-size:13px;color:var(--dim);overflow-wrap:anywhere}
+.side .me+#logout{margin-top:0}
+.me-card{margin:16px 0 0;padding:14px 18px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.me-card p{margin:0;font-size:15px}
+.studio .me-card .me-change{margin:0 0 0 6px;padding:4px 10px;font-size:13px;min-height:0}
+.studio .me-card label{margin:12px 0 6px}
+.me-row{display:flex;gap:10px;flex-wrap:wrap}.me-row input{flex:1 1 220px}
+.studio .me-row .btn{margin:0}
+.studio .me-card .me-status{min-height:0;margin:6px 0 0}
+@media (max-width:760px){.side .me{display:none}}
+.notice-card{margin:18px 0 8px}
+.studio .notice-card h2{margin:0 0 4px;font-size:26px}
+.studio .notice-card .note{margin:0}
+.studio .preset-admin{display:block}
+.studio .preset-admin li{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+.studio .preset-admin li img{width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:6px;flex:none}
+.studio .preset-admin li p{margin:4px 0 0;color:var(--dim);font-size:14px}
 .studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
@@ -206,9 +223,10 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 });
 </script>`;
 
-const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
+const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
 <section data-view="overview">
-<div class="view-top"><h1>Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
+<div class="view-top"><h1 id="hello">Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
+<form class="me-card" id="me-form"><p id="me-line"></p><div class="me-edit" hidden><label for="me-credit">Your Instagram name (your photos are credited to it)</label><div class="me-row"><input id="me-credit" name="credit" maxlength="40" autocapitalize="none" placeholder="visuals_alex_"><button class="btn btn-hot">Save</button></div></div><p role="status" class="me-status"></p></form>
 <div class="inbox-warn" id="ov-warn" role="status" hidden><p></p><button class="btn" type="button" data-go="requests">Answer requests</button></div>
 <div class="stats"><button type="button" class="card" data-go="requests"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
 <div class="two"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
@@ -224,6 +242,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <label for="alt">Describe the photo for people who can't see it (optional)</label><input id="alt" name="alt" maxlength="150" placeholder="A receiver leaps for a one-handed catch over a defender">
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
+<label for="live-at">Goes live (optional)</label><input id="live-at" type="datetime-local"><p class="note">Leave empty to show the photos right away, or pick a time, like the morning after the game.</p>
 <label for="sport">Category</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
   const options = sports.map(([value, label]) => `<option value="${value}">${label.replace("&", "&amp;")}</option>`).join("");
   return season ? `<optgroup label="${season}">${options}</optgroup>` : options;
@@ -250,6 +269,11 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note" id="requests-room"></p>
 <ul id="requests" class="requests"></ul></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
+<div class="card notice-card"><h2>Notice bar</h2><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
+<form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
+<div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
+<div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
+<h2>Announcement cards</h2>
 <p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
 <div class="card"><form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
 <label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
@@ -267,6 +291,21 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
 <p role="status"></p></form></div>
 <ul id="announcements" class="ann-admin"></ul></section>
+<section data-view="presets" hidden><div class="view-top"><h1>Presets</h1></div>
+<p class="note">Free Lightroom presets for the presets page. As soon as one is added here, the page switches from "coming soon" to downloads.</p>
+<div class="card"><form id="preset-form"><div class="form-cols"><div class="col">
+<label for="preset-name">Name</label><input id="preset-name" name="name" maxlength="40" required placeholder="Game day">
+<label for="preset-text">Short description</label><textarea id="preset-text" name="text" maxlength="200" rows="3" placeholder="Rich, punchy color for night games under the lights."></textarea>
+<label for="preset-dng">Lightroom mobile file (.dng)</label><input id="preset-dng" type="file" accept=".dng,image/x-adobe-dng">
+<label for="preset-xmp">Lightroom desktop file (.xmp)</label><input id="preset-xmp" type="file" accept=".xmp">
+</div><div class="col">
+<label for="preset-before">Before photo</label><input id="preset-before" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
+<label for="preset-after">After photo (the same photo with the preset)</label><input id="preset-after" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
+<p class="note">Visitors drag a slider across these to compare.</p>
+</div></div>
+<div class="form-end"><button class="btn btn-hot">Add preset</button><p class="note">Add the .dng file, the .xmp file, or both.</p></div><p role="status"></p></form></div>
+<h2>On the presets page</h2>
+<ul id="preset-list" class="preset-admin"></ul></section>
 <div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Edit photo</h2><div class="tool-bar"><div class="tool-modes" role="group" aria-label="What dragging does"><button type="button" class="btn" data-mode="crop" aria-pressed="false">Crop</button><button type="button" class="btn" data-mode="blur" aria-pressed="true">Blur plates</button></div><button type="button" class="btn tool-rotate">Rotate &#8635;</button><button type="button" class="btn tool-reset">Start over</button></div><p class="note tool-note"></p><canvas aria-label="The photo; drag on it to crop or to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
 <div id="undo" class="undo" role="status" hidden><span></span><button type="button" class="btn btn-hot">Undo</button></div>
 <script>
@@ -295,6 +334,38 @@ const credit = document.getElementById("credit");
 const teamButtons = [...document.querySelectorAll(".team button")];
 const markTeam = () => teamButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.name === credit.value.replace(/^@+/, ""))));
 teamButtons.forEach((button) => button.addEventListener("click", () => { credit.value = button.dataset.name; markTeam(); }));
+
+// ---- Who is signed in (ME comes from the server: your username, and the
+// Instagram name your photos are credited to).
+const meForm = document.getElementById("me-form");
+const meEdit = meForm.querySelector(".me-edit");
+function showMe() {
+  document.getElementById("me-side").textContent = "Signed in as " + ME.name;
+  document.getElementById("hello").textContent = "Hi, " + ME.name;
+  const line = document.getElementById("me-line");
+  line.textContent = "";
+  if (ME.credit) {
+    line.append("Photos you add are credited to ");
+    const b = document.createElement("b");
+    b.textContent = "@" + ME.credit;
+    line.append(b, ". ");
+    line.append(button("Change", "me-change", () => { meEdit.hidden = !meEdit.hidden; if (!meEdit.hidden) document.getElementById("me-credit").focus(); }));
+  } else {
+    line.textContent = "Add your Instagram name, so photos you add are credited to you automatically.";
+    meEdit.hidden = false;
+  }
+  document.getElementById("me-credit").value = ME.credit || "";
+  if (!credit.value || credit.dataset.auto === "1") { credit.value = ME.credit || ""; credit.dataset.auto = "1"; }
+  markTeam();
+}
+credit.addEventListener("input", () => { credit.dataset.auto = ""; });
+meForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const response = await post("/studio/profile", { credit: document.getElementById("me-credit").value });
+  const reply = await response.json();
+  meForm.querySelector(".me-status").textContent = response.ok ? "Saved." : reply.error;
+  if (response.ok) { ME.credit = reply.credit; credit.dataset.auto = "1"; credit.value = ""; meEdit.hidden = true; showMe(); }
+});
 credit.addEventListener("input", markTeam);
 const list = document.getElementById("photos");
 
@@ -711,7 +782,7 @@ async function readBuiltIn() {
 }
 
 async function refresh() {
-  const data = await (await fetch("/portfolio-photos.json", { cache: "no-store" })).json();
+  const data = await (await fetch("/studio/photos.json", { cache: "no-store" })).json();
   state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [], hero: data.hero || "" };
   await Promise.all([loadBuiltIn(), refreshStats()]);
   render();
@@ -755,6 +826,8 @@ function thumbItem(photo, actions) {
   const asked = requestCounts[photo.path] || 0;
   const tags = document.createElement("span");
   tags.className = "tags";
+  if (photo.added && photo.added.liveAt > Date.now()) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "Goes live " + new Date(photo.added.liveAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); tags.append(t); }
+  if (photo.added && photo.added.by) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "By " + photo.added.by; tags.append(t); }
   if (asked) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "Requested " + asked + "\\u00d7"; tags.append(t); }
   if (state.hero === photo.path) { const t = document.createElement("span"); t.className = "tag live"; t.textContent = "Homepage"; tags.append(t); }
   if (tags.children.length) item.append(tags);
@@ -764,7 +837,8 @@ function thumbItem(photo, actions) {
 function render() {
   const all = everyPhoto();
   const live = state.photos.filter((p) => !removing.has(p.id));
-  counts.added = live.length;
+  const now = Date.now();
+  counts.added = live.filter((p) => !(p.liveAt > now)).length;
   counts.builtIn = builtIn.filter((p) => !state.hidden.includes(p.path)).length;
   showPhotoCount();
 
@@ -863,11 +937,18 @@ function openEditor(item, photo) {
   save.textContent = "Save";
   const note = document.createElement("p");
   note.className = "note";
-  form.append(field("Title", "title", photo.title, 60), field("Description (for screen readers)", "alt", photo.alt, 150), field("Photographer", "credit", photo.credit, 40), sportLabel, field("Car owner (cars only)", "owner", photo.owner, 40), save, button("Cancel", "", () => form.remove()), note);
+  const liveLabel = document.createElement("label");
+  liveLabel.textContent = "Goes live (empty = now)";
+  const live = document.createElement("input");
+  live.type = "datetime-local";
+  if (photo.liveAt > Date.now()) { const d = new Date(photo.liveAt); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); live.value = d.toISOString().slice(0, 16); }
+  liveLabel.append(live);
+  form.append(field("Title", "title", photo.title, 60), field("Description (for screen readers)", "alt", photo.alt, 150), field("Photographer", "credit", photo.credit, 40), sportLabel, field("Car owner (cars only)", "owner", photo.owner, 40), liveLabel, save, button("Cancel", "", () => form.remove()), note);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const body = new FormData(form);
     body.set("id", photo.id);
+    body.set("liveAt", live.value ? String(new Date(live.value).getTime()) : "");
     const response = await fetch("/studio/edit-photo", { method: "POST", body });
     if (response.ok) refresh();
     else note.textContent = (await response.json()).error;
@@ -956,6 +1037,8 @@ document.getElementById("add").addEventListener("submit", async (event) => {
       const body = new FormData(event.target);
       body.set("full", await shrink(image, 1200, 0.82, picks[i].boxes), "full.jpg");
       body.set("thumb", await shrink(image, 480, 0.7, picks[i].boxes), "thumb.jpg");
+      const when = document.getElementById("live-at").value;
+      if (when) body.set("liveAt", String(new Date(when).getTime()));
       addStatus.textContent = "Sending photo" + of + "...";
       const response = await fetch("/studio/upload", { method: "POST", body });
       if (response.ok) added += 1;
@@ -965,8 +1048,10 @@ document.getElementById("add").addEventListener("submit", async (event) => {
     }
   }
   button.disabled = false;
-  addStatus.textContent = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
-  if (added) { event.target.reset(); picks = []; showPicks(); markTeam(); refresh(); }
+  const later = document.getElementById("live-at").value;
+  const whenText = later && new Date(later).getTime() > Date.now() ? " They go live " + new Date(later).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "." : "";
+  addStatus.textContent = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") + whenText : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  if (added) { event.target.reset(); picks = []; showPicks(); credit.value = ME.credit || ""; credit.dataset.auto = "1"; markTeam(); refresh(); }
 });
 const signOut = async () => {
   await fetch("/studio/logout", { method: "POST" });
@@ -983,7 +1068,8 @@ dateBox.value = today();
 
 const removingAnn = new Set(); // announcements waiting out their 10 seconds
 async function refreshAnnouncements() {
-  const { today: day, items: everything } = await (await fetch("/studio/announcements.json", { cache: "no-store" })).json();
+  const { today: day, items: everything, notice } = await (await fetch("/studio/announcements.json", { cache: "no-store" })).json();
+  showNotice(notice);
   const items = everything.filter((item) => !removingAnn.has(item.id));
   announceList.textContent = "";
   const stateOf = (item) => (item.date > day ? "Scheduled" : item.until && item.until < day ? "Ended" : "Live");
@@ -1106,6 +1192,89 @@ function updatePreview() {
 announceForm.addEventListener("input", updatePreview);
 announceForm.addEventListener("change", updatePreview);
 updatePreview();
+// ---- Notice bar
+const noticeForm = document.getElementById("notice-form");
+const noticeStatus = noticeForm.querySelector("[role=status]");
+function showNotice(notice) {
+  document.getElementById("notice-text").value = notice ? notice.text : "";
+  document.getElementById("notice-until").value = notice ? notice.until || "" : "";
+  document.getElementById("notice-link").value = notice ? notice.link || "" : "";
+  document.getElementById("notice-link-text").value = notice ? notice.linkText || "" : "";
+  document.getElementById("notice-now").textContent = notice ? "On now" + (notice.until ? ", until " + notice.until : "") + (notice.by ? " (set by " + notice.by + ")" : "") + ". It shows on the site within a minute of changes." : "Off.";
+}
+noticeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const response = await fetch("/studio/notice", { method: "POST", body: new FormData(noticeForm) });
+  const reply = await response.json();
+  noticeStatus.textContent = response.ok ? (reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.") : reply.error;
+  if (response.ok) showNotice(reply.notice);
+});
+document.getElementById("notice-off").addEventListener("click", async () => {
+  const response = await post("/studio/notice", { text: "" });
+  if (response.ok) { showNotice(null); noticeStatus.textContent = "Turned off. It leaves the site within a minute."; }
+});
+// ---- Presets
+const presetForm = document.getElementById("preset-form");
+const presetStatus = presetForm.querySelector("[role=status]");
+const presetList = document.getElementById("preset-list");
+const removingPresets = new Set();
+async function refreshPresets() {
+  const items = (await (await fetch("/presets.json", { cache: "no-store" })).json()).filter((item) => !removingPresets.has(item.id));
+  presetList.textContent = "";
+  if (!items.length) presetList.append(miniRow("No presets yet: the page says they are coming soon.", ""));
+  for (const item of items) {
+    const row = document.createElement("li");
+    for (const kind of ["before", "after"]) {
+      if (!item.has[kind]) continue;
+      const image = document.createElement("img");
+      image.src = "/preset-files/" + item.id + "/" + kind + "?v=" + item.added;
+      image.alt = "";
+      row.append(image);
+    }
+    const info = document.createElement("div");
+    const name = document.createElement("b");
+    name.textContent = item.name;
+    const files = document.createElement("p");
+    files.textContent = [item.has.dng ? ".dng (phones)" : "", item.has.xmp ? ".xmp (computers)" : ""].filter(Boolean).join(" + ") + (item.by ? " \\u00b7 added by " + item.by : "");
+    info.append(name, files);
+    const remove = button("Remove", "btn-danger", () => {
+      removingPresets.add(item.id);
+      refreshPresets();
+      removeLater('"' + item.name + '"', () => post("/studio/preset-delete", { id: item.id }).then(() => { removingPresets.delete(item.id); refreshPresets(); }), () => { removingPresets.delete(item.id); refreshPresets(); });
+    });
+    info.append(remove);
+    row.append(info);
+    presetList.append(row);
+  }
+}
+presetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const body = new FormData();
+  body.set("name", document.getElementById("preset-name").value);
+  body.set("text", document.getElementById("preset-text").value);
+  const dng = document.getElementById("preset-dng").files[0];
+  const xmp = document.getElementById("preset-xmp").files[0];
+  if (dng) body.set("dng", dng, "preset.dng");
+  if (xmp) body.set("xmp", xmp, "preset.xmp");
+  if (!dng && !xmp) { presetStatus.textContent = "Add the preset's .dng file, its .xmp file, or both."; return; }
+  presetStatus.textContent = "Preparing the photos...";
+  try {
+    for (const kind of ["before", "after"]) {
+      const file = document.getElementById("preset-" + kind).files[0];
+      if (file) body.set(kind, await shrink(await createImageBitmap(file, { imageOrientation: "from-image" }), 1200, 0.85), kind + ".jpg");
+    }
+  } catch (error) {
+    presetStatus.textContent = "This device could not read one of the photos. Try a JPEG.";
+    return;
+  }
+  presetStatus.textContent = "Sending...";
+  const response = await fetch("/studio/preset", { method: "POST", body });
+  const reply = await response.json().catch(() => ({ error: "That didn't send. The files may be too large." }));
+  presetStatus.textContent = response.ok ? "Added. It's on the presets page now." : reply.error;
+  if (response.ok) { presetForm.reset(); refreshPresets(); }
+});
+refreshPresets();
+showMe();
 refresh();
 refreshAnnouncements();
 refreshRequests();
@@ -1137,7 +1306,9 @@ async function takeShared() {
 takeShared();
 </script>`;
 
-export function studioPage({ state }) {
-  const body = state === "in" ? nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
+export function studioPage({ state, user = { name: "", credit: "" } }) {
+  // Who is signed in, for the page's script. "<" is escaped so the values can't end the script.
+  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || "") }).replace(/</g, "\\u003c") + ";</script>";
+  const body = state === "in" ? me + nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
   return head + body + '<script src="/js/site.js"></script></body></html>';
 }

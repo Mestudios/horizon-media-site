@@ -157,7 +157,7 @@ test("a signed-in upload appears in the public list and can be fetched", async (
   const list = await call("/portfolio-photos.json");
   assert.equal(list.headers.get("cache-control"), "no-cache", "removals show on the next page load");
   assert.equal(list.body.photos.length, 1);
-  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 });
+  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0, by: USERNAME });
 
   for (const size of ["full", "thumb"]) {
     const image = await call(`/uploads/${id}/${size}.jpg`);
@@ -477,6 +477,98 @@ test("the studio counts how often each photo is requested, even after requests a
   const cookie = await signIn();
   for (const r of (await call("/studio/requests.json", { cookie })).body) await call("/studio/request-done", { method: "POST", cookie, form: { id: r.id } });
   assert.deepEqual((await call("/studio/stats.json", { cookie })).body.requestCounts, { "img/portfolio/golden-hour.jpg": 2, "img/cars/grille.jpg": 1 });
+});
+
+test("the studio knows who is signed in: their name, their saved Instagram credit, and who added what", async () => {
+  // Login 2 is a team member's Instagram name, so it is their credit until they change it.
+  globalThis.Netlify = { env: { get: (name) => ({ STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "cb.framed.it", STUDIO_PASSWORD_2: "another long password" })[name] } };
+  const signInAs = async (username, password) => (await call("/studio/login", { method: "POST", form: { username, password } })).headers.get("set-cookie").split(";")[0];
+  const one = await signInAs(USERNAME, PASSWORD);
+  const two = await signInAs("cb.framed.it", "another long password");
+  const meOf = async (cookie) => JSON.parse(/<script>const ME = (\{.*?\});<\/script>/.exec((await call("/studio", { cookie })).body)[1]);
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "" }, "a username that isn't an Instagram name starts with no credit");
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" });
+  assert.equal((await call("/studio/profile", { method: "POST", form: { credit: "@visuals_alex_" } })).status, 401);
+  assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "not a name!" } })).status, 400);
+  assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "@visuals_alex_" } })).status, 200);
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "visuals_alex_" });
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" }, "each login has its own");
+  const added = (await call("/studio/upload", { method: "POST", cookie: two, form: photo() })).body.photo;
+  assert.equal(added.by, "cb.framed.it");
+  const edited = (await call("/studio/edit-photo", { method: "POST", cookie: one, form: { id: added.id, title: "x", credit: "y", sport: "football" } })).body.photo;
+  assert.deepEqual([edited.by, edited.editedBy], ["cb.framed.it", USERNAME]);
+  const ann = (await call("/studio/announce", { method: "POST", cookie: one, form: { title: "t", text: "x" } })).body.announcement;
+  assert.equal(ann.by, USERNAME);
+});
+
+test("a username can't break out of the studio page's script", async () => {
+  const { studioPage } = await import("../netlify/studio/page.js");
+  const html = studioPage({ state: "in", user: { name: "</script><script>alert(1)</script>", credit: "" } });
+  assert.doesNotMatch(html, /<\/script><script>alert/);
+});
+
+test("scheduled photos stay off the site until their time, but the team sees them", async () => {
+  const cookie = await signIn();
+  const later = Date.now() + 3 * 86_400_000;
+  const scheduled = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Tomorrow", liveAt: String(later) }) })).body.photo;
+  assert.equal(scheduled.liveAt, later);
+  const now = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Now", liveAt: "garbage" }) })).body.photo;
+  assert.equal(now.liveAt, undefined, "a bad time means now");
+  const titles = async (path, c) => (await call(path, { cookie: c })).body.photos.map((p) => p.title).sort();
+  assert.deepEqual(await titles("/portfolio-photos.json"), ["Now"]);
+  assert.equal((await call("/studio/photos.json")).status, 401);
+  assert.deepEqual(await titles("/studio/photos.json", cookie), ["Now", "Tomorrow"]);
+  // Clearing the time puts it live at once.
+  await call("/studio/edit-photo", { method: "POST", cookie, form: { id: scheduled.id, title: "Tomorrow", credit: "x", sport: "football", liveAt: "" } });
+  assert.deepEqual(await titles("/portfolio-photos.json"), ["Now", "Tomorrow"]);
+  // A photo scheduled a moment ahead appears by itself once its time comes.
+  await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Soon", liveAt: String(Date.now() + 1200) }) });
+  assert.ok(!(await titles("/portfolio-photos.json")).includes("Soon"));
+  await new Promise((resolve) => setTimeout(resolve, 1400));
+  assert.ok((await titles("/portfolio-photos.json")).includes("Soon"));
+});
+
+test("the notice bar is set and turned off in the studio, with the same link rules as announcements", async () => {
+  assert.equal((await call("/studio/notice", { method: "POST", form: { text: "x" } })).status, 401);
+  const cookie = await signIn();
+  assert.equal((await call("/studio/notice", { method: "POST", cookie, form: { text: "Hi", link: "javascript:alert(1)" } })).status, 400);
+  const set = await call("/studio/notice", { method: "POST", cookie, form: { text: "Game <b>moved</b>", link: "book.html", linkText: "", until: "2099-01-01" } });
+  assert.equal(set.status, 200);
+  assert.deepEqual([set.body.notice.text, set.body.notice.link, set.body.notice.linkText, set.body.notice.until, set.body.notice.by], ["Game bmoved/b", "book.html", "More", "2099-01-01", USERNAME]);
+  assert.equal((await call("/studio/announcements.json", { cookie })).body.notice.text, "Game bmoved/b");
+  await call("/studio/notice", { method: "POST", cookie, form: { text: "" } });
+  assert.equal((await call("/studio/announcements.json", { cookie })).body.notice, null);
+});
+
+test("presets: the team adds Lightroom files and before/after photos, visitors download them", async () => {
+  const DNG = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0, 1, 2, 3]);
+  const XMP = new TextEncoder().encode('<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF/></x:xmpmeta>');
+  const form = (extra = {}) => ({ name: "Game <b>day</b>", text: "Night games", dng: new Blob([DNG]), xmp: new Blob([XMP]), before: new Blob([JPEG]), after: new Blob([JPEG]), ...extra });
+  assert.equal((await call("/studio/preset", { method: "POST", form: form() })).status, 401);
+  const cookie = await signIn();
+  assert.equal((await call("/studio/preset", { method: "POST", cookie, form: form({ name: "" }) })).status, 400);
+  assert.equal((await call("/studio/preset", { method: "POST", cookie, form: form({ dng: new Blob(["<html>"]) }) })).status, 415, "a .dng must really be a DNG");
+  assert.equal((await call("/studio/preset", { method: "POST", cookie, form: form({ xmp: new Blob(["<script>alert(1)</script>"]) }) })).status, 415, "a .xmp must really be an XMP");
+  assert.equal((await call("/studio/preset", { method: "POST", cookie, form: form({ before: new Blob(["<svg/>"]) }) })).status, 415);
+  const { dng, xmp, ...noFiles } = form();
+  assert.equal((await call("/studio/preset", { method: "POST", cookie, form: noFiles })).status, 400, "at least one preset file");
+  assert.deepEqual((await call("/presets.json")).body, []);
+  const added = await call("/studio/preset", { method: "POST", cookie, form: form() });
+  assert.equal(added.status, 200);
+  const { id, slug, has, by } = added.body.preset;
+  assert.deepEqual([slug, has, by], ["game-bday-b", { dng: true, xmp: true, before: true, after: true }, USERNAME]);
+  const listed = (await call("/presets.json")).body;
+  assert.deepEqual(listed.map((p) => [p.id, p.name]), [[id, "Game bday/b"]]);
+  const file = await call(`/preset-files/${id}/dng`);
+  assert.equal(file.status, 200);
+  assert.equal(file.headers.get("content-disposition"), 'attachment; filename="horizon-game-bday-b.dng"');
+  assert.equal(file.headers.get("x-content-type-options"), "nosniff");
+  assert.equal((await call(`/preset-files/${id}/xmp`)).headers.get("content-type"), "application/octet-stream", "never shown as a page");
+  assert.equal((await call(`/preset-files/${id}/after`)).headers.get("content-type"), "image/jpeg");
+  assert.equal((await call("/preset-files/0123456789abcdef/dng")).status, 404);
+  assert.equal((await call("/studio/preset-delete", { method: "POST", cookie, form: { id } })).status, 200);
+  assert.deepEqual((await call("/presets.json")).body, []);
+  assert.equal((await call(`/preset-files/${id}/dng`)).status, 404);
 });
 
 test("removing a photo deletes it everywhere", async () => {

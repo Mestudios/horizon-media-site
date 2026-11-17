@@ -456,3 +456,26 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 .book-privacy a { color: var(--accent-2); }
 .request a.btn { color: var(--chalk); }
 .request a.btn-hot { color: #1a1402; }
+
+/* Notice bar: set in the studio, added to every page by the guard. */
+.notice-bar { position: relative; z-index: 11; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 9px 48px; background: var(--flare); color: #1a1402; font-size: 15px; font-weight: 600; text-align: center; }
+.notice-bar p { margin: 0; }
+.notice-bar a { color: #1a1402; text-decoration: underline; text-underline-offset: 3px; }
+.notice-close { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: #1a1402; font-size: 24px; line-height: 1; cursor: pointer; }
+.notice-close:hover { background: rgba(0, 0, 0, .1); }
+.notice-bar[hidden] { display: none; }
+
+/* Presets from the studio: a before/after slider and downloads. */
+.presets-list.has-presets .ann { padding-top: 0; overflow: hidden; }
+.compare { position: relative; margin: 0 -24px 18px; aspect-ratio: 4 / 5; overflow: hidden; background: var(--panel); --split: 50%; }
+.compare img, .preset-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
+.preset-photo { width: calc(100% + 48px); max-width: none; margin: 0 -24px 18px; aspect-ratio: 4 / 5; }
+.compare-before { position: absolute; inset: 0; clip-path: inset(0 calc(100% - var(--split)) 0 0); }
+.compare-before::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--split); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.5); }
+.compare-labels { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; justify-content: space-between; pointer-events: none; }
+.compare-labels span { padding: 3px 8px; border-radius: 999px; background: rgba(10,10,10,.7); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.compare input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.compare:has(input:focus-visible) { outline: 2px solid var(--flare-2); outline-offset: 2px; }
+.presets-list .ann .btns { margin-top: 14px; }
+.presets-list .ann .btn { padding: 10px 14px; font-size: 14px; color: var(--chalk); }
+.presets-list .ann .btn-hot { color: #1a1402; }

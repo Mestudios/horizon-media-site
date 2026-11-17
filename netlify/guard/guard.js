@@ -15,6 +15,7 @@
 // is served.
 import { createBanList } from "./bans.js";
 import { createHomepagePhoto } from "./homepage.js";
+import { createNoticeReader } from "./notice.js";
 import { bannedPage, reply, timeoutPage } from "./replies.js";
 import { createRateLimiter, isBot, isPrefetch, newVisitorId, previewMode, readVisitorCookie } from "./requests.js";
 import { BAN_AFTER, MODES, RATE_LIMIT } from "./settings.js";
@@ -29,6 +30,7 @@ export function createGuard() {
   const limiter = createRateLimiter();
   const bans = createBanList();
   const homepage = createHomepagePhoto();
+  const notices = createNoticeReader();
   const visitors = createVisitorCounter();
   let mode = 0; // position in MODES
 
@@ -69,20 +71,21 @@ export function createGuard() {
     }
     if (loads > RATE_LIMIT) return timeoutPage();
 
-    // Pages without photos only need the checks above.
-    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return;
+    // Pages without photos only need the checks above, and the notice bar if one is on.
+    const notice = await notices.current(now);
+    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return notice ? reply(await context.next(), { notice }) : undefined;
 
     const path = new URL(request.url).pathname;
     const hero = path === "/" || path === "/index.html" ? await homepage.current(now) : null;
 
     const preview = previewMode(request);
-    if (preview !== null) return reply(await context.next(), { mode: preview, preview: true, hero });
+    if (preview !== null) return reply(await context.next(), { mode: preview, preview: true, hero, notice });
 
     // Search engines and link-preview bots always get the normal page (with the
     // chosen homepage photo) and are not counted.
-    if (isBot(request)) return hero ? reply(await context.next(), { hero }) : undefined;
+    if (isBot(request)) return hero || notice ? reply(await context.next(), { hero, notice }) : undefined;
 
     const [response, state] = await Promise.all([context.next(), welcome(request, context, now)]);
-    return reply(response, { ...state, hero });
+    return reply(response, { ...state, hero, notice });
   };
 }

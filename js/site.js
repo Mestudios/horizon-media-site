@@ -39,6 +39,20 @@
   prefersLight.addEventListener("change", update);
   update();
 
+  // The notice bar (added to pages by the guard): once closed, it stays closed
+  // for the rest of the visit, until a new notice is set.
+  const bar = document.querySelector(".notice-bar");
+  if (bar) {
+    const KEY = "hm-notice-closed";
+    let closed = "";
+    try { closed = sessionStorage.getItem(KEY) || ""; } catch (error) {}
+    if (closed && closed === bar.dataset.notice) bar.hidden = true;
+    bar.querySelector(".notice-close").addEventListener("click", () => {
+      bar.hidden = true;
+      try { sessionStorage.setItem(KEY, bar.dataset.notice); } catch (error) {}
+    });
+  }
+
   // The service worker (sw.js) lets team members share photos from a phone's
   // gallery straight into the studio. Only the studio installs it, and it only
   // covers /studio/, so visitors' browsers never get it.
