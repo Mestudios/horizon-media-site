@@ -45,8 +45,8 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 </script>`;
 
 const signedIn = `<form id="add">
-<label for="photo">Photo</label><input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic" required>
-<label for="title">Title</label><input id="title" name="title" maxlength="60" required>
+<label for="photo">Photos (pick one, or up to 20 at once)</label><input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple required>
+<label for="title">Title (several photos share it)</label><input id="title" name="title" maxlength="60" required>
 <label for="credit">Photographer's Instagram name</label><input id="credit" name="credit" maxlength="40" placeholder="cb.framed.it" required>
 <div class="team" role="group" aria-label="Fill in a team member">${TEAM.map((name) => `<button type="button" data-name="${name}" aria-pressed="false">@${name}</button>`).join("")}</div>
 <label for="sport">Category</label><select id="sport" name="sport">${SEASONS.map(([season, sports]) => {
@@ -55,7 +55,7 @@ const signedIn = `<form id="add">
 }).join("")}</select>
 <label for="owner">Car owner's Instagram name (car photos only, optional)</label><p class="note">Blur license plates before uploading a car photo: the site's privacy page promises they are blurred.</p><input id="owner" name="owner" maxlength="40" placeholder="thatdernrs7">
 <button class="btn btn-hot">Add to the portfolio</button> <button class="btn" type="button" id="logout">Sign out</button>
-<p class="note">The photo is shrunk to website size on this device before it is sent. It appears on the portfolio page right away.</p>
+<p class="note">Photos are shrunk to website size on this device before they are sent, one after another. They appear on the site right away.</p>
 <p role="status"></p></form>
 <ul id="photos"></ul>
 <h2>Announcements</h2>
@@ -153,22 +153,42 @@ async function refresh() {
   }
 }
 
+// Up to this many photos can be picked and uploaded in one go.
+const MAX_AT_ONCE = 20;
 document.getElementById("add").addEventListener("submit", async (event) => {
   event.preventDefault();
-  status.textContent = "Preparing the photo...";
-  try {
-    const image = await createImageBitmap(document.getElementById("photo").files[0], { imageOrientation: "from-image" });
-    if (WATERMARK) await document.fonts.load('800 40px "Big Shoulders Display"').catch(() => {});
-    const body = new FormData(event.target);
-    body.set("full", await shrink(image, 1200, 0.82), "full.jpg");
-    body.set("thumb", await shrink(image, 480, 0.7), "thumb.jpg");
-    status.textContent = "Sending...";
-    const response = await fetch("/studio/upload", { method: "POST", body });
-    status.textContent = response.ok ? "Added." : (await response.json()).error;
-    if (response.ok) { event.target.reset(); markTeam(); refresh(); }
-  } catch (error) {
-    status.textContent = "This device could not read that photo. Try a JPEG.";
+  const files = [...document.getElementById("photo").files];
+  if (files.length > MAX_AT_ONCE) {
+    status.textContent = "That's " + files.length + " photos. Pick up to " + MAX_AT_ONCE + " at a time.";
+    return;
   }
+  const button = event.target.querySelector(".btn-hot");
+  button.disabled = true;
+  if (WATERMARK) await document.fonts.load('800 40px "Big Shoulders Display"').catch(() => {});
+  let added = 0;
+  const problems = [];
+  for (const [i, file] of files.entries()) {
+    const of = files.length > 1 ? " " + (i + 1) + " of " + files.length : "";
+    try {
+      status.textContent = "Preparing photo" + of + "...";
+      const image = await createImageBitmap(file, { imageOrientation: "from-image" });
+      const body = new FormData(event.target);
+      body.set("full", await shrink(image, 1200, 0.82), "full.jpg");
+      body.set("thumb", await shrink(image, 480, 0.7), "thumb.jpg");
+      status.textContent = "Sending photo" + of + "...";
+      const response = await fetch("/studio/upload", { method: "POST", body });
+      if (response.ok) added += 1;
+      else {
+        problems.push(file.name + ": " + (await response.json()).error);
+        if (response.status === 409 || response.status === 401) break; // studio full, or signed out
+      }
+    } catch (error) {
+      problems.push(file.name + ": this device could not read it. Try a JPEG.");
+    }
+  }
+  button.disabled = false;
+  status.textContent = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  if (added) { event.target.reset(); markTeam(); refresh(); }
 });
 document.getElementById("logout").addEventListener("click", async () => {
   await fetch("/studio/logout", { method: "POST" });
