@@ -44,9 +44,9 @@ export function createRateLimiter() {
   let minute = 0;
   const loads = new Map(); // address -> page loads this minute
 
-  // Counts this page load; true once the address is past the limit.
-  function over(ip, now) {
-    if (!ip) return false;
+  // Counts this page load and returns how many this address has made this minute.
+  function count(ip, now) {
+    if (!ip) return 0;
     if (Math.floor(now / 60_000) !== minute) {
       minute = Math.floor(now / 60_000);
       loads.clear();
@@ -57,15 +57,18 @@ export function createRateLimiter() {
     if (count === RATE_LIMIT + 1) {
       console.warn(`guard: ${ip} passed ${RATE_LIMIT} page loads this minute; refusing the rest`);
     }
-    return count > RATE_LIMIT;
+    return count;
   }
 
-  return { over };
+  // True once the address is past the limit.
+  const over = (ip, now) => count(ip, now) > RATE_LIMIT;
+
+  return { over, count };
 }
 
 // IPv4: the address itself. IPv6: its /64 network, because one device or
 // household can use any address inside it.
-function network(ip) {
+export function network(ip) {
   if (!ip.includes(":")) return ip;
   const [head, tail] = ip.split("::");
   const groups = head.split(":").filter(Boolean);
