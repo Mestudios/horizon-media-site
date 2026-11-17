@@ -73,14 +73,14 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 ## Cookies, consent and third parties
 
-- `cookies.html` lists everything the site stores. There are no advertising, analytics or tracking cookies, so no cookie banner is needed: `hm_visitor` (busy mode) and `hm_studio` (team sign-in) are needed for the site to work, and `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
+- The privacy page's **Cookies** section (`privacy.html#cookies`) lists everything the site stores. There are no advertising, analytics or tracking cookies, so no cookie banner is needed: `hm_visitor` (busy mode) and `hm_studio` (team sign-in) are needed for the site to work, and `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
 - The only third-party content is the Google booking form. `book.html` doesn't load it until the visitor presses "Load the booking form" (`js/book.js`); "Remember my choice" saves `hm-forms` in their browser.
 - Fonts and photos are served from this site. Instagram is only linked to, never loaded. `npm test` fails if any page starts loading something from another company.
 - **Removal:** every opened photo has a "Request removal" link (an email or Instagram message to the team with the photo named), the portfolio and car pages say so above the photos, and every footer links to the removal steps on the privacy page.
 - **Studio link:** no page links to `/studio`. `js/site.js` adds a "Studio" footer link only on devices that have signed in to the studio (`hm-team` in that browser). The service worker is installed only by the studio and only covers `/studio/`.
 - **Terms** include the client license (what people may do with photos from a booking), cancellations and rain-outs, delivery, athletes under 18, and Maryland governing law. Horizon Media takes no payments, so there is no payment section.
 - The photo request form asks only for a name, an Instagram name or email, and an optional message, and must be sent with the consent box ticked (checked on the server too).
-- `refunds.html` explains that Horizon Media takes no payments: each photographer sets their own prices and handles payment and refunds directly.
+- The terms page's **Payment and refunds** section (`terms.html#refunds`) explains that Horizon Media takes no payments: each photographer sets their own prices and handles payment and refunds directly. The old `/cookies.html` and `/refunds.html` addresses redirect to these sections (`netlify.toml`).
 
 ## Accessibility
 

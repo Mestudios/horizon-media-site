@@ -408,8 +408,8 @@ test("the site loads nothing from other companies, except the Google booking for
 test("every page links to the policies and to photo removal, and none links to the team sign-in", () => {
   for (const page of SITE_PAGES) {
     const html = readFileSync(join(ROOT, page), "utf8");
-    const footer = /<nav class="foot-links"[^>]*>(.*?)<\/nav>/s.exec(html)?.[1] ?? "";
-    for (const link of ["privacy.html#removal", "privacy.html", "terms.html", "cookies.html", "refunds.html"]) {
+    const footer = /<footer>(.*?)<\/footer>/s.exec(html)?.[1] ?? "";
+    for (const link of ["privacy.html#removal", "privacy.html", "terms.html"]) {
       assert.match(footer, new RegExp(`href="/?${link.replace(".", "\\.")}"`), `${page} footer links to ${link}`);
     }
     assert.doesNotMatch(html, /href="\/?studio/, `${page} has no link to the studio (js/site.js adds one on team devices only)`);
@@ -420,6 +420,13 @@ test("every page links to the policies and to photo removal, and none links to t
     assert.match(html, /class="viewer-removal">Request removal</, `${page}: every opened photo has a Request removal link`);
   }
   assert.match(readFileSync(join(ROOT, "privacy.html"), "utf8"), /<h2 id="removal">/);
+  // Cookies and refunds are sections of the privacy and terms pages, and their old addresses redirect there.
+  assert.match(readFileSync(join(ROOT, "privacy.html"), "utf8"), /<h2 id="cookies">/);
+  assert.match(readFileSync(join(ROOT, "terms.html"), "utf8"), /<h2 id="refunds">/);
+  const toml = readFileSync(join(ROOT, "netlify.toml"), "utf8");
+  for (const [from, to] of [["/cookies.html", "/privacy.html#cookies"], ["/refunds.html", "/terms.html#refunds"]]) {
+    assert.match(toml, new RegExp(`from = "${from.replace(".", "\\.")}"\\s+to = "${to.replace(".", "\\.")}"`), `${from} redirects to ${to}`);
+  }
   const site = readFileSync(join(ROOT, "js/site.js"), "utf8");
   assert.match(site, /register\("\/sw\.js", \{ scope: "\/studio\/" \}\)/, "the service worker only covers the studio");
 });
