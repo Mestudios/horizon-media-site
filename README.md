@@ -48,7 +48,6 @@ Each tile shows a tiny blurry preview (`--ph`, from `tools/make_placeholders.py`
 The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
 - Once signed in, the studio is a dashboard: a side menu (a bar along the bottom on phones) with Overview, Add photos, All photos, Requests and Announcements. Overview shows the counts and the latest of each.
-- Several photos can be picked and uploaded at once; they share the title, credit and category.
 - **Edit before upload:** under each picked photo, Edit opens it to **rotate**, **crop** (drag what to keep) and **blur plates** (drag a box over each license plate). All of it happens on the device before upload, so a readable plate never leaves the phone.
 - **Already on the site?** Each picked photo is compared with the photos already on the site (a tiny fingerprint of each, made on the device), and a likely repeat is flagged by name.
 - **All photos** has a search box (title or photographer) and a Show menu: sports, cars, pinned, most requested, taken off the site, or the homepage photo. Each photo shows how many times visitors requested it; the overview names the most requested one (counts are kept after requests are handled, in `request-counts`).
@@ -62,6 +61,7 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 - **Photo requests** lists what visitors asked for. Done deletes a request.
 
 - The sign-in is two environment variables in the Netlify project settings: `STUDIO_USERNAME` and `STUDIO_PASSWORD` (at least 12 characters). Until both are set, the studio is switched off. Changing the password signs everyone out. Never write them in this repository: it is public. To give more people their own sign-in, add `STUDIO_USERNAME_2` and `STUDIO_PASSWORD_2`, then `_3`, up to `_5`; changing one person's password signs out only that person.
+- Up to 50 photos can be picked and uploaded at once; they share the title, credit and category.
 - Photos are shrunk to website size on the device before upload, stored in Netlify Blobs, and shown first on the portfolio page, or on the car page when their category is Cars.
 - Signed-in team members can also post, edit and remove **announcements**, each with an optional photo (served at `/announcement-photos/<id>.jpg`) and an optional link to a page of the site or an https address. An announcement goes up on its date (a future date schedules it) and, if it has a "comes down after" date, comes down after that day. Days follow New York time (`TIME_ZONE` in `netlify/studio/studio.js`). They are stored in Netlify Blobs and served at `/announcements.json`, and `js/announcements.js` shows the newest three on the homepage. The cards written into `index.html` only show if that list can't be loaded.
 - Five wrong sign-ins in a minute from one address locks that address out for the rest of the minute, and ten in 15 minutes locks it out for 15 minutes. The second count is kept in Netlify Blobs (under a scrambled form of the address), so it holds across all of Netlify's servers.

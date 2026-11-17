@@ -217,7 +217,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
 <div class="card"><form id="add"><div class="form-cols"><div class="col">
-<label class="drop" id="drop"><b>Choose photos</b><span>Tap here to pick one or several, or drag them in from your computer.</span><input id="photo" class="drop-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple></label>
+<label class="drop" id="drop"><b>Choose photos</b><span>Tap here to pick up to 50, or drag them in from your computer.</span><input id="photo" class="drop-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple></label>
 <ul id="picked" class="picked"></ul>
 </div><div class="col">
 <label for="title">Title (several photos share it)</label><input id="title" name="title" maxlength="60" required>
@@ -942,6 +942,7 @@ document.getElementById("add").addEventListener("submit", async (event) => {
   event.preventDefault();
   const files = picks.map((pick) => pick.file);
   if (!files.length) { addStatus.textContent = "Choose at least one photo first."; return; }
+  if (files.length > 50) { addStatus.textContent = "That's " + files.length + " photos. Pick up to 50 at a time."; return; }
   const button = event.target.querySelector(".btn-hot");
   button.disabled = true;
   if (WATERMARK) await document.fonts.load('800 40px "Big Shoulders Display"').catch(() => {});
