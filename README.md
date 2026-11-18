@@ -47,6 +47,7 @@ Each tile shows a tiny blurry preview (`--ph`, from `tools/make_placeholders.py`
 
 The **studio** at `/studio` lets Horizon Media add and remove portfolio photos from any phone or computer with one username and password. Its code is in `netlify/studio/`.
 
+- **Announcements** has three tabs: Announcements (a list with thumbnails, dates and Live/Scheduled/Ended; **+ New announcement** or Edit opens the form, with dates and link under "More options"), Recaps (**+ New recap**) and Notice bar (its tab shows On or Off).
 - Once signed in, the studio is a dashboard: a side menu (a bar along the bottom on phones) with Overview, Add photos, All photos, Requests and Announcements. Overview shows the counts and the latest of each.
 - **Edit before upload:** under each picked photo, Edit opens it to **rotate**, **crop** (drag what to keep) and **blur plates** (drag a box over each license plate). All of it happens on the device before upload, so a readable plate never leaves the phone.
 - **Already on the site?** Each picked photo is compared with the photos already on the site (a tiny fingerprint of each, made on the device), and a likely repeat is flagged by name.

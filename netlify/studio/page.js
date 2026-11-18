@@ -152,6 +152,32 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .recap-picker input{position:absolute;top:8px;left:8px;width:20px;height:20px;margin:0;accent-color:var(--flare)}
 .studio .recap-picker input:checked+img{border-color:var(--flare)}
 .studio .btn-small{padding:6px 12px;font-size:13px;min-height:0}
+.studio .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 18px;overflow-x:auto}
+.studio .tabs [role=tab]{flex:none;border:0;background:none;padding:12px 16px;font:600 15px var(--body);color:var(--dim);border-bottom:3px solid transparent;cursor:pointer;min-height:44px}
+.studio .tabs [role=tab][aria-selected=true]{color:var(--chalk);border-bottom-color:var(--flare)}
+.studio .tabs .count{color:var(--dim);font-weight:500;margin-left:2px}
+.studio .tabs .pill{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:var(--line);font-size:12px;font-weight:700;color:var(--chalk)}
+.studio .tabs .pill.on{background:var(--flare);color:#1a1402}
+.studio .card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.studio .card-top h2{margin:0}
+.studio .panel-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.studio .panel-top .note{margin:0;max-width:60ch}
+.studio .form-card-panel{margin-bottom:22px;border-top:3px solid var(--flare)}
+.studio .list-status{min-height:1.4em;margin:0 0 8px;color:var(--accent-2);font-weight:600;font-size:14px}
+.studio details.more{margin:14px 0 4px;border-top:1px solid var(--line);padding-top:10px}
+.studio details.more summary{cursor:pointer;font-weight:600;padding:6px 0}
+.studio .ann-rows{display:block;list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.studio .ann-rows li{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto auto;gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.studio .ann-rows li:last-child{border-bottom:0}
+.studio .ann-rows li.empty{display:block;color:var(--dim)}
+.studio .ann-rows .thumb{width:96px;aspect-ratio:16/10;border-radius:8px;object-fit:cover;background:var(--line);display:block}
+.studio .ann-rows b{display:block;font-size:16px}
+.studio .ann-rows p{margin:3px 0 0;color:var(--dim);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.studio .ann-rows time{color:var(--dim);font-size:13px;white-space:nowrap}
+.studio .ann-rows time .tag{margin-left:8px}
+@media (max-width:640px){.studio .tabs{gap:0}.studio .tabs [role=tab]{padding:10px 6px;font-size:13px}}
+@media (max-width:380px){.studio .tabs [role=tab]{font-size:12px;padding:10px 5px}.studio .tabs .pill{margin-left:3px;padding:1px 6px;font-size:11px}}
+@media (max-width:760px){.studio .ann-rows li{grid-template-columns:72px minmax(0,1fr);gap:8px 12px}.studio .ann-rows .thumb{width:72px}.studio .ann-rows time{grid-column:2}.studio .ann-rows li .btn{grid-column:auto}}
 .studio .ann-crop{margin:8px 0 12px}
 .studio .crop-frame{position:relative;display:block;width:100%;max-width:460px;aspect-ratio:16/10;overflow:hidden;padding:0;border:2px solid var(--flare);border-radius:10px;background:#000;cursor:grab;touch-action:none}
 .studio .crop-frame:active{cursor:grabbing}
@@ -303,14 +329,46 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note" id="requests-room"></p>
 <ul id="requests" class="requests"></ul>
 <div class="card"><h2>Reply templates</h2><p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p><div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p></div></section>
-<section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
-<div class="card notice-card"><h2>Notice bar</h2><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
-<form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
-<div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
-<div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
-<h2>Recaps</h2>
-<p class="note">A page of photos you pick, like a season or a big game. Posting one adds an announcement on the homepage that links to it.</p>
-<div class="card"><form id="recap-form"><input type="hidden" name="id" id="recap-id"><div class="form-cols"><div class="col">
+<section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
+<div class="tabs" role="tablist" aria-label="News sections">
+<button type="button" role="tab" id="tab-ann" aria-controls="panel-ann" aria-selected="true">Announcements <span class="count" id="tab-ann-count"></span></button>
+<button type="button" role="tab" id="tab-recaps" aria-controls="panel-recaps" aria-selected="false" tabindex="-1">Recaps <span class="count" id="tab-recap-count"></span></button>
+<button type="button" role="tab" id="tab-notice" aria-controls="panel-notice" aria-selected="false" tabindex="-1">Notice bar <span class="pill" id="tab-notice-state">Off</span></button>
+</div>
+<div role="tabpanel" id="panel-ann" aria-labelledby="tab-ann">
+<div class="card form-card-panel" id="ann-form-card" hidden><div class="card-top"><h2 id="ann-form-title">New announcement</h2><button type="button" class="btn btn-small" id="ann-close">Close</button></div>
+<form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
+<label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
+<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="5" required></textarea>
+<label for="ann-photo">Photo (optional): upload one</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
+<p class="note">Or <button type="button" class="btn btn-small" id="ann-pick" aria-expanded="false" aria-controls="ann-pick-box">Choose from the portfolio</button></p>
+<input type="hidden" name="photoPath" id="ann-photo-path">
+<div id="ann-pick-box" class="ann-pick-box" hidden><input type="search" id="ann-pick-search" placeholder="Search by title or photographer" aria-label="Search the site's photos"><ul id="ann-picker" class="recap-picker"></ul></div>
+<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><p class="note" id="ann-photo-from"></p><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
+<p class="note" id="ann-crop-row" hidden><button type="button" class="btn btn-small" id="ann-crop-open" aria-expanded="false" aria-controls="ann-crop">Crop &amp; position</button> <span id="ann-crop-state"></span></p>
+<div id="ann-crop" class="ann-crop" hidden><p class="note">Drag the photo to move it, or use the arrow keys. The frame is the shape of the homepage card.</p><button type="button" class="crop-frame" aria-label="Photo position in the card: drag, or use the arrow keys, to move it; plus and minus zoom"><img alt="" draggable="false"></button><label for="ann-crop-zoom">Zoom</label><input type="range" id="ann-crop-zoom" min="1" max="3" step="0.01" value="1"><div class="form-end"><button type="button" class="btn btn-hot btn-small" id="ann-crop-done">Done</button><button type="button" class="btn btn-small" id="ann-crop-reset">Reset</button></div></div>
+<input type="hidden" name="photoCrop" id="ann-photo-crop">
+</div><div class="col">
+<div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
+</div></div>
+<details class="more" id="ann-more"><summary>More options: dates and link</summary><div class="form-cols"><div class="col">
+<label for="ann-date">Goes up on</label><input id="ann-date" name="date" type="date" required>
+<label for="ann-until">Comes down after (optional)</label><input id="ann-until" name="until" type="date">
+<p class="note">Pick a future date to schedule it. Leave the second date empty to keep it up.</p>
+</div><div class="col">
+<label for="ann-link">Link (optional)</label><input id="ann-link" name="link" maxlength="300" placeholder="cars.html or https://...">
+<label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
+</div></div></details>
+<div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel">Cancel</button></div>
+<p role="status"></p></form></div>
+<p class="note">The newest three that are up show on the homepage, newest date first.</p>
+<p role="status" class="list-status" id="ann-list-status"></p>
+<ul id="announcements" class="ann-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-recaps" aria-labelledby="tab-recaps" hidden>
+<div class="panel-top"><p class="note">A page of photos you pick, like a season or a big game. Posting one adds an announcement on the homepage that links to it.</p><button class="btn btn-hot" type="button" id="recap-new">+ New recap</button></div>
+<div class="card form-card-panel" id="recap-form-card" hidden><div class="card-top"><h2 id="recap-form-title">New recap</h2><button type="button" class="btn btn-small" id="recap-close">Close</button></div>
+<form id="recap-form"><input type="hidden" name="id" id="recap-id"><div class="form-cols"><div class="col">
 <label for="recap-title">Headline</label><input id="recap-title" name="title" maxlength="80" required placeholder="Fall 2026 recap">
 <label for="recap-text">Text (optional)</label><textarea id="recap-text" name="text" maxlength="400" rows="4"></textarea>
 </div><div class="col">
@@ -321,31 +379,16 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <ul id="recap-picker" class="recap-picker"></ul>
 <div class="form-end"><button class="btn btn-hot" id="recap-submit">Post recap</button> <button class="btn" type="button" id="recap-cancel" hidden>Cancel editing</button></div>
 <p role="status"></p></form></div>
-<ul id="recap-list" class="ann-admin"></ul>
-<h2>Announcement cards</h2>
-<p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
-<div class="card"><form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
-<label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
-<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="9" required></textarea>
-</div><div class="col">
-<label for="ann-date">Goes up on</label><input id="ann-date" name="date" type="date" required>
-<label for="ann-until">Comes down after (optional)</label><input id="ann-until" name="until" type="date">
-<p class="note">Pick a future date to schedule it. Leave the second date empty to keep it up.</p>
-<label for="ann-link">Link (optional)</label><input id="ann-link" name="link" maxlength="300" placeholder="cars.html or https://...">
-<label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
-<label for="ann-photo">Photo (optional): upload one</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
-<p class="note">Or <button type="button" class="btn btn-small" id="ann-pick" aria-expanded="false" aria-controls="ann-pick-box">Choose from the portfolio</button></p>
-<input type="hidden" name="photoPath" id="ann-photo-path">
-<div id="ann-pick-box" class="ann-pick-box" hidden><input type="search" id="ann-pick-search" placeholder="Search by title or photographer" aria-label="Search the site's photos"><ul id="ann-picker" class="recap-picker"></ul></div>
-<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><p class="note" id="ann-photo-from"></p><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
-<p class="note" id="ann-crop-row" hidden><button type="button" class="btn btn-small" id="ann-crop-open" aria-expanded="false" aria-controls="ann-crop">Crop &amp; position</button> <span id="ann-crop-state"></span></p>
-<div id="ann-crop" class="ann-crop" hidden><p class="note">Drag the photo to move it, or use the arrow keys. The frame is the shape of the homepage card.</p><button type="button" class="crop-frame" aria-label="Photo position in the card: drag, or use the arrow keys, to move it; plus and minus zoom"><img alt="" draggable="false"></button><label for="ann-crop-zoom">Zoom</label><input type="range" id="ann-crop-zoom" min="1" max="3" step="0.01" value="1"><div class="form-end"><button type="button" class="btn btn-hot btn-small" id="ann-crop-done">Done</button><button type="button" class="btn btn-small" id="ann-crop-reset">Reset</button></div></div>
-<input type="hidden" name="photoCrop" id="ann-photo-crop">
-</div></div>
-<div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
-<div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
-<p role="status"></p></form></div>
-<ul id="announcements" class="ann-admin"></ul></section>
+<p role="status" class="list-status" id="recap-list-status"></p>
+<ul id="recap-list" class="ann-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-notice" aria-labelledby="tab-notice" hidden>
+<div class="card notice-card"><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
+<form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
+<div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
+<div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
+</div>
+</section>
 <section data-view="presets" hidden><div class="view-top"><h1>Presets</h1></div>
 <p class="note">Free Lightroom presets for the presets page. As soon as one is added here, the page switches from "coming soon" to downloads.</p>
 <div class="card"><form id="preset-form"><div class="form-cols"><div class="col">
@@ -1284,6 +1327,48 @@ const signOut = async () => {
 };
 document.getElementById("logout").addEventListener("click", signOut);
 document.getElementById("logout-top").addEventListener("click", signOut);
+// ---- Announcements view: tabs (Announcements, Recaps, Notice bar), list first,
+// and the forms open only when making or editing something.
+const tabs = { ann: "tab-ann", recaps: "tab-recaps", notice: "tab-notice" };
+function showTab(name) {
+  for (const [key, id] of Object.entries(tabs)) {
+    const tab = document.getElementById(id);
+    const on = key === name;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = !on;
+  }
+}
+for (const [key, id] of Object.entries(tabs)) document.getElementById(id).addEventListener("click", () => showTab(key));
+document.querySelector(".tabs").addEventListener("keydown", (event) => {
+  const keys = Object.keys(tabs);
+  const now = keys.findIndex((k) => document.getElementById(tabs[k]).getAttribute("aria-selected") === "true");
+  const next = event.key === "ArrowRight" ? now + 1 : event.key === "ArrowLeft" ? now - 1 : null;
+  if (next === null) return;
+  const key = keys[(next + keys.length) % keys.length];
+  showTab(key);
+  document.getElementById(tabs[key]).focus();
+});
+const annFormCard = document.getElementById("ann-form-card");
+function openAnnForm(heading) {
+  showTab("ann");
+  document.getElementById("ann-form-title").textContent = heading;
+  annFormCard.hidden = false;
+}
+function closeAnnForm() {
+  stopEditing();
+  annFormCard.hidden = true;
+  document.getElementById("ann-new").focus();
+}
+document.getElementById("ann-new").addEventListener("click", () => {
+  stopEditing();
+  openAnnForm("New announcement");
+  document.getElementById("ann-more").open = false;
+  document.getElementById("ann-title").focus();
+});
+document.getElementById("ann-close").addEventListener("click", closeAnnForm);
+const annThumb = (item) => (item.photo ? "/announcement-photos/" + item.id + ".jpg?v=" + item.photo : item.photoPath ? smallCopy(item.photoPath) : "");
+
 const announceForm = document.getElementById("announce");
 const announceStatus = announceForm.querySelector("[role=status]");
 const announceList = document.getElementById("announcements");
@@ -1324,6 +1409,8 @@ async function refreshAnnouncements() {
     editButton.type = "button";
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => {
+      openAnnForm("Edit announcement");
+      document.getElementById("ann-more").open = !!(item.until || item.link || item.date > day);
       document.getElementById("ann-id").value = item.id;
       document.getElementById("ann-title").value = item.title;
       document.getElementById("ann-text").value = item.text;
@@ -1345,9 +1432,9 @@ async function refreshAnnouncements() {
       if (item.photoCrop) { annCrop = item.photoCrop; cropInput.value = JSON.stringify(item.photoCrop); document.getElementById("ann-crop-state").textContent = "Cropped."; }
       updatePreview();
       document.getElementById("ann-submit").textContent = "Save changes";
-      document.getElementById("ann-cancel").hidden = false;
-      announceStatus.textContent = "Editing: " + item.title;
-      announceForm.scrollIntoView({ behavior: "smooth" });
+          announceStatus.textContent = "";
+      annFormCard.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("ann-title").focus();
     });
     const remove = document.createElement("button");
     remove.className = "btn btn-danger";
@@ -1360,9 +1447,18 @@ async function refreshAnnouncements() {
         () => post("/studio/announce-delete", { id: item.id }).then(() => { removingAnn.delete(item.id); refreshAnnouncements(); }),
         () => { removingAnn.delete(item.id); refreshAnnouncements(); });
     });
-    row.append(when, title, text, editButton, document.createTextNode(" "), remove);
+    const thumbSrc = annThumb(item);
+    let thumb;
+    if (thumbSrc) { thumb = document.createElement("img"); thumb.src = thumbSrc; thumb.alt = ""; thumb.loading = "lazy"; }
+    else { thumb = document.createElement("span"); thumb.setAttribute("aria-hidden", "true"); }
+    thumb.className = "thumb";
+    const info = document.createElement("div");
+    info.append(title, text);
+    row.append(thumb, info, when, editButton, remove);
     announceList.append(row);
   }
+  document.getElementById("tab-ann-count").textContent = items.length;
+  if (!items.length) { const none = document.createElement("li"); none.className = "empty"; none.textContent = "No announcements yet. Press + New announcement to post one."; announceList.append(none); }
 }
 
 // ---- Announcement photo picked from the site's own photos.
@@ -1426,12 +1522,11 @@ function stopEditing() {
   document.getElementById("ann-id").value = "";
   dateBox.value = today();
   document.getElementById("ann-submit").textContent = "Post announcement";
-  document.getElementById("ann-cancel").hidden = true;
   document.getElementById("ann-until").value = "";
   document.getElementById("ann-photo-now").hidden = true;
   updatePreview();
 }
-document.getElementById("ann-cancel").addEventListener("click", () => { stopEditing(); announceStatus.textContent = ""; });
+document.getElementById("ann-cancel").addEventListener("click", () => { closeAnnForm(); announceStatus.textContent = ""; });
 
 announceForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1450,7 +1545,7 @@ announceForm.addEventListener("submit", async (event) => {
   const scheduled = dateBox.value > today();
   if (response.ok) flash(announceStatus, (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away."));
   else announceStatus.textContent = (await response.json()).error;
-  if (response.ok) { stopEditing(); refreshAnnouncements(); }
+  if (response.ok) { stopEditing(); annFormCard.hidden = true; flash(document.getElementById("ann-list-status"), announceStatus.textContent); announceStatus.textContent = ""; refreshAnnouncements(); }
 });
 
 
@@ -1591,6 +1686,9 @@ updatePreview();
 const noticeForm = document.getElementById("notice-form");
 const noticeStatus = noticeForm.querySelector("[role=status]");
 function showNotice(notice) {
+  const pill = document.getElementById("tab-notice-state");
+  pill.textContent = notice ? "On" : "Off";
+  pill.className = "pill" + (notice ? " on" : "");
   document.getElementById("notice-text").value = notice ? notice.text : "";
   document.getElementById("notice-until").value = notice ? notice.until || "" : "";
   document.getElementById("notice-link").value = notice ? notice.link || "" : "";
@@ -1660,7 +1758,17 @@ function stopRecapEditing() {
   recapPicked = [];
   showRecapPicker();
 }
-document.getElementById("recap-cancel").addEventListener("click", stopRecapEditing);
+const recapFormCard = document.getElementById("recap-form-card");
+document.getElementById("recap-cancel").addEventListener("click", () => { stopRecapEditing(); recapFormCard.hidden = true; });
+document.getElementById("recap-new").addEventListener("click", async () => {
+  stopRecapEditing();
+  document.getElementById("recap-form-title").textContent = "New recap";
+  recapFormCard.hidden = false;
+  await loadBuiltIn();
+  showRecapPicker();
+  document.getElementById("recap-title").focus();
+});
+document.getElementById("recap-close").addEventListener("click", () => { stopRecapEditing(); recapFormCard.hidden = true; document.getElementById("recap-new").focus(); });
 recapForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!recapPicked.length) { recapStatus.textContent = "Pick at least one photo."; return; }
@@ -1673,7 +1781,8 @@ recapForm.addEventListener("submit", async (event) => {
   if (!response.ok) { recapStatus.textContent = reply.error; return; }
   const editing = document.getElementById("recap-id").value;
   stopRecapEditing();
-  flash(recapStatus, (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.");
+  recapFormCard.hidden = true;
+  flash(document.getElementById("recap-list-status"), (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.");
   refreshRecaps();
   refreshAnnouncements();
 });
@@ -1694,6 +1803,9 @@ async function refreshRecaps() {
     view.rel = "noopener";
     view.textContent = "Open the page";
     const edit = button("Edit", "", () => {
+      showTab("recaps");
+      document.getElementById("recap-form-title").textContent = "Edit recap";
+      recapFormCard.hidden = false;
       document.getElementById("recap-id").value = recap.id;
       document.getElementById("recap-title").value = recap.title;
       document.getElementById("recap-text").value = recap.text || "";
@@ -1716,6 +1828,8 @@ async function refreshRecaps() {
     li.append(time, title, p);
     list.append(li);
   }
+  document.getElementById("tab-recap-count").textContent = recaps.length;
+  if (!recaps.length) { const none = document.createElement("li"); none.className = "empty"; none.textContent = "No recaps yet. Press + New recap to make one."; list.append(none); }
   if (!recapPicker.children.length) stopRecapEditing();
 }
 
