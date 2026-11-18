@@ -3,11 +3,14 @@
 import photoVariants from "./photo-variants.js";
 import { COOKIE, MODES, SECURITY_HEADERS } from "./settings.js";
 import { visitorLabel } from "./visitors.js";
+import { useHero } from "./homepage.js";
+import { useNotice } from "./notice.js";
 
 // Finishes the reply Netlify prepared for the page.
 //   mode: position in MODES; visitors: the count, when one was taken;
 //   cookie: a new visitor id to hand out; preview: the mode was asked for with ?busy=
-export async function reply(response, { mode = 0, visitors, cookie, preview = false }) {
+//   hero: the homepage photo chosen in the studio, if any; notice: the notice bar, if one is on
+export async function reply(response, { mode = 0, visitors, cookie, preview = false, hero = null, notice = null }) {
   const name = MODES[mode].name;
   const headers = new Headers(response.headers);
   for (const [header, value] of Object.entries(SECURITY_HEADERS)) headers.set(header, value);
@@ -18,11 +21,14 @@ export async function reply(response, { mode = 0, visitors, cookie, preview = fa
   }
 
   const isPage = response.status === 200 && (response.headers.get("content-type") || "").includes("text/html");
-  if (mode === 0 || !isPage) {
+  if ((mode === 0 && !hero && !notice) || !isPage) {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
 
-  const html = swapPhotos(await response.text(), mode);
+  let html = await response.text();
+  if (hero) html = useHero(html, hero);
+  if (notice) html = useNotice(html, notice);
+  if (mode !== 0) html = swapPhotos(html, mode);
   for (const header of ["content-length", "content-encoding", "etag", "last-modified"]) headers.delete(header);
   headers.set("cache-control", "no-store");
   return new Response(html, { status: 200, headers });

@@ -337,9 +337,122 @@ test("an address that keeps hammering after the timeout is kicked off every page
   assert.equal((await visit(later, { ...attacker })).status, 200);
 });
 
+test("the homepage shows the photo chosen in the studio, with busy mode still swapping it", async () => {
+  await getStore("studio-photos").setJSON("hero", { path: "img/cars/grille.jpg" });
+  const handler = newInstance();
+  const normal = await visit(handler, newVisitor());
+  assert.match(normal.body, /class="hero-photo"[^>]*url\('img\/cars\/grille\.jpg'\)/);
+  const busy = await visit(handler, newVisitor(), { path: "/?busy=lite" });
+  assert.match(busy.body, /class="hero-photo"[^>]*url\('img\/lite\/cars\/grille\.jpg'\)/);
+  // Something odd in storage is ignored.
+  await getStore("studio-photos").setJSON("hero", { path: "x');background:url('evil" });
+  assert.doesNotMatch((await visit(newInstance(), newVisitor())).body, /evil/);
+  await getStore("studio-photos").delete("hero");
+});
+
+test("every photo tile on the portfolio and car pages has its tiny blurry preview", () => {
+  for (const page of ["portfolio.html", "cars.html"]) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const tiles = [...html.matchAll(/<button class="shot"[^>]*>/g)].map((m) => m[0]);
+    assert.ok(tiles.length > 0, page);
+    for (const tile of tiles) {
+      const preview = /style="--ph:url\(data:image\/jpeg;base64,([A-Za-z0-9+/=]+)\)"/.exec(tile);
+      assert.ok(preview, `${page}: a tile has no preview; run: python3 tools/make_placeholders.py\n${tile.slice(0, 160)}`);
+      assert.ok(preview[1].length < 1200, "the preview stays tiny");
+    }
+  }
+});
+
+// ---- What the privacy and cookie pages promise ---------------------------------
+
+const SITE_PAGES = readdirSync(ROOT).filter((name) => name.endsWith(".html"));
+const SITE_FILES = [
+  ...SITE_PAGES,
+  ...readdirSync(join(ROOT, "css")).map((name) => `css/${name}`),
+  ...readdirSync(join(ROOT, "js")).map((name) => `js/${name}`),
+  "sw.js",
+  "manifest.webmanifest",
+];
+
+test("the site loads nothing from other companies, except the Google booking form after the visitor agrees", async () => {
+  const { studioPage } = await import("../netlify/studio/page.js");
+  const sources = Object.fromEntries(SITE_FILES.map((file) => [file, readFileSync(join(ROOT, file), "utf8")]));
+  for (const state of ["in", "out", "off"]) sources[`studio (${state})`] = studioPage({ state });
+  const LOADS = [
+    /<(?:script|img|iframe|video|audio|source|embed|object)\b[^>]*\s(?:src|srcset|data-src)="((?:https?:)?\/\/[^"]+)/g,
+    /<link\b[^>]*\brel="(?:stylesheet|preload|preconnect|dns-prefetch|modulepreload|icon|apple-touch-icon|manifest)"[^>]*\bhref="((?:https?:)?\/\/[^"]+)/g,
+    /url\(\s*["']?((?:https?:)?\/\/[^)"']+)/g,
+    /@import\s+["']((?:https?:)?\/\/[^"']+)/g,
+    /(?:fetch|sendBeacon|importScripts|import|WebSocket|EventSource)\s*\(\s*["'`]((?:https?:)?\/\/[^"'`]+)/g,
+  ];
+  const found = [];
+  for (const [file, text] of Object.entries(sources)) {
+    for (const pattern of LOADS) for (const match of text.matchAll(pattern)) found.push(`${file}: ${match[1]}`);
+  }
+  assert.deepEqual(found, ["book.html: https://forms.gle/Tn4ZsGxT8dV4Ru6B8"], "the only outside content is the booking form");
+  const book = sources["book.html"];
+  assert.match(book, /<iframe data-src="https:\/\/forms\.gle\//, "the form's address waits in data-src");
+  assert.doesNotMatch(book, /<iframe[^>]*\ssrc=/, "so nothing loads from Google until the visitor presses the button");
+  for (const [file, text] of Object.entries(sources)) {
+    assert.doesNotMatch(text, /googletagmanager|google-analytics|gtag\(|fbq\(|hotjar|clarity\.ms|cdninstagram|fbcdn|fonts\.googleapis|fonts\.gstatic/i, `${file} has no tracker, Instagram image or Google font`);
+  }
+  // Fonts are served from this site.
+  const fonts = [...sources["css/site.css"].matchAll(/@font-face[^}]*url\("([^"]+)"\)/g)].map((m) => m[1]);
+  assert.ok(fonts.length >= 2);
+  for (const font of fonts) {
+    assert.match(font, /^\.\.\/fonts\//);
+    assert.ok(existsSync(join(ROOT, "css", font)), `${font} exists`);
+  }
+});
+
+test("every page links to the policies and to photo removal, and none links to the team sign-in", () => {
+  for (const page of SITE_PAGES) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const footer = /<footer>(.*?)<\/footer>/s.exec(html)?.[1] ?? "";
+    for (const link of ["privacy.html#removal", "privacy.html", "terms.html"]) {
+      assert.match(footer, new RegExp(`href="/?${link.replace(".", "\\.")}"`), `${page} footer links to ${link}`);
+    }
+    assert.doesNotMatch(html, /href="\/?studio/, `${page} has no link to the studio (js/site.js adds one on team devices only)`);
+  }
+  for (const page of ["portfolio.html", "cars.html"]) {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    assert.match(html, /class="removal-note"[^>]*>[^<]*<a href="privacy\.html#removal"|class="removal-note">.*privacy\.html#removal/s, `${page} shows how to have a photo taken down`);
+    assert.match(html, /class="viewer-removal">Request removal</, `${page}: every opened photo has a Request removal link`);
+  }
+  assert.match(readFileSync(join(ROOT, "privacy.html"), "utf8"), /<h2 id="removal">/);
+  // Cookies and refunds are sections of the privacy and terms pages, and their old addresses redirect there.
+  assert.match(readFileSync(join(ROOT, "privacy.html"), "utf8"), /<h2 id="cookies">/);
+  assert.match(readFileSync(join(ROOT, "terms.html"), "utf8"), /<h2 id="refunds">/);
+  const toml = readFileSync(join(ROOT, "netlify.toml"), "utf8");
+  for (const [from, to] of [["/cookies.html", "/privacy.html#cookies"], ["/refunds.html", "/terms.html#refunds"]]) {
+    assert.match(toml, new RegExp(`from = "${from.replace(".", "\\.")}"\\s+to = "${to.replace(".", "\\.")}"`), `${from} redirects to ${to}`);
+  }
+  const site = readFileSync(join(ROOT, "js/site.js"), "utf8");
+  assert.match(site, /register\("\/sw\.js", \{ scope: "\/studio\/" \}\)/, "the service worker only covers the studio");
+});
+
+test("the notice bar from the studio shows at the top of every page, safely, until its last day", async () => {
+  const studioStore = getStore("studio-photos");
+  await studioStore.setJSON("notice", { id: "1", text: "Game moved <script>alert(1)</script>", link: "book.html", linkText: "Book \"now\"", until: "" });
+  const handler = newInstance();
+  for (const path of ["/", "/book.html", "/privacy.html"]) {
+    const reply = await visit(handler, newVisitor(), { path, origin: () => new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<nav></nav></body>`, { headers: { "content-type": "text/html" } }) });
+    assert.match(reply.body, /<a class="skip"[^>]*>Skip to content<\/a><div class="notice-bar"/, `${path} has the bar right after the skip link`);
+    assert.match(reply.body, /Game moved &lt;script&gt;alert\(1\)&lt;\/script&gt; <a href="book\.html">Book &quot;now&quot;<\/a>/);
+    assert.doesNotMatch(reply.body, /<script>alert/);
+  }
+  // A bad link in storage is left out; a notice past its last day disappears.
+  await studioStore.setJSON("notice", { id: "2", text: "Hi", link: "javascript:alert(1)", until: "" });
+  assert.doesNotMatch((await visit(newInstance(), newVisitor(), { path: "/book.html", origin: () => new Response("<body><a class=\"skip\" href=\"#main\">Skip</a></body>", { headers: { "content-type": "text/html" } }) })).body, /javascript:/);
+  await studioStore.setJSON("notice", { id: "3", text: "Old news", until: "2000-01-01" });
+  const old = await visit(newInstance(), newVisitor(), { path: "/book.html" });
+  assert.equal(old.passedThrough, true, "no notice: the page is passed through untouched");
+  await studioStore.delete("notice");
+});
+
 test("pages without photos only get the checks, not busy mode", async () => {
   const handler = newInstance();
-  const reply = await visit(handler, newVisitor(), { path: "/terms.html" });
+  const reply = await visit(handler, newVisitor(), { path: "/book.html" });
   assert.equal(reply.passedThrough, true);
 });
 
@@ -457,7 +570,7 @@ test("the smallest mode falls back to the small copy when a photo has no smalles
 test("every photo on the page has up-to-date watermarked copies made from an original in photos/", () => {
   const hint = "run: python3 tools/make_photo_variants.py";
   assert.ok(pagePhotos.length >= 8, `found the page's photos: ${pagePhotos}`);
-  assert.ok(pagePhotos.includes("img/hero-sunset.jpg"), "including the hero photo");
+  assert.ok(pagePhotos.includes("img/portfolio/golden-hour.jpg"), "including the hero photo");
   for (const photo of pagePhotos) {
     const entry = photoVariants[photo];
     assert.ok(entry, `${photo} has no smaller copies (${hint})`);
@@ -546,7 +659,7 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },

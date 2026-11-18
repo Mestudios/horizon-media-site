@@ -6,9 +6,16 @@
   if (!list) return;
   const SHOW = 3;
 
-  function card({ date, title, text, link, linkText }) {
+  function card({ id, date, title, text, link, linkText, photo }) {
     const article = document.createElement("article");
-    article.className = "ann";
+    article.className = "ann" + (photo ? " has-photo" : "");
+    if (photo) {
+      const image = document.createElement("img");
+      image.src = `announcement-photos/${id}.jpg?v=${photo}`;
+      image.alt = "";
+      image.loading = "lazy";
+      article.append(image);
+    }
     const when = document.createElement("time");
     when.setAttribute("datetime", date);
     when.textContent = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

@@ -102,11 +102,6 @@ export default {
     "lite": "img/lite/game-day.jpg",
     "saver": "img/saver/game-day.jpg"
   },
-  "img/hero-sunset.jpg": {
-    "source": "eaabe8ced079aedd",
-    "lite": "img/lite/hero-sunset.jpg",
-    "saver": "img/saver/hero-sunset.jpg"
-  },
   "img/portfolio/ball-secure.jpg": {
     "source": "1efdaedb50d13cb8",
     "lite": "img/lite/portfolio/ball-secure.jpg",

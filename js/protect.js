@@ -9,10 +9,10 @@
 // 1. Saving: blocks the right-click menu and dragging on photos, which stops
 //    the quick "Save Image As…".
 document.addEventListener("contextmenu", (e) => {
-  if (e.target.closest("img, .hero-photo, .shot")) e.preventDefault();
+  if (e.target.closest("img, canvas, .hero-photo, .shot")) e.preventDefault();
 });
 document.addEventListener("dragstart", (e) => {
-  if (e.target.closest("img")) e.preventDefault();
+  if (e.target.closest("img, canvas")) e.preventDefault();
 });
 
 // 2. Screenshots, on computers only. A web page is never told that a screenshot

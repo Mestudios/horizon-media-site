@@ -7,6 +7,25 @@
   command = "sh tools/build-site.sh"
   publish = "dist"
 
+# Cookies and refunds are now sections of the privacy and terms pages; old
+# links still work.
+[[redirects]]
+  from = "/cookies.html"
+  to = "/privacy.html#cookies"
+  status = 301
+[[redirects]]
+  from = "/cookies"
+  to = "/privacy.html#cookies"
+  status = 301
+[[redirects]]
+  from = "/refunds.html"
+  to = "/terms.html#refunds"
+  status = 301
+[[redirects]]
+  from = "/refunds"
+  to = "/terms.html#refunds"
+  status = 301
+
 # Security headers for every file. The homepage is sent through the guard,
 # which adds the same ones from netlify/guard/settings.js. Keep the two lists
 # the same (npm test checks).
