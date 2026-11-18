@@ -7,11 +7,11 @@
 
 :root {
   /* Layout idea: night stadium. One glowing horizon line is the bold move; everything else stays quiet navy. */
-  --night: #0a0a0a;
-  --panel: #151515;
-  --line: #2b2b2b;
-  --chalk: #f4f4f4;
-  --dim: #a6a6a6;
+  --night: #000000;
+  --panel: #161617;
+  --line: #333336;
+  --chalk: #f5f5f7;
+  --dim: #a1a1a6;
   --flare: #ffc61a;
   --flare-2: #ffe27a;
   --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
@@ -29,18 +29,18 @@
    one with the switch in the menu bar (js/site.js stores it as data-theme on <html>). */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --night: #f6f4ef; --panel: #ffffff; --line: #ddd8cc; --chalk: #141414; --dim: #5e5e5e;
-    --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e; --danger: #b3261e;
+    --night: #ffffff; --panel: #f5f5f7; --line: #d2d2d7; --chalk: #1d1d1f; --dim: #6e6e73;
+    --accent: #8a5d00; --accent-2: #8a5d00; --soft: #424245; --soft-2: #1d1d1f; --danger: #b3261e;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --night: #f6f4ef; --panel: #ffffff; --line: #ddd8cc; --chalk: #141414; --dim: #5e5e5e;
-  --accent: #8a5d00; --accent-2: #8a5d00; --soft: #3a3a3a; --soft-2: #2e2e2e; --danger: #b3261e;
+  --night: #ffffff; --panel: #f5f5f7; --line: #d2d2d7; --chalk: #1d1d1f; --dim: #6e6e73;
+  --accent: #8a5d00; --accent-2: #8a5d00; --soft: #424245; --soft-2: #1d1d1f; --danger: #b3261e;
   color-scheme: light;
 }
 /* Text laid over photos, and the photo viewer, stay light-on-dark in both modes. */
-.hero, .tile, .shot-info, .viewer {
+.shot-info, .viewer {
   --night: #0a0a0a; --panel: #151515; --line: #2b2b2b; --chalk: #f4f4f4; --dim: #a6a6a6;
   --accent: var(--flare); --accent-2: var(--flare-2); --soft: #c9c9c9; --soft-2: #d0d0d0;
   color: var(--chalk);
@@ -484,3 +484,131 @@ img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; }
 .presets-list .ann .btns { margin-top: 14px; }
 .presets-list .ann .btn { padding: 10px 14px; font-size: 14px; color: var(--chalk); }
 .presets-list .ann .btn-hot { color: #1a1402; }
+
+/* ==========================================================================
+   Update 2.5: Apple-style look. Same fonts (Big Shoulders headings, Archivo
+   text); calmer colours, more space, pill buttons, rounded photos, a thin
+   see-through menu bar. Only how things look changes: the pages' structure,
+   the photo viewer, busy mode and the homepage photo picker work as before.
+   ========================================================================== */
+body { font-size: 17px; letter-spacing: -.005em; }
+.wrap { width: min(1080px, 100% - 44px); }
+section { padding: clamp(72px, 10vw, 112px) 0; }
+
+/* Menu bar: thin, see-through, small links */
+.nav { background: color-mix(in srgb, var(--night) 72%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.nav .wrap { height: 52px; }
+.logo { font-size: 20px; }
+.logo-mark svg { width: 24px; height: 18px; }
+.nav-links { gap: 26px; font-size: 13px; font-weight: 400; }
+.nav-links a { color: var(--chalk); opacity: .82; }
+.nav-links a:hover, .nav-links a[aria-current="page"] { opacity: 1; color: var(--chalk); }
+.nav-cta { opacity: 1 !important; padding: 6px 14px; border-radius: 980px; font-size: 13px; font-weight: 600; }
+.theme-toggle { width: 32px; height: 32px; border: 0; background: transparent; }
+.theme-toggle:hover { background: var(--panel); }
+
+/* Notice bar: a quiet grey line under the menu bar */
+.notice-bar { background: var(--panel); color: var(--chalk); font-size: 14px; font-weight: 400; padding: 12px 48px; border-bottom: 1px solid var(--line); }
+.notice-bar a { color: var(--accent-2); text-decoration: none; font-weight: 600; }
+.notice-bar a::after { content: " \203A"; }
+.notice-close { color: var(--dim); }
+.notice-close:hover { background: var(--line); color: var(--chalk); }
+
+/* Buttons: pills. The main one stays gold; the other is a quiet outline. */
+.btn { border-radius: 980px; padding: 12px 24px; font-size: 16px; font-weight: 600; letter-spacing: 0; background: transparent; border-color: var(--line); }
+.btn:hover { border-color: var(--chalk); }
+.btn-hot { background: var(--flare); border-color: var(--flare); color: #1a1402; }
+.btn-hot:hover { background: var(--flare-2); border-color: var(--flare-2); }
+.label, .kicker { letter-spacing: .14em; }
+
+/* Homepage hero: centred words on a plain background, the photo below them in a rounded frame */
+.hero { display: flex; flex-direction: column; padding: clamp(64px, 9vw, 104px) 0 0; overflow: visible; }
+.hero .wrap { order: 1; }
+.hero-photo { order: 2; position: relative; inset: auto; z-index: 0; width: min(1320px, 100% - 24px); margin: clamp(40px, 6vw, 64px) auto 0; aspect-ratio: 16 / 8; border-radius: 28px; background-position: center 62%; }
+.hero-photo::after { display: none; }
+.hero .rule { display: none; }
+.hero .headline { font-size: clamp(56px, 10vw, 120px); }
+.hero .hero-copy { margin: 22px auto 30px; font-size: clamp(19px, 2.2vw, 24px); line-height: 1.4; color: var(--dim); }
+@media (max-width: 700px) { .hero-photo { aspect-ratio: 4 / 5; border-radius: 22px; width: calc(100% - 24px); } }
+
+/* Seasons strip: plain columns on grey */
+.board { margin-top: 12px; border: 0; background: var(--panel); }
+.board .wrap { padding: 40px 0; gap: 24px; }
+.board div { border: 0 !important; padding: 0 8px; }
+.board b { font-size: 30px; }
+.board span { display: block; margin-top: 6px; font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--dim); line-height: 1.45; }
+.board .board-book { margin-top: 14px; color: #1a1402; }
+
+/* Work grid: rounded photos with the caption underneath */
+.grid { gap: 22px 20px; }
+.tile { display: block; aspect-ratio: auto; padding: 0; border: 0; border-radius: 0; overflow: visible; color: var(--chalk); }
+.tile img { position: static; display: block; width: 100%; aspect-ratio: 4 / 5; height: auto; border-radius: 22px; transition: transform .4s ease, opacity .2s; }
+.tile::after { display: none; }
+.tile h3 { margin: 14px 0 2px; font-size: 24px; }
+.tile .spec { color: var(--dim); font-size: 14px; letter-spacing: 0; }
+@media (prefers-reduced-motion: no-preference) { .tile:hover img { transform: none; opacity: .88; } }
+@media (max-width: 480px) { .tile { aspect-ratio: auto; } }
+.more a:not(.btn) { text-decoration: none; }
+
+/* Car photography: a big centred card */
+.cars-band { background: none; border: 0; padding-top: 0; }
+.cars-band .wrap { background: var(--panel); border-radius: 28px; padding: clamp(44px, 7vw, 72px) 24px; text-align: center; }
+.cars-band .lede { margin-inline: auto; }
+.cars-band .btns { justify-content: center; }
+
+/* Team: centred, no boxes */
+.team { gap: 28px 20px; }
+.member { flex-direction: column; text-align: center; gap: 12px; padding: 8px; border: 0; background: none; }
+.member:hover { border: 0; }
+.member:hover b { color: var(--accent); }
+.avatar { width: 88px; height: 88px; border: 0; }
+.member > span > span { display: block; }
+
+/* Announcements and other cards: soft grey, rounded, no gold edge */
+.announcements { background: none; border: 0; }
+.ann { background: var(--panel); border: 0; border-radius: 22px; padding: 28px; }
+.ann.has-photo img { width: calc(100% + 56px); margin: 0 -28px 20px; }
+.form-card, .book-consent, .member, .step, .ig-card { border-radius: 22px; }
+.form-card { border: 0; background: var(--panel); }
+.ig-card { border: 0; background: var(--panel); }
+.request { border-radius: 22px; }
+.request-alert-box { border-radius: 18px; border-top: 0; }
+
+/* Plain inner-page headers */
+.page-top { background: none; border-bottom: 0; }
+.page-top .rule-left { display: none; }
+.page-top .hero-copy { color: var(--dim); font-size: clamp(19px, 2.2vw, 22px); line-height: 1.4; }
+
+/* Portfolio and car galleries */
+.filters { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--panel); border-radius: 980px; }
+.filters button { border: 0; background: transparent; min-height: 40px; padding: 10px 18px; }
+.filters button[aria-pressed="true"] { background: var(--night); color: var(--chalk); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.filters button[aria-pressed="true"] span { color: var(--dim); }
+.gallery { gap: 14px; }
+.shot { border-radius: 18px; }
+.shot-new { top: 12px; left: 12px; }
+
+/* Booking band at the end of a page: a centred grey card, not a gold stripe */
+.cta-band { background: none; color: var(--chalk); padding: 0 0 clamp(64px, 9vw, 96px); }
+.cta-band .wrap { background: var(--panel); border-radius: 28px; padding: clamp(40px, 6vw, 56px) 24px; justify-content: center; text-align: center; flex-direction: column; }
+.cta-band .btn-hot { background: var(--flare); border-color: var(--flare); color: #1a1402; }
+.cta-band .btn-hot:hover { background: var(--flare-2); border-color: var(--flare-2); }
+
+/* Photo viewer: rounder, glassy controls */
+.viewer button { background: rgba(40,40,42,.72); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-color: rgba(255,255,255,.14); }
+.viewer .btn { border-radius: 980px; }
+.viewer-photo { border-radius: 14px; }
+
+/* Footer: small grey type on grey */
+footer { background: var(--panel); border-top: 0; font-size: 12px; padding: 22px 0 28px; }
+.foot-links, .foot-legal { font-size: 12px; }
+.foot-links a, .foot-legal a { color: var(--soft); }
+.foot-links a:hover, .foot-legal a:hover { color: var(--chalk); text-decoration: underline; }
+.foot-copy { border-top-color: var(--line); padding-top: 14px; font-size: 12px; }
+
+/* Presets */
+.presets-list.has-presets .ann { padding-top: 0; }
+.compare { margin: 0 -28px 20px; }
+.preset-photo { width: calc(100% + 56px); margin: 0 -28px 20px; }
+.page-top .headline { margin-bottom: 18px; }
+.book-consent { border: 0; background: var(--panel); }
