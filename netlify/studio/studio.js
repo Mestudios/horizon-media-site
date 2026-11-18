@@ -51,6 +51,20 @@ const DEFAULT_TEMPLATES = [
 // Recaps: a page of chosen photos, announced on the homepage.
 const MAX_RECAPS = 30;
 const MAX_RECAP_PHOTOS = 60;
+
+// How an announcement's photo is cropped for its card: the part of the photo
+// shown, as fractions of its width and height. Anything else is ignored.
+function readCrop(raw) {
+  let crop;
+  try { crop = JSON.parse(String(raw || "")); } catch { return null; }
+  if (!crop || typeof crop !== "object") return null;
+  const n = ["x", "y", "w", "h"].map((k) => Number(crop[k]));
+  if (!n.every(Number.isFinite)) return null;
+  const [x, y, w, h] = n;
+  if (x < 0 || y < 0 || w <= 0.02 || h <= 0.02 || w > 1 || h > 1 || x + w > 1.001 || y + h > 1.001) return null;
+  const r = (v) => Math.round(v * 10000) / 10000;
+  return { x: r(x), y: r(y), w: r(w), h: r(h) };
+}
 // Password guessing: this many wrong sign-ins from one address locks it out for
 // LOCK_MINUTES. Counted in Netlify Blobs, so it holds across all of Netlify's servers.
 const LOCK_AFTER = 10;
@@ -696,6 +710,7 @@ export function createStudio() {
       // Or a photo already on the site, picked from the portfolio or car page.
       const photoPath = dropPhoto || photoBytes ? "" : String(form.get("photoPath") || "");
       if (photoPath && !REQUESTABLE.test(photoPath)) return json({ error: "That photo isn't on the site." }, 400);
+      const crop = dropPhoto ? null : readCrop(form.get("photoCrop"));
 
       // Editing: an existing id keeps its place; otherwise a new announcement.
       const editing = String(form.get("id") || "");
@@ -717,6 +732,8 @@ export function createStudio() {
           delete announcement.photo;
           delete announcement.photoPath;
         }
+        if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
+        else delete announcement.photoCrop;
         await store().setJSON(`ann/${editing}`, announcement);
         await rebuildAnnouncementIndex();
         console.log(`studio: edited announcement ${editing}`);
@@ -728,6 +745,7 @@ export function createStudio() {
         await store().set(`ann-photo/${id}`, photoBytes.buffer);
         announcement.photo = now;
       } else if (photoPath) announcement.photoPath = photoPath;
+      if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
       await store().setJSON(`ann/${id}`, announcement);
       await rebuildAnnouncementIndex();
       console.log(`studio: added announcement ${id}`);

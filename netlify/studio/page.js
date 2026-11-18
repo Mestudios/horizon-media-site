@@ -152,6 +152,11 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .recap-picker input{position:absolute;top:8px;left:8px;width:20px;height:20px;margin:0;accent-color:var(--flare)}
 .studio .recap-picker input:checked+img{border-color:var(--flare)}
 .studio .btn-small{padding:6px 12px;font-size:13px;min-height:0}
+.studio .ann-crop{margin:8px 0 12px}
+.studio .crop-frame{position:relative;display:block;width:100%;max-width:460px;aspect-ratio:16/10;overflow:hidden;padding:0;border:2px solid var(--flare);border-radius:10px;background:#000;cursor:grab;touch-action:none}
+.studio .crop-frame:active{cursor:grabbing}
+.studio .crop-frame img{position:absolute;max-width:none;user-select:none;pointer-events:none}
+.studio .ann-crop input[type=range]{width:100%;max-width:460px;accent-color:var(--flare)}
 .studio .ann-pick-box{margin:8px 0 12px}
 .studio .ann-pick-box .recap-picker{max-height:300px}
 .studio .ann-pick-box .recap-picker button{display:block;width:100%;padding:0;border:0;background:none;color:var(--dim);font:inherit;font-size:12px;text-align:left;cursor:pointer}
@@ -333,6 +338,9 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <input type="hidden" name="photoPath" id="ann-photo-path">
 <div id="ann-pick-box" class="ann-pick-box" hidden><input type="search" id="ann-pick-search" placeholder="Search by title or photographer" aria-label="Search the site's photos"><ul id="ann-picker" class="recap-picker"></ul></div>
 <div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><p class="note" id="ann-photo-from"></p><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
+<p class="note" id="ann-crop-row" hidden><button type="button" class="btn btn-small" id="ann-crop-open" aria-expanded="false" aria-controls="ann-crop">Crop &amp; position</button> <span id="ann-crop-state"></span></p>
+<div id="ann-crop" class="ann-crop" hidden><p class="note">Drag the photo to move it, or use the arrow keys. The frame is the shape of the homepage card.</p><button type="button" class="crop-frame" aria-label="Photo position in the card: drag, or use the arrow keys, to move it; plus and minus zoom"><img alt="" draggable="false"></button><label for="ann-crop-zoom">Zoom</label><input type="range" id="ann-crop-zoom" min="1" max="3" step="0.01" value="1"><div class="form-end"><button type="button" class="btn btn-hot btn-small" id="ann-crop-done">Done</button><button type="button" class="btn btn-small" id="ann-crop-reset">Reset</button></div></div>
+<input type="hidden" name="photoCrop" id="ann-photo-crop">
 </div></div>
 <div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
 <div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
@@ -371,6 +379,9 @@ menu.forEach((b) => b.addEventListener("click", () => go(b.dataset.view)));
 document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 go(location.hash.slice(1), true);
 const setText = (id, value) => { document.getElementById(id).textContent = value; };
+// A message that something worked goes away by itself after a few seconds;
+// errors stay until the next try.
+const flash = (el, text) => { el.textContent = text; clearTimeout(el.fadeTimer); el.fadeTimer = setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 5000); };
 const miniRow = (strong, rest) => { const li = document.createElement("li"); const b = document.createElement("b"); b.textContent = strong; li.append(b, rest); return li; };
 const counts = { added: 0, builtIn: 0 };
 const showPhotoCount = () => setText("stat-photos", counts.added + counts.builtIn);
@@ -410,7 +421,7 @@ meForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await post("/studio/profile", { credit: document.getElementById("me-credit").value });
   const reply = await response.json();
-  meForm.querySelector(".me-status").textContent = response.ok ? "Saved." : reply.error;
+  if (response.ok) flash(meForm.querySelector(".me-status"), "Saved."); else meForm.querySelector(".me-status").textContent = reply.error;
   if (response.ok) { ME.credit = reply.credit; credit.dataset.auto = "1"; credit.value = ""; meEdit.hidden = true; showMe(); }
 });
 credit.addEventListener("input", markTeam);
@@ -802,7 +813,7 @@ async function setHomepage(path) {
   const reply = await response.json();
   if (!response.ok) { status.textContent = reply.error; return; }
   state.hero = reply.hero;
-  status.textContent = reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.";
+  flash(status, reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.");
   render();
 }
 function homepageButton(photo) {
@@ -852,7 +863,7 @@ async function refreshTrash() {
     const restore = iconButton("back", "Restore", "", async () => {
       restore.disabled = true;
       const response = await post("/studio/restore", { id: item.id });
-      status.textContent = response.ok ? '"' + item.title + '" is back on the site.' : (await response.json()).error;
+      if (response.ok) flash(status, '"' + item.title + '" is back on the site.'); else status.textContent = (await response.json()).error;
       refresh();
     });
     const forever = iconButton("trash", "Delete for good", "danger", async () => {
@@ -1069,7 +1080,7 @@ async function refreshRemovals() {
       for (const b of buttons.children) b.disabled = true;
       const response = await post(path, { id: item.id });
       if (!response.ok) { status.textContent = (await response.json()).error; }
-      requestsNote.textContent = response.ok ? done : "";
+      if (response.ok) flash(requestsNote, done); else requestsNote.textContent = "";
       refreshRemovals().then(refreshRequests);
       refresh();
     };
@@ -1142,7 +1153,7 @@ document.getElementById("tpl-add").addEventListener("click", () => {
 document.getElementById("tpl-save").addEventListener("click", async () => {
   const response = await post("/studio/templates", { templates: JSON.stringify(templates) });
   const reply = await response.json();
-  document.getElementById("tpl-status").textContent = response.ok ? "Saved." : reply.error;
+  if (response.ok) flash(document.getElementById("tpl-status"), "Saved."); else document.getElementById("tpl-status").textContent = reply.error;
   if (response.ok) { templates = reply.templates; showTemplates(); refreshRequests(); }
 });
 // A public link to a photo, like the one the viewer's Share button gives.
@@ -1263,7 +1274,8 @@ document.getElementById("add").addEventListener("submit", async (event) => {
   button.disabled = false;
   const later = document.getElementById("live-at").value;
   const whenText = later && new Date(later).getTime() > Date.now() ? " They go live " + new Date(later).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "." : "";
-  addStatus.textContent = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") + whenText : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  const addMessage = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") + whenText : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  if (added && !problems.length) flash(addStatus, addMessage); else addStatus.textContent = addMessage;
   if (added) { event.target.reset(); picks = []; showPicks(); credit.value = ME.credit || ""; credit.dataset.auto = "1"; markTeam(); refresh(); }
 });
 const signOut = async () => {
@@ -1329,6 +1341,8 @@ async function refreshAnnouncements() {
         if (item.photo) { now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo; document.getElementById("ann-photo-from").textContent = "Uploaded photo"; }
       }
       document.getElementById("ann-photo-remove").checked = false;
+      forgetCrop();
+      if (item.photoCrop) { annCrop = item.photoCrop; cropInput.value = JSON.stringify(item.photoCrop); document.getElementById("ann-crop-state").textContent = "Cropped."; }
       updatePreview();
       document.getElementById("ann-submit").textContent = "Save changes";
       document.getElementById("ann-cancel").hidden = false;
@@ -1358,6 +1372,7 @@ const pickPath = document.getElementById("ann-photo-path");
 const smallCopy = (path) => "/" + path.replace(/\\/full\\.jpg$/, "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
 function showPicked(path, title) {
   pickPath.value = path;
+  forgetCrop();
   const now = document.getElementById("ann-photo-now");
   now.hidden = !path;
   if (path) {
@@ -1407,6 +1422,7 @@ function stopEditing() {
   announceForm.reset();
   pickPath.value = "";
   pickBox.hidden = true;
+  forgetCrop();
   document.getElementById("ann-id").value = "";
   dateBox.value = today();
   document.getElementById("ann-submit").textContent = "Post announcement";
@@ -1429,10 +1445,11 @@ announceForm.addEventListener("submit", async (event) => {
     announceStatus.textContent = "This device could not read that photo. Try a JPEG.";
     return;
   }
-  if (document.getElementById("ann-photo-remove").checked) { body.set("removePhoto", "1"); body.delete("photoPath"); }
+  if (document.getElementById("ann-photo-remove").checked) { body.set("removePhoto", "1"); body.delete("photoPath"); body.delete("photoCrop"); }
   const response = await fetch("/studio/announce", { method: "POST", body });
   const scheduled = dateBox.value > today();
-  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away.") : (await response.json()).error;
+  if (response.ok) flash(announceStatus, (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away."));
+  else announceStatus.textContent = (await response.json()).error;
   if (response.ok) { stopEditing(); refreshAnnouncements(); }
 });
 
@@ -1452,7 +1469,19 @@ function updatePreview() {
   previewPhoto = picked ? URL.createObjectURL(picked) : keepOld ? document.querySelector("#ann-photo-now img").src : "";
   previewCard.textContent = "";
   previewCard.className = "ann" + (previewPhoto ? " has-photo" : "");
-  if (previewPhoto) { const image = document.createElement("img"); image.src = previewPhoto; image.alt = ""; previewCard.append(image); }
+  if (previewPhoto) {
+    const image = document.createElement("img");
+    image.src = previewPhoto;
+    image.alt = "";
+    if (annCrop) {
+      const frame = document.createElement("div");
+      frame.className = "ann-photo";
+      placeCrop(image, annCrop);
+      frame.append(image);
+      previewCard.append(frame);
+    } else previewCard.append(image);
+  }
+  syncCropRow();
   const when = document.createElement("time");
   when.textContent = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const heading = document.createElement("h3");
@@ -1462,6 +1491,99 @@ function updatePreview() {
   if (link) { const a = document.createElement("a"); a.href = "#"; a.textContent = linkText; body.append(" ", a); }
   previewCard.append(when, heading, body);
 }
+// ---- Crop & position: which part of the photo the 16:10 card shows, kept as
+// fractions of the photo ({x, y, w, h}) so it works for uploads and picked photos alike.
+const CARD = 16 / 10;
+let annCrop = null;
+const cropBox = document.getElementById("ann-crop");
+const cropFrame = cropBox.querySelector(".crop-frame");
+const cropImage = cropFrame.querySelector("img");
+const cropZoom = document.getElementById("ann-crop-zoom");
+const cropInput = document.getElementById("ann-photo-crop");
+const crop = { W: 0, H: 0, w0: 1, h0: 1, z: 1, cx: 0.5, cy: 0.5 };
+function placeCrop(image, c) {
+  image.style.left = (-c.x / c.w) * 100 + "%";
+  image.style.top = (-c.y / c.h) * 100 + "%";
+  image.style.width = 100 / c.w + "%";
+  image.style.height = 100 / c.h + "%";
+}
+function cropRect() {
+  const w = crop.w0 / crop.z, h = crop.h0 / crop.z;
+  const x = Math.min(Math.max(crop.cx - w / 2, 0), 1 - w), y = Math.min(Math.max(crop.cy - h / 2, 0), 1 - h);
+  crop.cx = x + w / 2;
+  crop.cy = y + h / 2;
+  return { x, y, w, h };
+}
+function showCrop() {
+  annCrop = cropRect();
+  placeCrop(cropImage, annCrop);
+  cropInput.value = JSON.stringify(annCrop);
+  document.getElementById("ann-crop-state").textContent = "Cropped.";
+  updatePreview();
+}
+function forgetCrop() {
+  annCrop = null;
+  cropInput.value = "";
+  cropBox.hidden = true;
+  document.getElementById("ann-crop-open").setAttribute("aria-expanded", "false");
+  document.getElementById("ann-crop-state").textContent = "";
+}
+function syncCropRow() {
+  const hasPhoto = !!document.getElementById("ann-photo").files[0] || (!document.getElementById("ann-photo-now").hidden && !document.getElementById("ann-photo-remove").checked);
+  document.getElementById("ann-crop-row").hidden = !hasPhoto;
+  if (!hasPhoto) cropBox.hidden = true;
+}
+document.getElementById("ann-crop-open").addEventListener("click", () => {
+  const opening = cropBox.hidden;
+  cropBox.hidden = !opening;
+  document.getElementById("ann-crop-open").setAttribute("aria-expanded", String(opening));
+  if (!opening) return;
+  cropImage.onload = () => {
+    crop.W = cropImage.naturalWidth;
+    crop.H = cropImage.naturalHeight;
+    const wide = crop.W / crop.H > CARD;
+    crop.w0 = wide ? (CARD * crop.H) / crop.W : 1;
+    crop.h0 = wide ? 1 : crop.W / (CARD * crop.H);
+    if (annCrop) { crop.z = crop.w0 / annCrop.w; crop.cx = annCrop.x + annCrop.w / 2; crop.cy = annCrop.y + annCrop.h / 2; }
+    else { crop.z = 1; crop.cx = 0.5; crop.cy = 0.5; }
+    cropZoom.value = String(crop.z);
+    placeCrop(cropImage, cropRect());
+  };
+  // Picked photos are edited on their full-size copy, so zooming in stays sharp.
+  cropImage.src = pickPath.value && !document.getElementById("ann-photo").files[0] ? "/" + pickPath.value : previewPhoto;
+  cropFrame.focus();
+});
+cropZoom.addEventListener("input", () => { crop.z = Number(cropZoom.value); showCrop(); });
+let cropDrag = null;
+cropFrame.addEventListener("pointerdown", (event) => { cropDrag = { x: event.clientX, y: event.clientY }; cropFrame.setPointerCapture(event.pointerId); });
+cropFrame.addEventListener("pointermove", (event) => {
+  if (!cropDrag) return;
+  const box = cropFrame.getBoundingClientRect();
+  crop.cx -= ((event.clientX - cropDrag.x) / box.width) * (crop.w0 / crop.z);
+  crop.cy -= ((event.clientY - cropDrag.y) / box.height) * (crop.h0 / crop.z);
+  cropDrag = { x: event.clientX, y: event.clientY };
+  showCrop();
+});
+const endCropDrag = () => { cropDrag = null; };
+cropFrame.addEventListener("pointerup", endCropDrag);
+cropFrame.addEventListener("pointercancel", endCropDrag);
+cropFrame.addEventListener("keydown", (event) => {
+  const step = 0.03;
+  const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (moves[event.key]) { crop.cx += moves[event.key][0] * (crop.w0 / crop.z); crop.cy += moves[event.key][1] * (crop.h0 / crop.z); }
+  else if (event.key === "+" || event.key === "=") crop.z = Math.min(3, crop.z + 0.1);
+  else if (event.key === "-") crop.z = Math.max(1, crop.z - 0.1);
+  else return;
+  event.preventDefault();
+  cropZoom.value = String(crop.z);
+  showCrop();
+});
+document.getElementById("ann-crop-done").addEventListener("click", () => { cropBox.hidden = true; document.getElementById("ann-crop-open").setAttribute("aria-expanded", "false"); document.getElementById("ann-crop-open").focus(); });
+document.getElementById("ann-crop-reset").addEventListener("click", () => { crop.z = 1; crop.cx = 0.5; crop.cy = 0.5; cropZoom.value = "1"; placeCrop(cropImage, cropRect()); annCrop = null; cropInput.value = ""; document.getElementById("ann-crop-state").textContent = ""; updatePreview(); });
+// A different photo starts uncropped.
+document.getElementById("ann-photo").addEventListener("change", forgetCrop);
+document.getElementById("ann-photo-remove").addEventListener("change", forgetCrop);
+
 announceForm.addEventListener("input", updatePreview);
 announceForm.addEventListener("change", updatePreview);
 updatePreview();
@@ -1479,12 +1601,13 @@ noticeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await fetch("/studio/notice", { method: "POST", body: new FormData(noticeForm) });
   const reply = await response.json();
-  noticeStatus.textContent = response.ok ? (reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.") : reply.error;
+  if (response.ok) flash(noticeStatus, reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.");
+  else noticeStatus.textContent = reply.error;
   if (response.ok) showNotice(reply.notice);
 });
 document.getElementById("notice-off").addEventListener("click", async () => {
   const response = await post("/studio/notice", { text: "" });
-  if (response.ok) { showNotice(null); noticeStatus.textContent = "Turned off. It leaves the site within a minute."; }
+  if (response.ok) { showNotice(null); flash(noticeStatus, "Turned off. It leaves the site within a minute."); }
 });
 // ---- Presets
 // ---- Recaps: a page of picked photos, with an announcement linking to it.
@@ -1550,7 +1673,7 @@ recapForm.addEventListener("submit", async (event) => {
   if (!response.ok) { recapStatus.textContent = reply.error; return; }
   const editing = document.getElementById("recap-id").value;
   stopRecapEditing();
-  recapStatus.textContent = (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.";
+  flash(recapStatus, (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.");
   refreshRecaps();
   refreshAnnouncements();
 });
@@ -1652,7 +1775,7 @@ presetForm.addEventListener("submit", async (event) => {
   presetStatus.textContent = "Sending...";
   const response = await fetch("/studio/preset", { method: "POST", body });
   const reply = await response.json().catch(() => ({ error: "That didn't send. The files may be too large." }));
-  presetStatus.textContent = response.ok ? "Added. It's on the presets page now." : reply.error;
+  if (response.ok) flash(presetStatus, "Added. It's on the presets page now."); else presetStatus.textContent = reply.error;
   if (response.ok) { presetForm.reset(); refreshPresets(); }
 });
 refreshPresets();

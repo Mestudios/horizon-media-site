@@ -751,6 +751,25 @@ test("an announcement can use a photo picked from the portfolio, which drops out
   assert.equal((await call("/announcements.json")).body.find((a) => a.id === recap.id).photoPath, "img/cars/grille.jpg");
 });
 
+test("an announcement photo can be cropped; bad crops are ignored and removing the photo drops the crop", async () => {
+  const cookie = await signIn();
+  const announce = (form) => call("/studio/announce", { method: "POST", cookie, form: { title: "Cropped", text: "x", date: TODAY, ...form } });
+  const id = (await announce({ photoPath: "img/portfolio/golden-hour.jpg", photoCrop: JSON.stringify({ x: 0.1, y: 0.2, w: 0.5, h: 0.4, extra: "<b>" }) })).body.announcement.id;
+  const card = async () => (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.deepEqual((await card()).photoCrop, { x: 0.1, y: 0.2, w: 0.5, h: 0.4 });
+  for (const bad of ["not json", JSON.stringify({ x: 0.8, y: 0, w: 0.5, h: 0.5 }), JSON.stringify({ x: -1, y: 0, w: 0.5, h: 0.5 }), JSON.stringify({ x: 0, y: 0, w: "a", h: 1 })]) {
+    await announce({ id, photoPath: "img/portfolio/golden-hour.jpg", photoCrop: bad });
+    assert.equal((await card()).photoCrop, undefined, bad);
+  }
+  await announce({ id, photoPath: "img/portfolio/golden-hour.jpg", photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  assert.ok((await card()).photoCrop);
+  await announce({ id, removePhoto: "1", photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  const after = await card();
+  assert.ok(!after.photoPath && !after.photoCrop, "no photo, no crop");
+  await announce({ id, photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  assert.equal((await card()).photoCrop, undefined, "a crop without a photo is not kept");
+});
+
 test("signing out ends the session in the browser", async () => {
   const out = await call("/studio/logout", { method: "POST" });
   assert.match(out.headers.get("set-cookie"), /^hm_studio=; Max-Age=0/);
