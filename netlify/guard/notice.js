@@ -12,7 +12,8 @@ const fetchWithTimeout = (input, init) => fetch(input, { ...init, signal: AbortS
 const TIME_ZONE = "America/New_York";
 const dayIn = (now) => new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
 // A link to a page of this site, or an https address (the same rule as announcements).
-export const NOTICE_LINK = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?)$/i;
+// A recap page (recap.html?r=<its id>) counts as a page of this site too.
+export const NOTICE_LINK = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?|recap\.html\?r=[0-9a-f]{16})$/i;
 
 export function createNoticeReader() {
   let notice = null;
