@@ -6,14 +6,18 @@
   if (!list) return;
   const SHOW = 3;
 
-  function card({ id, date, title, text, link, linkText, photo }) {
+  // A photo picked from the portfolio or car page shows its smaller copy.
+  const smallCopy = (path) => path.replace(/\/full\.jpg$/, "/thumb.jpg").replace(/^img\/(portfolio|cars)\//, "img/$1/thumb/");
+  function card({ id, date, title, text, link, linkText, photo, photoPath }) {
     const article = document.createElement("article");
-    article.className = "ann" + (photo ? " has-photo" : "");
-    if (photo) {
+    article.className = "ann" + (photo || photoPath ? " has-photo" : "");
+    if (photo || photoPath) {
       const image = document.createElement("img");
-      image.src = `announcement-photos/${id}.jpg?v=${photo}`;
+      image.src = photo ? `announcement-photos/${id}.jpg?v=${photo}` : smallCopy(photoPath);
       image.alt = "";
       image.loading = "lazy";
+      // If the photo can't be loaded, the card simply goes without it.
+      image.addEventListener("error", () => { image.remove(); article.classList.remove("has-photo"); });
       article.append(image);
     }
     const when = document.createElement("time");

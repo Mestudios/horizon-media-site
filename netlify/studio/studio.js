@@ -352,7 +352,14 @@ export function createStudio() {
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
       const today = todayIn(now);
-      const up = (await announcementIndex()).filter((item) => isUp(item, today));
+      let up = (await announcementIndex()).filter((item) => isUp(item, today));
+      // A photo picked from the site that has since come off it is left out.
+      if (up.some((item) => item.photoPath)) {
+        const { photos, hidden } = await photoIndex();
+        const live = new Set(photos.map((p) => `uploads/${p.id}/full.jpg`));
+        const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !hidden.includes(path));
+        up = up.map(({ photoPath, ...item }) => (photoPath && onSite(photoPath) ? { ...item, photoPath } : item));
+      }
       return json(up, 200, { "cache-control": "no-cache" });
     }
     if (url.pathname === "/photo-request") {
@@ -686,6 +693,9 @@ export function createStudio() {
         if (!isJpeg(photoBytes)) return json({ error: "Only JPEG photos are accepted." }, 415);
       }
       const dropPhoto = form.get("removePhoto") === "1";
+      // Or a photo already on the site, picked from the portfolio or car page.
+      const photoPath = dropPhoto || photoBytes ? "" : String(form.get("photoPath") || "");
+      if (photoPath && !REQUESTABLE.test(photoPath)) return json({ error: "That photo isn't on the site." }, 400);
 
       // Editing: an existing id keeps its place; otherwise a new announcement.
       const editing = String(form.get("id") || "");
@@ -697,9 +707,15 @@ export function createStudio() {
         if (photoBytes) {
           await store().set(`ann-photo/${editing}`, photoBytes.buffer);
           announcement.photo = now;
-        } else if (dropPhoto && old.photo) {
-          await store().delete(`ann-photo/${editing}`);
+          delete announcement.photoPath;
+        } else if (photoPath) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
           delete announcement.photo;
+          announcement.photoPath = photoPath;
+        } else if (dropPhoto) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
+          delete announcement.photo;
+          delete announcement.photoPath;
         }
         await store().setJSON(`ann/${editing}`, announcement);
         await rebuildAnnouncementIndex();
@@ -711,7 +727,7 @@ export function createStudio() {
       if (photoBytes) {
         await store().set(`ann-photo/${id}`, photoBytes.buffer);
         announcement.photo = now;
-      }
+      } else if (photoPath) announcement.photoPath = photoPath;
       await store().setJSON(`ann/${id}`, announcement);
       await rebuildAnnouncementIndex();
       console.log(`studio: added announcement ${id}`);
@@ -843,7 +859,8 @@ export function createStudio() {
       // Its announcement shares its id and links to the recap page.
       await seedAnnouncements();
       const oldAnn = await store().get(`ann/${id}`, { type: "json" });
-      await store().setJSON(`ann/${id}`, { ...(oldAnn || {}), id, title, text: text || `${photos.length} photos from Horizon Media.`, date, until: (oldAnn && oldAnn.until) || "", link: `recap.html?r=${id}`, linkText: "See the photos", added: oldAnn ? oldAnn.added : now, by: oldAnn ? oldAnn.by : me.username, recap: true });
+      const cover = oldAnn && (oldAnn.photo || (oldAnn.photoPath && photos.some((p) => p.path === oldAnn.photoPath))) ? {} : { photoPath: photos[0].path };
+      await store().setJSON(`ann/${id}`, { ...(oldAnn || {}), id, title, text: text || `${photos.length} photos from Horizon Media.`, date, until: (oldAnn && oldAnn.until) || "", link: `recap.html?r=${id}`, linkText: "See the photos", added: oldAnn ? oldAnn.added : now, by: oldAnn ? oldAnn.by : me.username, recap: true, ...cover });
       await rebuildAnnouncementIndex();
       console.log(`studio: ${old ? "edited" : "posted"} recap ${id}`);
       return json({ ok: true, recap });

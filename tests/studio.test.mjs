@@ -716,6 +716,41 @@ test("recaps: a page of chosen photos with an announcement linking to it", async
   assert.ok(!(await call("/announcements.json")).body.some((x) => x.id === id));
 });
 
+test("an announcement can use a photo picked from the portfolio, which drops out if the photo leaves the site", async () => {
+  const cookie = await signIn();
+  const announce = (form) => call("/studio/announce", { method: "POST", cookie, form: { title: "Big win", text: "We won.", date: TODAY, ...form } });
+  assert.equal((await announce({ photoPath: "https://evil.example/x.jpg" })).status, 400);
+  const made = await announce({ photoPath: "img/portfolio/golden-hour.jpg" });
+  assert.equal(made.status, 200);
+  const id = made.body.announcement.id;
+  let shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, "img/portfolio/golden-hour.jpg");
+  assert.equal(shown.photo, undefined);
+  // Uploading a photo replaces the picked one, and picking replaces an upload.
+  await announce({ id, photo: new Blob([JPEG]) });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.ok(shown.photo && !shown.photoPath);
+  const up = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Team photo" }) })).body.photo;
+  await announce({ id, photoPath: `uploads/${up.id}/full.jpg` });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, `uploads/${up.id}/full.jpg`);
+  assert.ok(!shown.photo);
+  assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 404, "the old upload is gone");
+  // If the picked photo comes off the site, the card goes without it.
+  await call("/studio/delete", { method: "POST", cookie, form: { id: up.id } });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, undefined);
+  await call("/studio/restore", { method: "POST", cookie, form: { id: up.id } });
+  assert.equal((await call("/announcements.json")).body.find((a) => a.id === id).photoPath, `uploads/${up.id}/full.jpg`, "and gets it back if restored");
+  // Remove photo clears it.
+  await announce({ id, photoPath: `uploads/${up.id}/full.jpg`, removePhoto: "1" });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.ok(!shown.photo && !shown.photoPath);
+  // A recap's announcement uses the recap's first photo.
+  const recap = (await call("/studio/recap", { method: "POST", cookie, form: { title: "Recap", date: TODAY, photos: JSON.stringify([{ path: "img/cars/grille.jpg", title: "Grille", credit: "x" }]) } })).body.recap;
+  assert.equal((await call("/announcements.json")).body.find((a) => a.id === recap.id).photoPath, "img/cars/grille.jpg");
+});
+
 test("signing out ends the session in the browser", async () => {
   const out = await call("/studio/logout", { method: "POST" });
   assert.match(out.headers.get("set-cookie"), /^hm_studio=; Max-Age=0/);

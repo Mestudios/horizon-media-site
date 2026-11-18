@@ -151,6 +151,12 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .recap-picker img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;margin-bottom:4px;border:3px solid transparent}
 .studio .recap-picker input{position:absolute;top:8px;left:8px;width:20px;height:20px;margin:0;accent-color:var(--flare)}
 .studio .recap-picker input:checked+img{border-color:var(--flare)}
+.studio .btn-small{padding:6px 12px;font-size:13px;min-height:0}
+.studio .ann-pick-box{margin:8px 0 12px}
+.studio .ann-pick-box .recap-picker{max-height:300px}
+.studio .ann-pick-box .recap-picker button{display:block;width:100%;padding:0;border:0;background:none;color:var(--dim);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.studio .ann-pick-box .recap-picker button img{border:3px solid transparent}
+.studio .ann-pick-box .recap-picker button[aria-pressed=true] img{border-color:var(--flare)}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
@@ -322,8 +328,11 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note">Pick a future date to schedule it. Leave the second date empty to keep it up.</p>
 <label for="ann-link">Link (optional)</label><input id="ann-link" name="link" maxlength="300" placeholder="cars.html or https://...">
 <label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
-<label for="ann-photo">Photo (optional)</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
-<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
+<label for="ann-photo">Photo (optional): upload one</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
+<p class="note">Or <button type="button" class="btn btn-small" id="ann-pick" aria-expanded="false" aria-controls="ann-pick-box">Choose from the portfolio</button></p>
+<input type="hidden" name="photoPath" id="ann-photo-path">
+<div id="ann-pick-box" class="ann-pick-box" hidden><input type="search" id="ann-pick-search" placeholder="Search by title or photographer" aria-label="Search the site's photos"><ul id="ann-picker" class="recap-picker"></ul></div>
+<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><p class="note" id="ann-photo-from"></p><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
 </div></div>
 <div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
 <div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
@@ -1311,8 +1320,14 @@ async function refreshAnnouncements() {
       document.getElementById("ann-link").value = item.link || "";
       document.getElementById("ann-link-text").value = item.linkText || "";
       const now = document.getElementById("ann-photo-now");
-      now.hidden = !item.photo;
-      if (item.photo) now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo;
+      pickPath.value = "";
+      if (item.photoPath) {
+        const known = everyPhoto().find((p) => p.path === item.photoPath);
+        showPicked(item.photoPath, known ? known.title : "");
+      } else {
+        now.hidden = !item.photo;
+        if (item.photo) { now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo; document.getElementById("ann-photo-from").textContent = "Uploaded photo"; }
+      }
       document.getElementById("ann-photo-remove").checked = false;
       updatePreview();
       document.getElementById("ann-submit").textContent = "Save changes";
@@ -1336,8 +1351,62 @@ async function refreshAnnouncements() {
   }
 }
 
+// ---- Announcement photo picked from the site's own photos.
+const pickBox = document.getElementById("ann-pick-box");
+const pickButton = document.getElementById("ann-pick");
+const pickPath = document.getElementById("ann-photo-path");
+const smallCopy = (path) => "/" + path.replace(/\\/full\\.jpg$/, "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+function showPicked(path, title) {
+  pickPath.value = path;
+  const now = document.getElementById("ann-photo-now");
+  now.hidden = !path;
+  if (path) {
+    now.querySelector("img").src = smallCopy(path);
+    document.getElementById("ann-photo-from").textContent = "From the site: " + (title || path.replace(/^.*\\//, ""));
+  }
+  document.getElementById("ann-photo-remove").checked = false;
+}
+function showAnnPicker() {
+  const words = document.getElementById("ann-pick-search").value.trim().toLowerCase();
+  const list = document.getElementById("ann-picker");
+  list.textContent = "";
+  for (const photo of recapChoices()) {
+    if (words && !(photo.title + " " + (photo.credit || "")).toLowerCase().includes(words)) continue;
+    const li = document.createElement("li");
+    const choose = document.createElement("button");
+    choose.type = "button";
+    choose.setAttribute("aria-pressed", String(pickPath.value === photo.path));
+    const image = document.createElement("img");
+    image.src = photo.thumb;
+    image.alt = "";
+    image.loading = "lazy";
+    choose.append(image, photo.title);
+    choose.addEventListener("click", () => {
+      document.getElementById("ann-photo").value = "";
+      showPicked(photo.path, photo.title);
+      pickBox.hidden = true;
+      pickButton.setAttribute("aria-expanded", "false");
+      updatePreview();
+      pickButton.focus();
+    });
+    li.append(choose);
+    list.append(li);
+  }
+}
+pickButton.addEventListener("click", async () => {
+  const open = pickBox.hidden;
+  pickBox.hidden = !open;
+  pickButton.setAttribute("aria-expanded", String(open));
+  if (open) { await loadBuiltIn(); showAnnPicker(); document.getElementById("ann-pick-search").focus(); }
+});
+document.getElementById("ann-pick-search").addEventListener("input", showAnnPicker);
+// Uploading a photo replaces one picked from the site.
+document.getElementById("ann-photo").addEventListener("change", () => { if (document.getElementById("ann-photo").files[0]) { pickPath.value = ""; document.getElementById("ann-photo-now").hidden = true; } });
+
 function stopEditing() {
   announceForm.reset();
+  pickPath.value = "";
+  pickBox.hidden = true;
   document.getElementById("ann-id").value = "";
   dateBox.value = today();
   document.getElementById("ann-submit").textContent = "Post announcement";
@@ -1360,7 +1429,7 @@ announceForm.addEventListener("submit", async (event) => {
     announceStatus.textContent = "This device could not read that photo. Try a JPEG.";
     return;
   }
-  if (document.getElementById("ann-photo-remove").checked) body.set("removePhoto", "1");
+  if (document.getElementById("ann-photo-remove").checked) { body.set("removePhoto", "1"); body.delete("photoPath"); }
   const response = await fetch("/studio/announce", { method: "POST", body });
   const scheduled = dateBox.value > today();
   announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away.") : (await response.json()).error;
