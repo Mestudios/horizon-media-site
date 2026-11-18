@@ -464,6 +464,14 @@ export function createStudio() {
         if (url.pathname === "/studio/requests.json") return json(await listRequests());
         return json({ today: todayIn(now), items: await listAnnouncements(), notice: (await store().get("notice", { type: "json" })) || null });
       }
+      // Thumbnails of photos in the trash, for the team only.
+      const trashThumb = /^\/studio\/trash-photo\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
+      if (trashThumb) {
+        if (!(await signedIn(request, list, now))) return reply("Sign in first.", 401);
+        const bytes = await store().get(`trash-photo/${trashThumb[1]}/thumb`, { type: "arrayBuffer" });
+        if (!bytes) return reply("Not found", 404);
+        return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, no-store" } });
+      }
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       const me = await signedIn(request, list, now);
       if (!me) return reply(studioPage({ state: "out" }));

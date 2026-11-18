@@ -603,6 +603,8 @@ test("trash: removed photos can be restored for 30 days, then they are deleted f
   assert.equal(trash[0].trashedBy, USERNAME);
   assert.ok(trash[0].deletesOn - trash[0].trashedAt === 30 * 86_400_000);
   assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404, "a photo in the trash can't be loaded");
+  assert.equal((await call(`/studio/trash-photo/${id}.jpg`)).status, 401, "its thumbnail is for the team only");
+  assert.deepEqual([...(await call(`/studio/trash-photo/${id}.jpg`, { cookie })).body], [...JPEG]);
   assert.equal((await call("/studio/restore", { method: "POST", form: { id } })).status, 401);
   assert.equal((await call("/studio/restore", { method: "POST", cookie, form: { id } })).status, 200);
   assert.deepEqual((await call("/portfolio-photos.json")).body.photos.map((p) => p.title), ["Keep me"], "restored photos are back on the site");

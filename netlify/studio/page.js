@@ -136,6 +136,21 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .preset-admin li img{width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:6px;flex:none}
 .studio .preset-admin li p{margin:4px 0 0;color:var(--dim);font-size:14px}
 .studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
+.studio .requests .reply{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.studio .requests .reply select{width:auto;min-width:0}
+.studio .requests li.removal{border-left:3px solid var(--danger);padding-left:12px}
+.studio .requests .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.studio details.handled{margin:6px 0 18px;color:var(--dim);font-size:14px}
+.studio details.handled summary{cursor:pointer;padding:6px 0}
+.studio .templates{display:grid;gap:12px;margin-top:10px}
+.studio .templates .tpl{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.studio .templates .tpl textarea{min-height:70px}
+.studio .trash li .when{display:block;color:var(--dim);font-size:13px}
+.studio .recap-picker{list-style:none;padding:0;margin:8px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;max-height:420px;overflow:auto}
+.studio .recap-picker label{display:block;position:relative;cursor:pointer;font-size:12px;color:var(--dim);line-height:1.25}
+.studio .recap-picker img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;margin-bottom:4px;border:3px solid transparent}
+.studio .recap-picker input{position:absolute;top:8px;left:8px;width:20px;height:20px;margin:0;accent-color:var(--flare)}
+.studio .recap-picker input:checked+img{border-color:var(--flare)}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
@@ -259,20 +274,43 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note">Pinned photos show first on their page, in this order.</p>
 <ul id="pinned" class="pinned"></ul>
 <h2>Added here</h2>
-<p class="note">Photos added in the studio. Remove deletes them for good, after a 10-second chance to undo.</p>
+<p class="note">Photos added in the studio. Remove takes one off the site and puts it in the Trash for 30 days (with a 10-second Undo right away).</p>
 <ul id="photos"></ul>
 <h2>On the site</h2>
 <p class="note">The photos built into the portfolio and car pages. Remove takes one off the site right away; Put back shows it again.</p>
-<ul id="site-photos"></ul></section>
-<section data-view="requests" hidden><div class="view-top"><h1>Photo requests</h1></div>
+<ul id="site-photos"></ul>
+<h2>Trash</h2>
+<p class="note">Removed photos wait here for 30 days, then they are deleted for good. Restore puts one back on the site.</p>
+<ul id="trash" class="trash"></ul></section>
+<section data-view="requests" hidden><div class="view-top"><h1>Requests</h1></div>
+<h2>Removal requests</h2>
+<p class="note">People asking for a photo to come off the site. Take down moves it to the Trash (or takes a built-in photo off its page). Either way, their name and contact details are then deleted and only a record is kept.</p>
+<ul id="removals" class="requests"></ul>
+<details class="handled"><summary>Handled removal requests</summary><ul id="removals-done" class="ann-admin"></ul></details>
+<h2>Photo requests</h2>
 <p class="note">Visitors who asked for a photo. Reach out to them, then press Done to delete the request.</p>
 <p class="note" id="requests-room"></p>
-<ul id="requests" class="requests"></ul></section>
+<ul id="requests" class="requests"></ul>
+<div class="card"><h2>Reply templates</h2><p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p><div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p></div></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
 <div class="card notice-card"><h2>Notice bar</h2><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
 <form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
 <div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
 <div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
+<h2>Recaps</h2>
+<p class="note">A page of photos you pick, like a season or a big game. Posting one adds an announcement on the homepage that links to it.</p>
+<div class="card"><form id="recap-form"><input type="hidden" name="id" id="recap-id"><div class="form-cols"><div class="col">
+<label for="recap-title">Headline</label><input id="recap-title" name="title" maxlength="80" required placeholder="Fall 2026 recap">
+<label for="recap-text">Text (optional)</label><textarea id="recap-text" name="text" maxlength="400" rows="4"></textarea>
+</div><div class="col">
+<label for="recap-date">Goes up on</label><input id="recap-date" name="date" type="date" required>
+<p class="note" id="recap-count">No photos picked yet.</p>
+</div></div>
+<label for="recap-search">Pick the photos</label><input type="search" id="recap-search" placeholder="Search by title or photographer">
+<ul id="recap-picker" class="recap-picker"></ul>
+<div class="form-end"><button class="btn btn-hot" id="recap-submit">Post recap</button> <button class="btn" type="button" id="recap-cancel" hidden>Cancel editing</button></div>
+<p role="status"></p></form></div>
+<ul id="recap-list" class="ann-admin"></ul>
 <h2>Announcement cards</h2>
 <p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
 <div class="card"><form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
@@ -786,6 +824,41 @@ async function refresh() {
   state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [], hero: data.hero || "" };
   await Promise.all([loadBuiltIn(), refreshStats()]);
   render();
+  refreshTrash();
+}
+
+// ---- Trash: removed photos, kept 30 days.
+const trashList = document.getElementById("trash");
+async function refreshTrash() {
+  const items = await (await fetch("/studio/trash.json", { cache: "no-store" })).json();
+  trashList.textContent = "";
+  if (!items.length) {
+    const none = document.createElement("li");
+    none.className = "empty";
+    none.textContent = "The trash is empty.";
+    trashList.append(none);
+  }
+  for (const item of items) {
+    const photo = { title: item.title, credit: item.credit, thumb: "/studio/trash-photo/" + item.id + ".jpg", path: "trash/" + item.id };
+    const restore = iconButton("back", "Restore", "", async () => {
+      restore.disabled = true;
+      const response = await post("/studio/restore", { id: item.id });
+      status.textContent = response.ok ? '"' + item.title + '" is back on the site.' : (await response.json()).error;
+      refresh();
+    });
+    const forever = iconButton("trash", "Delete for good", "danger", async () => {
+      if (!confirm('Delete "' + item.title + '" for good? This can\u2019t be undone.')) return;
+      forever.disabled = true;
+      await post("/studio/trash-delete", { id: item.id });
+      refreshTrash();
+    });
+    const row = thumbItem(photo, [restore, forever]);
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = "Removed " + new Date(item.trashedAt).toLocaleDateString() + " by " + (item.trashedBy || "the team") + (item.why ? " (" + item.why + ")" : "") + ". Deleted for good on " + new Date(item.deletesOn).toLocaleDateString() + ".";
+    row.append(when);
+    trashList.append(row);
+  }
 }
 
 // Every photo the studio knows, by the path pins and requests use.
@@ -883,7 +956,7 @@ function render() {
       const id = photo.added.id;
       removing.add(id);
       render();
-      removeLater('"' + photo.title + '"',
+      removeLater('"' + photo.title + '" (it\u2019s in the Trash for 30 days)',
         () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
@@ -958,8 +1031,140 @@ function openEditor(item, photo) {
 }
 
 const requestList = document.getElementById("requests");
+const removalList = document.getElementById("removals");
+const RELATIONS = { pictured: "They're in the photo", parent: "Parent or guardian of someone in it", owner: "It shows their car", other: "Other" };
+let openRemovals = 0;
+async function refreshRemovals() {
+  const items = await (await fetch("/studio/removals.json", { cache: "no-store" })).json();
+  const open = items.filter((r) => r.status === "open");
+  openRemovals = open.length;
+  removalList.textContent = "";
+  if (!open.length) {
+    const none = document.createElement("li");
+    none.className = "empty";
+    none.textContent = "No removal requests right now.";
+    removalList.append(none);
+  }
+  for (const item of open) {
+    const row = document.createElement("li");
+    row.className = "removal";
+    const image = document.createElement("img");
+    image.src = "/" + item.photo.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+    image.alt = "";
+    const info = document.createElement("div");
+    const line = (label, value) => { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = label + " "; p.append(b, value); return p; };
+    info.append(line("Photo:", item.title || item.photo), line("From:", item.name), line("Who:", RELATIONS[item.relation] || item.relation), line("Reach them at:", item.contact));
+    if (item.message) info.append(line("Message:", item.message));
+    info.append(line("Sent:", new Date(item.added).toLocaleString()));
+    const act = (path, done) => async () => {
+      for (const b of buttons.children) b.disabled = true;
+      const response = await post(path, { id: item.id });
+      if (!response.ok) { status.textContent = (await response.json()).error; }
+      requestsNote.textContent = response.ok ? done : "";
+      refreshRemovals().then(refreshRequests);
+      refresh();
+    };
+    const buttons = document.createElement("div");
+    buttons.className = "btns";
+    buttons.append(
+      button("Take down", "btn-hot", act("/studio/removal-takedown", '"' + (item.title || "The photo") + '" is off the site and in the Trash. Let ' + item.name + " know at " + item.contact + ".")),
+      button("Keep it up", "", act("/studio/removal-keep", "Kept up. Let " + item.name + " know why at " + item.contact + "."))
+    );
+    info.append(buttons);
+    row.append(image, info);
+    removalList.append(row);
+  }
+  const done = document.getElementById("removals-done");
+  done.textContent = "";
+  for (const item of items.filter((r) => r.status !== "open")) {
+    const li = document.createElement("li");
+    const p = document.createElement("p");
+    p.textContent = (item.title || item.photo) + ": " + (item.status === "taken-down" ? "taken down" : "kept up") + " by " + item.handledBy + ", " + new Date(item.handledAt).toLocaleDateString() + ".";
+    li.append(p);
+    done.append(li);
+  }
+  if (!done.children.length) { const li = document.createElement("li"); li.textContent = "None yet."; done.append(li); }
+  showRequestBadge();
+}
+const requestsNote = document.createElement("p");
+requestsNote.setAttribute("role", "status");
+requestsNote.className = "note";
+removalList.before(requestsNote);
+let waitingRequests = 0;
+function showRequestBadge() {
+  const badge = document.getElementById("nav-requests");
+  badge.textContent = waitingRequests + openRemovals;
+  badge.hidden = waitingRequests + openRemovals === 0;
+}
+
+// Reply templates: copied with the visitor's name, the photo and its link filled in.
+let templates = [];
+const templateBox = document.getElementById("templates");
+async function loadTemplates() {
+  templates = await (await fetch("/studio/templates.json", { cache: "no-store" })).json();
+  showTemplates();
+}
+function showTemplates() {
+  templateBox.textContent = "";
+  templates.forEach((t, i) => {
+    const box = document.createElement("div");
+    box.className = "tpl";
+    const name = document.createElement("input");
+    name.value = t.name;
+    name.maxLength = 40;
+    name.setAttribute("aria-label", "Template name");
+    name.addEventListener("input", () => { templates[i].name = name.value; });
+    const text = document.createElement("textarea");
+    text.value = t.text;
+    text.maxLength = 600;
+    text.setAttribute("aria-label", "Template text");
+    text.addEventListener("input", () => { templates[i].text = text.value; });
+    const remove = button("Remove", "", () => { templates.splice(i, 1); showTemplates(); });
+    box.append(name, text, remove);
+    templateBox.append(box);
+  });
+}
+document.getElementById("tpl-add").addEventListener("click", () => {
+  if (templates.length >= 12) return;
+  templates.push({ name: "New reply", text: "Hi {name}! " });
+  showTemplates();
+  templateBox.lastElementChild.querySelector("input").focus();
+});
+document.getElementById("tpl-save").addEventListener("click", async () => {
+  const response = await post("/studio/templates", { templates: JSON.stringify(templates) });
+  const reply = await response.json();
+  document.getElementById("tpl-status").textContent = response.ok ? "Saved." : reply.error;
+  if (response.ok) { templates = reply.templates; showTemplates(); refreshRequests(); }
+});
+// A public link to a photo, like the one the viewer's Share button gives.
+function photoLink(path) {
+  const cars = /^img\\/cars\\//.test(path) || (state.photos.find((p) => "uploads/" + p.id + "/full.jpg" === path) || {}).sport === "cars";
+  const name = path.replace(/^uploads\\/([0-9a-f]{16})\\/full\\.jpg$/, "$1").replace(/^.*\\//, "").replace(/\\.jpg$/, "");
+  return location.origin + "/" + (cars ? "cars" : "portfolio") + ".html#photo=" + name;
+}
+function replyTools(item) {
+  const box = document.createElement("div");
+  box.className = "reply";
+  if (!templates.length) return box;
+  const pick = document.createElement("select");
+  pick.setAttribute("aria-label", "Reply template");
+  for (const [i, t] of templates.entries()) pick.add(new Option(t.name, String(i)));
+  const said = document.createElement("span");
+  said.className = "note";
+  said.setAttribute("role", "status");
+  const copy = button("Copy reply", "", async () => {
+    const t = templates[Number(pick.value)];
+    const text = t.text.split("{name}").join(item.name).split("{photo}").join(item.title || "your photo").split("{link}").join(photoLink(item.photo));
+    try { await navigator.clipboard.writeText(text); said.textContent = "Copied. Paste it into your message to " + item.contact + "."; }
+    catch (error) { window.prompt("Copy this reply:", text); }
+  });
+  box.append(pick, copy, said);
+  return box;
+}
+
 async function refreshRequests() {
   const items = await (await fetch("/studio/requests.json", { cache: "no-store" })).json();
+  waitingRequests = items.length;
   requestList.textContent = "";
   setText("stat-requests", items.length);
   const full = items.length >= ${MAX_REQUESTS};
@@ -973,11 +1178,10 @@ async function refreshRequests() {
   warn.querySelector("p").textContent = full
     ? "The request inbox is full (" + items.length + " of ${MAX_REQUESTS}), so visitors can\u2019t ask for photos until you answer some and press Done."
     : items.length + " of ${MAX_REQUESTS} photo requests are waiting. Answer some soon: at ${MAX_REQUESTS}, visitors can\u2019t send new ones.";
-  const badge = document.getElementById("nav-requests");
-  badge.textContent = items.length;
-  badge.hidden = items.length === 0;
+  showRequestBadge();
   const ovRequests = document.getElementById("ov-requests");
   ovRequests.textContent = "";
+  if (openRemovals) ovRequests.append(miniRow(openRemovals + (openRemovals === 1 ? " removal request" : " removal requests") + " waiting.", " Take the photo down or keep it up under Requests."));
   for (const item of items.slice(0, 3)) ovRequests.append(miniRow(item.name, " wants " + (item.title || "a photo") + " \\u00b7 " + item.contact));
   await Promise.all([refreshStats(), loadBuiltIn()]);
   const top = Object.entries(requestCounts).sort((a, b) => b[1] - a[1])[0];
@@ -1013,7 +1217,7 @@ async function refreshRequests() {
       await fetch("/studio/request-done", { method: "POST", body });
       refreshRequests();
     });
-    info.append(done);
+    info.append(done, replyTools(item));
     row.append(image, info);
     requestList.append(row);
   }
@@ -1214,6 +1418,115 @@ document.getElementById("notice-off").addEventListener("click", async () => {
   if (response.ok) { showNotice(null); noticeStatus.textContent = "Turned off. It leaves the site within a minute."; }
 });
 // ---- Presets
+// ---- Recaps: a page of picked photos, with an announcement linking to it.
+const recapForm = document.getElementById("recap-form");
+const recapPicker = document.getElementById("recap-picker");
+const recapSearch = document.getElementById("recap-search");
+const recapStatus = recapForm.querySelector("[role=status]");
+let recapPicked = []; // paths, in the order they were picked
+let recaps = [];
+function recapChoices() {
+  // Photos on the site now: added ones that are live, and built-in ones not taken off.
+  const now = Date.now();
+  return everyPhoto().filter((p) => (p.added ? !(p.added.liveAt > now) : !state.hidden.includes(p.path)));
+}
+function showRecapPicker() {
+  const words = recapSearch.value.trim().toLowerCase();
+  recapPicker.textContent = "";
+  for (const photo of recapChoices()) {
+    if (words && !(photo.title + " " + (photo.credit || "")).toLowerCase().includes(words) && !recapPicked.includes(photo.path)) continue;
+    const li = document.createElement("li");
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = recapPicked.includes(photo.path);
+    box.addEventListener("change", () => {
+      if (box.checked && recapPicked.length >= 60) { box.checked = false; recapStatus.textContent = "Pick up to 60 photos."; return; }
+      recapPicked = box.checked ? recapPicked.concat(photo.path) : recapPicked.filter((x) => x !== photo.path);
+      showRecapCount();
+    });
+    const image = document.createElement("img");
+    image.src = photo.thumb;
+    image.alt = "";
+    image.loading = "lazy";
+    label.append(box, image, photo.title);
+    li.append(label);
+    recapPicker.append(li);
+  }
+  showRecapCount();
+}
+function showRecapCount() {
+  document.getElementById("recap-count").textContent = recapPicked.length ? recapPicked.length + (recapPicked.length === 1 ? " photo picked." : " photos picked.") + " They show in the order you picked them." : "No photos picked yet.";
+}
+recapSearch.addEventListener("input", showRecapPicker);
+function stopRecapEditing() {
+  recapForm.reset();
+  document.getElementById("recap-id").value = "";
+  document.getElementById("recap-date").value = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  document.getElementById("recap-submit").textContent = "Post recap";
+  document.getElementById("recap-cancel").hidden = true;
+  recapPicked = [];
+  showRecapPicker();
+}
+document.getElementById("recap-cancel").addEventListener("click", stopRecapEditing);
+recapForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!recapPicked.length) { recapStatus.textContent = "Pick at least one photo."; return; }
+  const all = everyPhoto();
+  const photos = recapPicked.map((path) => all.find((p) => p.path === path)).filter(Boolean).map((p) => ({ path: p.path, title: p.title, credit: p.credit, owner: p.added ? p.added.owner || "" : "" }));
+  const body = new FormData(recapForm);
+  body.set("photos", JSON.stringify(photos));
+  const response = await fetch("/studio/recap", { method: "POST", body });
+  const reply = await response.json();
+  if (!response.ok) { recapStatus.textContent = reply.error; return; }
+  const editing = document.getElementById("recap-id").value;
+  stopRecapEditing();
+  recapStatus.textContent = (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.";
+  refreshRecaps();
+  refreshAnnouncements();
+});
+async function refreshRecaps() {
+  recaps = await (await fetch("/studio/recaps.json", { cache: "no-store" })).json();
+  await loadBuiltIn();
+  const list = document.getElementById("recap-list");
+  list.textContent = "";
+  for (const recap of recaps) {
+    const li = document.createElement("li");
+    const time = document.createElement("time");
+    time.textContent = recap.date + " · " + recap.photos.length + (recap.photos.length === 1 ? " photo" : " photos");
+    const title = document.createElement("b");
+    title.textContent = recap.title;
+    const view = document.createElement("a");
+    view.href = "/recap.html?r=" + recap.id;
+    view.target = "_blank";
+    view.rel = "noopener";
+    view.textContent = "Open the page";
+    const edit = button("Edit", "", () => {
+      document.getElementById("recap-id").value = recap.id;
+      document.getElementById("recap-title").value = recap.title;
+      document.getElementById("recap-text").value = recap.text || "";
+      document.getElementById("recap-date").value = recap.date;
+      recapPicked = recap.photos.map((p) => p.path);
+      document.getElementById("recap-submit").textContent = "Save recap";
+      document.getElementById("recap-cancel").hidden = false;
+      recapStatus.textContent = "";
+      showRecapPicker();
+      document.getElementById("recap-title").focus();
+    });
+    const remove = button("Remove", "danger", async () => {
+      if (!confirm('Remove the recap "' + recap.title + '" and its announcement?')) return;
+      await post("/studio/recap-delete", { id: recap.id });
+      refreshRecaps();
+      refreshAnnouncements();
+    });
+    const p = document.createElement("p");
+    p.append(view, " ", edit, " ", remove);
+    li.append(time, title, p);
+    list.append(li);
+  }
+  if (!recapPicker.children.length) stopRecapEditing();
+}
+
 const presetForm = document.getElementById("preset-form");
 const presetStatus = presetForm.querySelector("[role=status]");
 const presetList = document.getElementById("preset-list");
@@ -1277,7 +1590,8 @@ refreshPresets();
 showMe();
 refresh();
 refreshAnnouncements();
-refreshRequests();
+refreshRemovals().then(loadTemplates).then(refreshRequests);
+refreshRecaps();
 
 // Photos shared from the phone's gallery (sw.js keeps them for a moment) land here.
 async function takeShared() {
