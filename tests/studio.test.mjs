@@ -60,6 +60,15 @@ async function signIn() {
 }
 const photo = (extra = {}) => ({ title: "Big win", credit: "@cb.framed.it", sport: "football", full: new Blob([JPEG]), thumb: new Blob([JPEG]), ...extra });
 
+// Some limits count per clock minute. Tests of them hold the clock still, so a
+// minute can't tick over halfway through and restart the count.
+function holdClock(t) {
+  const real = Date.now;
+  const fixed = Math.floor(real() / 60_000) * 60_000 + 1_000;
+  Date.now = () => fixed;
+  t.after(() => { Date.now = real; });
+}
+
 test("without a password set in Netlify the studio is switched off", async () => {
   for (const value of [undefined, "", "short"]) {
     globalThis.Netlify = { env: { get: (name) => (name === "STUDIO_USERNAME" ? USERNAME : value) } };
@@ -127,7 +136,8 @@ test("the session cookie is locked down and cannot be forged or extended", async
   }
 });
 
-test("six wrong tries in a minute from one address are cut off", async () => {
+test("six wrong tries in a minute from one address are cut off", async (t) => {
+  holdClock(t);
   let reply;
   for (let i = 0; i < 6; i++) reply = await call("/studio/login", { method: "POST", form: { password: "nope" }, ip: "203.0.113.9" });
   assert.equal(reply.status, 429);
@@ -435,14 +445,16 @@ test("public lists cost one storage read per view and still change right away", 
   assert.equal((await call("/portfolio-photos.json")).body.photos.length, 2, "a removal shows on the next load");
 });
 
-test("one visitor loading the public lists too fast is told to slow down", async () => {
+test("one visitor loading the public lists too fast is told to slow down", async (t) => {
+  holdClock(t);
   let last;
   for (let i = 0; i < 301; i++) last = await call("/announcements.json", { ip: "203.0.113.50" });
   assert.equal(last.status, 429);
   assert.equal((await call("/announcements.json", { ip: "203.0.113.51" })).status, 200);
 });
 
-test("a visitor who keeps hammering after 'slow down' is kicked off for an hour, on every server", async () => {
+test("a visitor who keeps hammering after 'slow down' is kicked off for an hour, on every server", async (t) => {
+  holdClock(t);
   const ip = "203.0.113.60";
   let last;
   for (let i = 0; i < 1200; i++) last = await call("/announcements.json", { ip });
