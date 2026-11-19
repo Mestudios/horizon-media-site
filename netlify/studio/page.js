@@ -58,7 +58,7 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .blur-panel h2{margin:0 0 4px;font-size:28px}
 .blur-panel canvas{display:block;max-width:100%;max-height:62vh;margin:14px auto 0;touch-action:none;cursor:crosshair;border-radius:6px}
 .studio .blur-panel .btns{margin-top:14px}.studio .blur-panel .btn{margin:0}
-.studio .note.full{color:var(--danger);font-weight:600}
+.studio .note.full,.studio #requests-room.full{color:var(--danger);font-weight:600}
 .inbox-warn{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 0;padding:14px 18px;border:1px solid var(--flare);border-left-width:5px;border-radius:8px;background:color-mix(in srgb,var(--flare) 12%,var(--panel))}
 .inbox-warn p{margin:0;flex:1 1 260px;font-weight:600;font-size:15px;color:var(--chalk)}
 .studio .inbox-warn .btn{margin:0;padding:9px 16px;font-size:14px}
@@ -139,6 +139,21 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .requests .reply{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 .studio .requests .reply select{width:auto;min-width:0}
 .studio .requests li.removal{border-left:3px solid var(--danger);padding-left:12px}
+.studio .req-rows{display:block;list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.studio .req-rows li{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px 16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.studio .req-rows li:last-child{border-bottom:0}
+.studio .req-rows li.empty{display:block;color:var(--dim)}
+.studio .req-rows li img{width:64px;aspect-ratio:3/4;object-fit:cover;border-radius:8px}
+.studio .req-rows .who{margin:0;font-size:16px}
+.studio .req-rows .who b{font-weight:700}
+.studio .req-rows .meta{margin:3px 0 0;color:var(--dim);font-size:14px}
+.studio .req-rows .msg{margin:6px 0 0;font-size:14px;color:var(--soft);font-style:italic}
+.studio .req-rows .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.studio .req-rows .acts .reply{margin:0}
+.studio .tabs .pill.alert{background:var(--danger);color:#fff}
+.studio .tabs .short{display:none}
+@media (max-width:640px){.studio .tabs .long{display:none}.studio .tabs .short{display:inline}}
+@media (max-width:760px){.studio .req-rows li{grid-template-columns:56px minmax(0,1fr)}.studio .req-rows li img{width:56px}.studio .req-rows .acts{grid-column:1/-1;justify-content:flex-start}}
 .studio .requests .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .studio details.handled{margin:6px 0 18px;color:var(--dim);font-size:14px}
 .studio details.handled summary{cursor:pointer;padding:6px 0}
@@ -320,15 +335,24 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note">Removed photos wait here for 30 days, then they are deleted for good. Restore puts one back on the site.</p>
 <ul id="trash" class="trash"></ul></section>
 <section data-view="requests" hidden><div class="view-top"><h1>Requests</h1></div>
-<h2>Removal requests</h2>
-<p class="note">People asking for a photo to come off the site. Take down moves it to the Trash (or takes a built-in photo off its page). Either way, their name and contact details are then deleted and only a record is kept.</p>
-<ul id="removals" class="requests"></ul>
+<div class="tabs" role="tablist" aria-label="Request types" id="req-tabs">
+<button type="button" role="tab" id="tab-req" aria-controls="panel-req" aria-selected="true"><span class="long">Photo requests</span><span class="short">Photos</span> <span class="count" id="tab-req-count"></span></button>
+<button type="button" role="tab" id="tab-rem" aria-controls="panel-rem" aria-selected="false" tabindex="-1"><span class="long">Removal requests</span><span class="short">Removals</span> <span class="pill" id="tab-rem-count">0</span></button>
+<button type="button" role="tab" id="tab-tpl" aria-controls="panel-tpl" aria-selected="false" tabindex="-1"><span class="long">Reply templates</span><span class="short">Replies</span></button>
+</div>
+<div role="tabpanel" id="panel-req" aria-labelledby="tab-req">
+<p class="note">Visitors who asked for a photo. Copy a reply, send it to them, then press Done to delete the request. <span id="requests-room"></span></p>
+<ul id="requests" class="requests req-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-rem" aria-labelledby="tab-rem" hidden>
+<p class="note">People asking for a photo to come off the site. Take down moves it to the Trash (or takes a built-in photo off its page). Either way, their details are then deleted and only a record is kept.</p>
+<ul id="removals" class="requests req-rows"></ul>
 <details class="handled"><summary>Handled removal requests</summary><ul id="removals-done" class="ann-admin"></ul></details>
-<h2>Photo requests</h2>
-<p class="note">Visitors who asked for a photo. Reach out to them, then press Done to delete the request.</p>
-<p class="note" id="requests-room"></p>
-<ul id="requests" class="requests"></ul>
-<div class="card"><h2>Reply templates</h2><p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p><div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p></div></section>
+</div>
+<div role="tabpanel" id="panel-tpl" aria-labelledby="tab-tpl" hidden>
+<p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p>
+<div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p>
+</div></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
 <div class="tabs" role="tablist" aria-label="News sections">
 <button type="button" role="tab" id="tab-ann" aria-controls="panel-ann" aria-selected="true">Announcements <span class="count" id="tab-ann-count"></span></button>
@@ -1093,6 +1117,60 @@ function openEditor(item, photo) {
   form.querySelector("input").focus();
 }
 
+// ---- Requests view: tabs for photo requests, removal requests and reply templates.
+(() => {
+  const list = document.getElementById("req-tabs");
+  const all = [...list.querySelectorAll("[role=tab]")];
+  const show = (tab) => {
+    for (const t of all) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  };
+  for (const t of all) t.addEventListener("click", () => show(t));
+  list.addEventListener("keydown", (event) => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    const next = all[(all.findIndex((t) => t.getAttribute("aria-selected") === "true") + step + all.length) % all.length];
+    show(next);
+    next.focus();
+  });
+})();
+// One request row: who wants what, how to reach them and when, and their message.
+const requestThumb = (path) => "/" + path.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+function ago(when) {
+  const minutes = Math.round((Date.now() - when) / 60000);
+  if (minutes < 60) return minutes <= 1 ? "just now" : minutes + " min ago";
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours + (hours === 1 ? " hour ago" : " hours ago");
+  return new Date(when).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function requestWho(name, middle, title) {
+  const p = document.createElement("p");
+  p.className = "who";
+  const b = document.createElement("b");
+  b.textContent = name;
+  const t = document.createElement("b");
+  t.textContent = title;
+  p.append(b, middle, t);
+  return p;
+}
+function requestMeta(contact, when) {
+  const p = document.createElement("p");
+  p.className = "meta";
+  p.textContent = contact + " \u00b7 " + ago(when);
+  p.title = new Date(when).toLocaleString();
+  return p;
+}
+function requestMessage(text) {
+  const p = document.createElement("p");
+  p.className = "msg";
+  p.textContent = "\u201c" + text + "\u201d";
+  return p;
+}
+
 const requestList = document.getElementById("requests");
 const removalList = document.getElementById("removals");
 const RELATIONS = { pictured: "They're in the photo", parent: "Parent or guardian of someone in it", owner: "It shows their car", other: "Other" };
@@ -1112,13 +1190,11 @@ async function refreshRemovals() {
     const row = document.createElement("li");
     row.className = "removal";
     const image = document.createElement("img");
-    image.src = "/" + item.photo.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+    image.src = requestThumb(item.photo);
     image.alt = "";
     const info = document.createElement("div");
-    const line = (label, value) => { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = label + " "; p.append(b, value); return p; };
-    info.append(line("Photo:", item.title || item.photo), line("From:", item.name), line("Who:", RELATIONS[item.relation] || item.relation), line("Reach them at:", item.contact));
-    if (item.message) info.append(line("Message:", item.message));
-    info.append(line("Sent:", new Date(item.added).toLocaleString()));
+    info.append(requestWho(item.name, " wants this taken down: ", item.title || "a photo"), requestMeta((RELATIONS[item.relation] || item.relation) + " \u00b7 " + item.contact, item.added));
+    if (item.message) info.append(requestMessage(item.message));
     const act = (path, done) => async () => {
       for (const b of buttons.children) b.disabled = true;
       const response = await post(path, { id: item.id });
@@ -1128,13 +1204,12 @@ async function refreshRemovals() {
       refresh();
     };
     const buttons = document.createElement("div");
-    buttons.className = "btns";
+    buttons.className = "acts";
     buttons.append(
       button("Take down", "btn-hot", act("/studio/removal-takedown", '"' + (item.title || "The photo") + '" is off the site and in the Trash. Let ' + item.name + " know at " + item.contact + ".")),
       button("Keep it up", "", act("/studio/removal-keep", "Kept up. Let " + item.name + " know why at " + item.contact + "."))
     );
-    info.append(buttons);
-    row.append(image, info);
+    row.append(image, info, buttons);
     removalList.append(row);
   }
   const done = document.getElementById("removals-done");
@@ -1147,6 +1222,9 @@ async function refreshRemovals() {
     done.append(li);
   }
   if (!done.children.length) { const li = document.createElement("li"); li.textContent = "None yet."; done.append(li); }
+  const pill = document.getElementById("tab-rem-count");
+  pill.textContent = open.length;
+  pill.className = "pill" + (open.length ? " alert" : "");
   showRequestBadge();
 }
 const requestsNote = document.createElement("p");
@@ -1233,7 +1311,7 @@ async function refreshRequests() {
   const full = items.length >= ${MAX_REQUESTS};
   const room = document.getElementById("requests-room");
   room.textContent = items.length + " of ${MAX_REQUESTS} waiting." + (full ? " The inbox is full: visitors can\u2019t send new requests until you press Done on some." : "");
-  room.className = "note" + (full ? " full" : "");
+  room.className = full ? "full" : "";
   // The overview warns from ${WARN_REQUESTS} waiting requests, and louder when the inbox is full.
   const warn = document.getElementById("ov-warn");
   warn.hidden = items.length < ${WARN_REQUESTS};
@@ -1262,28 +1340,23 @@ async function refreshRequests() {
   for (const item of items) {
     const row = document.createElement("li");
     const image = document.createElement("img");
-    image.src = "/" + item.photo.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+    image.src = requestThumb(item.photo);
     image.alt = "";
     const info = document.createElement("div");
-    const line = (label, value) => { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = label + " "; p.append(b, value); return p; };
-    info.append(line("Photo:", item.title || item.photo), line("From:", item.name), line("Reach them at:", item.contact));
-    if (item.message) info.append(line("Message:", item.message));
-    info.append(line("Sent:", new Date(item.added).toLocaleString()));
-    const done = document.createElement("button");
-    done.className = "btn";
-    done.type = "button";
-    done.textContent = "Done";
-    done.addEventListener("click", async () => {
+    info.append(requestWho(item.name, " wants ", item.title || "a photo"), requestMeta(item.contact, item.added));
+    if (item.message) info.append(requestMessage(item.message));
+    const done = button("Done", "", async () => {
       done.disabled = true;
-      const body = new FormData();
-      body.set("id", item.id);
-      await fetch("/studio/request-done", { method: "POST", body });
+      await post("/studio/request-done", { id: item.id });
       refreshRequests();
     });
-    info.append(done, replyTools(item));
-    row.append(image, info);
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    acts.append(done, replyTools(item));
+    row.append(image, info, acts);
     requestList.append(row);
   }
+  document.getElementById("tab-req-count").textContent = items.length;
 }
 
 document.getElementById("add").addEventListener("submit", async (event) => {
@@ -1373,7 +1446,8 @@ const announceForm = document.getElementById("announce");
 const announceStatus = announceForm.querySelector("[role=status]");
 const announceList = document.getElementById("announcements");
 const dateBox = document.getElementById("ann-date");
-const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+// Days follow New York time, like the site (an announcement goes up on its New York date).
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
 dateBox.value = today();
 
 const removingAnn = new Set(); // announcements waiting out their 10 seconds
