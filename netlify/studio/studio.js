@@ -35,6 +35,36 @@ const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
 const MAX_PINS = 24;
+// Removed photos wait in the trash this long before they are deleted for good.
+const TRASH_DAYS = 30;
+// Removal requests: at most this many waiting, and handled ones kept as a record (without anyone's details).
+const MAX_REMOVALS = 200;
+const KEEP_HANDLED = 100;
+const RELATIONS = { pictured: "I am in the photo", parent: "I'm a parent or guardian of someone in it", owner: "I own the car in it", other: "Other" };
+// Reply templates for photo requests.
+const MAX_TEMPLATES = 12;
+const DEFAULT_TEMPLATES = [
+  { name: "Here's your photo", text: "Hi {name}! Thanks for asking about \"{photo}\". Here it is. If you post it, please tag @hor1zonmedia. Thanks for supporting us!" },
+  { name: "Coming soon", text: "Hi {name}! Thanks for your request for \"{photo}\" ({link}). We'll send it to you within a week." },
+  { name: "Can't share this one", text: "Hi {name}, thanks for asking about \"{photo}\". Sorry, we can't share that one, but you can see more of our work at https://www.instagram.com/hor1zonmedia/." },
+];
+// Recaps: a page of chosen photos, announced on the homepage.
+const MAX_RECAPS = 30;
+const MAX_RECAP_PHOTOS = 60;
+
+// How an announcement's photo is cropped for its card: the part of the photo
+// shown, as fractions of its width and height. Anything else is ignored.
+function readCrop(raw) {
+  let crop;
+  try { crop = JSON.parse(String(raw || "")); } catch { return null; }
+  if (!crop || typeof crop !== "object") return null;
+  const n = ["x", "y", "w", "h"].map((k) => Number(crop[k]));
+  if (!n.every(Number.isFinite)) return null;
+  const [x, y, w, h] = n;
+  if (x < 0 || y < 0 || w <= 0.02 || h <= 0.02 || w > 1 || h > 1 || x + w > 1.001 || y + h > 1.001) return null;
+  const r = (v) => Math.round(v * 10000) / 10000;
+  return { x: r(x), y: r(y), w: r(w), h: r(h) };
+}
 // Password guessing: this many wrong sign-ins from one address locks it out for
 // LOCK_MINUTES. Counted in Netlify Blobs, so it holds across all of Netlify's servers.
 const LOCK_AFTER = 10;
@@ -275,6 +305,49 @@ export function createStudio() {
     return items.sort((a, b) => b.added - a.added);
   }
 
+  // Every item stored under a prefix, newest first.
+  async function listAll(prefix, field = "added") {
+    const { blobs } = await store().list({ prefix });
+    const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+    return items.sort((a, b) => (b[field] || 0) - (a[field] || 0));
+  }
+
+  // ---- Trash: a removed photo keeps its files under trash-photo/ (so its
+  // public address stops working) and is deleted for good after TRASH_DAYS.
+  async function moveFile(from, to) {
+    const bytes = await store().get(from, { type: "arrayBuffer" });
+    if (bytes) await store().set(to, bytes);
+    await store().delete(from);
+  }
+  async function trashPhoto(id, by, why) {
+    const meta = await store().get(`meta/${id}`, { type: "json" });
+    if (!meta) return false;
+    await Promise.all(["full", "thumb"].map((kind) => moveFile(`photo/${id}/${kind}`, `trash-photo/${id}/${kind}`)));
+    await store().setJSON(`trash/${id}`, { ...meta, trashedAt: Date.now(), trashedBy: by, ...(why ? { why } : {}) });
+    await store().delete(`meta/${id}`);
+    return true;
+  }
+  async function deleteForGood(id) {
+    await Promise.all([store().delete(`trash/${id}`), store().delete(`trash-photo/${id}/full`), store().delete(`trash-photo/${id}/thumb`)]);
+  }
+  async function listTrash(now) {
+    const items = await listAll("trash/", "trashedAt");
+    const keep = [];
+    for (const item of items) {
+      if (now - item.trashedAt >= TRASH_DAYS * 86_400_000) await deleteForGood(item.id);
+      else keep.push({ ...item, deletesOn: item.trashedAt + TRASH_DAYS * 86_400_000 });
+    }
+    return keep;
+  }
+
+  // ---- Recaps
+  // A recap's photos, leaving out any that are no longer on the site.
+  async function recapForVisitors(recap) {
+    const { photos, hidden } = await photoIndex();
+    const live = new Set(photos.map((p) => `uploads/${p.id}/full.jpg`));
+    return { ...recap, photos: recap.photos.filter((p) => (p.path.startsWith("uploads/") ? live.has(p.path) : !hidden.includes(p.path))) };
+  }
+
   return async function studio(request, context) {
     const url = new URL(request.url);
     const now = Date.now();
@@ -293,7 +366,14 @@ export function createStudio() {
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
       const today = todayIn(now);
-      const up = (await announcementIndex()).filter((item) => isUp(item, today));
+      let up = (await announcementIndex()).filter((item) => isUp(item, today));
+      // A photo picked from the site that has since come off it is left out.
+      if (up.some((item) => item.photoPath)) {
+        const { photos, hidden } = await photoIndex();
+        const live = new Set(photos.map((p) => `uploads/${p.id}/full.jpg`));
+        const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !hidden.includes(path));
+        up = up.map(({ photoPath, ...item }) => (photoPath && onSite(photoPath) ? { ...item, photoPath } : item));
+      }
       return json(up, 200, { "cache-control": "no-cache" });
     }
     if (url.pathname === "/photo-request") {
@@ -320,6 +400,36 @@ export function createStudio() {
       await store().setJSON("request-counts", counts);
       console.log(`studio: photo request ${id}`);
       return json({ ok: true });
+    }
+    if (url.pathname === "/removal-request") {
+      if (request.method !== "POST") return reply("Not allowed", 405);
+      if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
+      const form = await request.formData();
+      if (String(form.get("website") || "") !== "") return json({ ok: true });
+      const name = clean(form.get("name"), 60);
+      const contact = clean(form.get("contact"), 100);
+      const message = clean(form.get("message"), 500);
+      const relation = Object.hasOwn(RELATIONS, String(form.get("relation"))) ? String(form.get("relation")) : "";
+      const photoPath = String(form.get("photo") || "");
+      if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
+      if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can let you know when it's down." }, 400);
+      if (!relation) return json({ error: "Choose how you're connected to the photo." }, 400);
+      if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
+      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      if ((await store().list({ prefix: "rem/" })).blobs.length >= MAX_REMOVALS) return json({ error: "We couldn't save your request right now, so please email or message us on Instagram instead." }, 503);
+      const id = hex(crypto.getRandomValues(new Uint8Array(8)));
+      await store().setJSON(`rem/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, relation, message, added: now, status: "open" });
+      console.log(`studio: removal request ${id}`);
+      return json({ ok: true });
+    }
+    const recapFile = /^\/recaps\/([0-9a-f]{16})\.json$/.exec(url.pathname);
+    if (recapFile) {
+      if (request.method !== "GET") return reply("Not allowed", 405);
+      if ((limited = await tooManyLoads("list", ip, now))) return limited;
+      const recap = await store().get(`recap/${recapFile[1]}`, { type: "json" });
+      if (!recap || recap.date > todayIn(now)) return json({ error: "Not found" }, 404);
+      const { by, ...shown } = await recapForVisitors(recap);
+      return json(shown, 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/presets.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
@@ -364,12 +474,24 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json" || url.pathname === "/studio/stats.json" || url.pathname === "/studio/photos.json") {
+      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json"].includes(url.pathname)) {
         if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+        if (url.pathname === "/studio/trash.json") return json(await listTrash(now));
+        if (url.pathname === "/studio/removals.json") return json(await listAll("rem/"));
+        if (url.pathname === "/studio/templates.json") return json((await store().get("templates", { type: "json" })) || DEFAULT_TEMPLATES);
+        if (url.pathname === "/studio/recaps.json") return json(await listAll("recap/"));
         if (url.pathname === "/studio/stats.json") return json({ requestCounts: (await store().get("request-counts", { type: "json" })) || {} });
         if (url.pathname === "/studio/photos.json") return json(await allPhotoData());
         if (url.pathname === "/studio/requests.json") return json(await listRequests());
         return json({ today: todayIn(now), items: await listAnnouncements(), notice: (await store().get("notice", { type: "json" })) || null });
+      }
+      // Thumbnails of photos in the trash, for the team only.
+      const trashThumb = /^\/studio\/trash-photo\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
+      if (trashThumb) {
+        if (!(await signedIn(request, list, now))) return reply("Sign in first.", 401);
+        const bytes = await store().get(`trash-photo/${trashThumb[1]}/thumb`, { type: "arrayBuffer" });
+        if (!bytes) return reply("Not found", 404);
+        return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, no-store" } });
       }
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       const me = await signedIn(request, list, now);
@@ -573,7 +695,7 @@ export function createStudio() {
       if (!form.get("id") && (await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
       // An optional link: a page of this site (cars.html, portfolio.html#x) or an https address.
       const rawLink = String(form.get("link") || "").trim();
-      const link = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?)$/i.test(rawLink) ? rawLink : "";
+      const link = NOTICE_LINK.test(rawLink) ? rawLink : "";
       if (rawLink && !link) return json({ error: "The link must be a page of this site, like cars.html, or start with https://." }, 400);
       const linkText = link ? clean(form.get("linkText"), 40) || "Read more" : "";
       // An optional photo, shrunk on the device like portfolio photos.
@@ -585,6 +707,10 @@ export function createStudio() {
         if (!isJpeg(photoBytes)) return json({ error: "Only JPEG photos are accepted." }, 415);
       }
       const dropPhoto = form.get("removePhoto") === "1";
+      // Or a photo already on the site, picked from the portfolio or car page.
+      const photoPath = dropPhoto || photoBytes ? "" : String(form.get("photoPath") || "");
+      if (photoPath && !REQUESTABLE.test(photoPath)) return json({ error: "That photo isn't on the site." }, 400);
+      const crop = dropPhoto ? null : readCrop(form.get("photoCrop"));
 
       // Editing: an existing id keeps its place; otherwise a new announcement.
       const editing = String(form.get("id") || "");
@@ -596,10 +722,18 @@ export function createStudio() {
         if (photoBytes) {
           await store().set(`ann-photo/${editing}`, photoBytes.buffer);
           announcement.photo = now;
-        } else if (dropPhoto && old.photo) {
-          await store().delete(`ann-photo/${editing}`);
+          delete announcement.photoPath;
+        } else if (photoPath) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
           delete announcement.photo;
+          announcement.photoPath = photoPath;
+        } else if (dropPhoto) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
+          delete announcement.photo;
+          delete announcement.photoPath;
         }
+        if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
+        else delete announcement.photoCrop;
         await store().setJSON(`ann/${editing}`, announcement);
         await rebuildAnnouncementIndex();
         console.log(`studio: edited announcement ${editing}`);
@@ -610,7 +744,8 @@ export function createStudio() {
       if (photoBytes) {
         await store().set(`ann-photo/${id}`, photoBytes.buffer);
         announcement.photo = now;
-      }
+      } else if (photoPath) announcement.photoPath = photoPath;
+      if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
       await store().setJSON(`ann/${id}`, announcement);
       await rebuildAnnouncementIndex();
       console.log(`studio: added announcement ${id}`);
@@ -646,12 +781,114 @@ export function createStudio() {
       return json({ ok: true });
     }
 
+    // Removing a photo puts it in the trash for TRASH_DAYS.
     if (url.pathname === "/studio/delete") {
       const id = String(form.get("id") || "");
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
-      await Promise.all([store().delete(`meta/${id}`), store().delete(`photo/${id}/full`), store().delete(`photo/${id}/thumb`)]);
+      await trashPhoto(id, me.username);
       await rebuildPhotoIndex();
-      console.log(`studio: removed photo ${id}`);
+      await listTrash(now);
+      console.log(`studio: moved photo ${id} to the trash`);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/studio/restore") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      const item = await store().get(`trash/${id}`, { type: "json" });
+      if (!item) return json({ error: "That photo is no longer in the trash." }, 404);
+      const { trashedAt, trashedBy, why, deletesOn, ...meta } = item;
+      await Promise.all(["full", "thumb"].map((kind) => moveFile(`trash-photo/${id}/${kind}`, `photo/${id}/${kind}`)));
+      await store().setJSON(`meta/${id}`, meta);
+      await store().delete(`trash/${id}`);
+      await rebuildPhotoIndex();
+      console.log(`studio: restored photo ${id}`);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/studio/trash-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      await deleteForGood(id);
+      console.log(`studio: deleted photo ${id} for good`);
+      return json({ ok: true });
+    }
+
+    // Removal requests: take the photo down (it goes to the trash, or a built-in
+    // photo comes off its page), or keep it up. Either way only a record of what
+    // was done is kept; the visitor's name, contact and message are deleted.
+    if (url.pathname === "/studio/removal-takedown" || url.pathname === "/studio/removal-keep") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown request." }, 400);
+      const item = await store().get(`rem/${id}`, { type: "json" });
+      if (!item || item.status !== "open") return json({ error: "That request was already handled." }, 409);
+      const down = url.pathname === "/studio/removal-takedown";
+      if (down) {
+        const upload = /^uploads\/([0-9a-f]{16})\/full\.jpg$/.exec(item.photo);
+        if (upload) await trashPhoto(upload[1], me.username, "removal request");
+        else {
+          const hidden = (await listHidden()).filter((p) => p !== item.photo);
+          hidden.push(item.photo);
+          await store().setJSON("hidden", hidden.slice(-500));
+        }
+        await rebuildPhotoIndex();
+      }
+      await store().setJSON(`rem/${id}`, { id, photo: item.photo, title: item.title, added: item.added, status: down ? "taken-down" : "kept", handledAt: now, handledBy: me.username });
+      // Only the newest KEEP_HANDLED records are kept.
+      const handled = (await listAll("rem/", "handledAt")).filter((r) => r.status !== "open");
+      await Promise.all(handled.slice(KEEP_HANDLED).map((r) => store().delete(`rem/${r.id}`)));
+      console.log(`studio: removal request ${id} ${down ? "taken down" : "kept up"}`);
+      return json({ ok: true });
+    }
+
+    // Reply templates for photo requests.
+    if (url.pathname === "/studio/templates") {
+      let items;
+      try { items = JSON.parse(String(form.get("templates") || "[]")); } catch { items = null; }
+      if (!Array.isArray(items) || items.length > MAX_TEMPLATES) return json({ error: `Keep up to ${MAX_TEMPLATES} templates.` }, 400);
+      const tidy = items.map((t) => ({ name: clean(t && t.name, 40), text: String((t && t.text) || "").replace(/[\u0000-\u0009\u000b-\u001f<>]/g, "").trim().slice(0, 600) })).filter((t) => t.name && t.text);
+      await store().setJSON("templates", tidy);
+      return json({ ok: true, templates: tidy });
+    }
+
+    // Recaps: a page of chosen photos, with an announcement linking to it.
+    if (url.pathname === "/studio/recap") {
+      const editing = String(form.get("id") || "");
+      if (editing && !/^[0-9a-f]{16}$/.test(editing)) return json({ error: "Unknown recap." }, 400);
+      const title = clean(form.get("title"), 80);
+      const text = clean(form.get("text"), 400);
+      const date = DAY.test(String(form.get("date") || "")) ? String(form.get("date")) : todayIn(now);
+      if (!title) return json({ error: "Give the recap a headline." }, 400);
+      let picked;
+      try { picked = JSON.parse(String(form.get("photos") || "[]")); } catch { picked = null; }
+      if (!Array.isArray(picked) || !picked.length) return json({ error: "Pick at least one photo." }, 400);
+      if (picked.length > MAX_RECAP_PHOTOS) return json({ error: `Pick up to ${MAX_RECAP_PHOTOS} photos.` }, 400);
+      const photos = [];
+      for (const p of picked) {
+        const path = String((p && p.path) || "");
+        if (!REQUESTABLE.test(path)) return json({ error: "One of those photos isn't on the site." }, 400);
+        if (photos.some((q) => q.path === path)) continue;
+        photos.push({ path, title: clean(p.title, 60) || "Untitled", credit: clean(p.credit, 40).replace(/^@+/, ""), ...(clean(p.owner, 40) ? { owner: clean(p.owner, 40).replace(/^@+/, "") } : {}) });
+      }
+      const old = editing ? await store().get(`recap/${editing}`, { type: "json" }) : null;
+      if (editing && !old) return json({ error: "That recap was removed." }, 404);
+      if (!editing && (await store().list({ prefix: "recap/" })).blobs.length >= MAX_RECAPS) return json({ error: `The studio holds ${MAX_RECAPS} recaps at most. Remove some first.` }, 409);
+      const id = editing || hex(crypto.getRandomValues(new Uint8Array(8)));
+      const recap = { id, title, text, date, photos, added: old ? old.added : now, by: old ? old.by : me.username, ...(old ? { editedBy: me.username } : {}) };
+      await store().setJSON(`recap/${id}`, recap);
+      // Its announcement shares its id and links to the recap page.
+      await seedAnnouncements();
+      const oldAnn = await store().get(`ann/${id}`, { type: "json" });
+      const cover = oldAnn && (oldAnn.photo || (oldAnn.photoPath && photos.some((p) => p.path === oldAnn.photoPath))) ? {} : { photoPath: photos[0].path };
+      await store().setJSON(`ann/${id}`, { ...(oldAnn || {}), id, title, text: text || `${photos.length} photos from Horizon Media.`, date, until: (oldAnn && oldAnn.until) || "", link: `recap.html?r=${id}`, linkText: "See the photos", added: oldAnn ? oldAnn.added : now, by: oldAnn ? oldAnn.by : me.username, recap: true, ...cover });
+      await rebuildAnnouncementIndex();
+      console.log(`studio: ${old ? "edited" : "posted"} recap ${id}`);
+      return json({ ok: true, recap });
+    }
+    if (url.pathname === "/studio/recap-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown recap." }, 400);
+      await Promise.all([store().delete(`recap/${id}`), store().delete(`ann/${id}`), store().delete(`ann-photo/${id}`)]);
+      await rebuildAnnouncementIndex();
+      console.log(`studio: removed recap ${id}`);
       return json({ ok: true });
     }
     return json({ error: "Not found" }, 404);

@@ -659,7 +659,7 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },

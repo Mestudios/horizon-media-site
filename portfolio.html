@@ -120,7 +120,7 @@
       <label for="request-contact">Instagram name or email</label><input id="request-contact" name="contact" maxlength="100" autocapitalize="none" placeholder="@yourname or you@email.com" required>
       <label for="request-message">Anything else? (optional)</label><textarea id="request-message" name="message" maxlength="500" rows="3" placeholder="Which game, who is in it, what you need it for"></textarea>
       <div class="request-trap" aria-hidden="true"><label for="request-website">Leave this empty</label><input id="request-website" name="website" tabindex="-1" autocomplete="off"></div>
-      <label class="consent"><input type="checkbox" name="consent" required> I agree that Horizon Media may use these details only to reply to me about this photo. They are deleted once my request is handled (<a href="privacy.html">privacy</a>).</label>
+      <label class="consent"><input type="checkbox" name="consent" required> <span>I agree that Horizon Media may use these details only to reply to me about this photo. They are deleted once my request is handled (<a href="privacy.html">privacy</a>).</span></label>
       <div class="btns"><button type="submit" class="btn btn-hot">Send request</button><button type="button" class="btn request-cancel">Cancel</button></div>
     </div>
     <div class="request-done" tabindex="-1" hidden>
@@ -141,8 +141,19 @@
     <h2 id="removal-title">Request removal</h2>
     <p class="request-for">Photo: <b class="removal-photo"></b></p>
     <p class="removal-text">If you are in this photo, you are the parent or guardian of someone who is, or it shows your car, we will take it off this site. You don't need to give a reason.</p>
-    <div class="btns"><a class="btn btn-hot removal-email" href="mailto:horzion.media418@gmail.com">Email us</a><a class="btn removal-dm" href="https://ig.me/m/hor1zonmedia">Message us on Instagram</a></div>
-    <p class="request-note">Both name this photo for you: the email comes filled in, and the photo's link is copied so you can paste it into your Instagram message. <a href="privacy.html#removal">How removal works</a>.</p>
+    <form class="removal-form">
+      <input type="hidden" name="photo"><input type="hidden" name="title">
+      <label for="removal-name">Your name</label><input id="removal-name" name="name" maxlength="60" autocomplete="name" required>
+      <label for="removal-contact">Instagram name or email</label><input id="removal-contact" name="contact" maxlength="100" autocapitalize="none" placeholder="@yourname or you@email.com" required>
+      <label for="removal-relation">How you're connected to it</label><select id="removal-relation" name="relation" required><option value="">Choose one</option><option value="pictured">I'm in the photo</option><option value="parent">I'm a parent or guardian of someone in it</option><option value="owner">It shows my car</option><option value="other">Other</option></select>
+      <label for="removal-message">Anything else? (optional)</label><textarea id="removal-message" name="message" maxlength="500" rows="2"></textarea>
+      <div class="request-trap" aria-hidden="true"><label for="removal-website">Leave this empty</label><input id="removal-website" name="website" tabindex="-1" autocomplete="off"></div>
+      <label class="consent"><input type="checkbox" name="consent" required> <span>I agree that Horizon Media may use these details only to handle this request. They are deleted once it's handled (<a href="privacy.html#removal">privacy</a>).</span></label>
+      <div class="btns"><button type="submit" class="btn btn-hot">Send removal request</button></div>
+      <p role="status"></p>
+    </form>
+    <div class="removal-done" tabindex="-1" hidden><p>Thanks. We got your request and will take the photo down, then let you know.</p></div>
+    <p class="request-note">Prefer email or Instagram? <a class="removal-email" href="mailto:horzion.media418@gmail.com">Email us</a> or <a class="removal-dm" href="https://ig.me/m/hor1zonmedia">message us on Instagram</a>. The email comes filled in, and the photo's link is copied so you can paste it into your message.</p>
   </div>
 </div>
 
