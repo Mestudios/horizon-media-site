@@ -508,11 +508,13 @@ export function createStudio() {
       const form = await request.formData();
       // Check every account, both fields each time, so the reply does not reveal
       // which account exists or which field was wrong.
-      const username = String(form.get("username") || "");
+      // Usernames ignore spaces around them and capital letters (phones add
+      // both); passwords must match exactly.
+      const username = String(form.get("username") || "").trim().toLowerCase();
       const password = String(form.get("password") || "");
       let account;
       for (const candidate of list) {
-        const nameOk = await same(username, candidate.username);
+        const nameOk = await same(username, candidate.username.trim().toLowerCase());
         const passwordOk = await same(password, candidate.password);
         if (nameOk && passwordOk && account === undefined) account = candidate;
       }

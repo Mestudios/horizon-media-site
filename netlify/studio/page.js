@@ -280,7 +280,7 @@ const signinEnd = `<a class="signin-back" href="/">&larr; Back to the site</a></
 
 const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note off-note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy. More people can sign in with STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5.</p>`;
 
-const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
+const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
 <script>
 document.getElementById("login").addEventListener("submit", async (event) => {
   event.preventDefault();

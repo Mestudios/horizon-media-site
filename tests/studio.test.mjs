@@ -82,6 +82,19 @@ test("a password without a username also leaves it switched off", async () => {
   assert.equal((await call("/studio")).status, 503);
 });
 
+test("a third sign-in works even when a phone capitalizes the username or adds spaces; the password stays exact", async () => {
+  const env = { STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "second-person", STUDIO_PASSWORD_2: "second long password", STUDIO_USERNAME_3: "createddbyabby", STUDIO_PASSWORD_3: "third long password" };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  for (const username of ["createddbyabby", "Createddbyabby", " createddbyabby ", "CREATEDDBYABBY\n"]) {
+    const reply = await call("/studio/login", { method: "POST", form: { username, password: "third long password" }, ip: "198.51.100.33" });
+    assert.equal(reply.status, 200, JSON.stringify(username));
+    assert.match(reply.headers.get("set-cookie"), /^hm_studio=\d{13}\.3\./, "signed in as the third account");
+  }
+  for (const form of [{ username: "createddbyabby", password: "Third long password" }, { username: "createddbyabby", password: "third long password " }, { username: "created by abby", password: "third long password" }, { username: "createddbyabby", password: "second long password" }]) {
+    assert.equal((await call("/studio/login", { method: "POST", form, ip: "198.51.100.34" })).status, 401, JSON.stringify(form));
+  }
+});
+
 test("a second sign-in (STUDIO_USERNAME_2 / STUDIO_PASSWORD_2) works on its own, and short or half-set pairs are ignored", async () => {
   const env = { STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "second-person", STUDIO_PASSWORD_2: "another long password", STUDIO_USERNAME_3: "too-short", STUDIO_PASSWORD_3: "short", STUDIO_PASSWORD_4: "no username for this one" };
   globalThis.Netlify = { env: { get: (name) => env[name] } };
