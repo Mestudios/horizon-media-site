@@ -9,6 +9,8 @@
 //   4. Kicked off: an address that keeps flooding after it is refused is banned
 //      from the whole site for an hour (bans.js), and every page shows it a
 //      short "Blocked" page instead.
+//   5. Honeypot: an address that asks for a break-in page this site has never
+//      had (TRAPS in settings.js, like /wp-login.php) is banned the same way.
 //
 // To see a mode yourself, add ?busy=lite or ?busy=saver to the address.
 // The numbers are in settings.js. If anything in here fails, the normal page
@@ -16,9 +18,9 @@
 import { createBanList } from "./bans.js";
 import { createHomepagePhoto } from "./homepage.js";
 import { createNoticeReader } from "./notice.js";
-import { bannedPage, reply, timeoutPage } from "./replies.js";
+import { bannedPage, notFoundPage, reply, timeoutPage } from "./replies.js";
 import { cookiesAllowed, createRateLimiter, hasVisitorCookie, isBot, isPrefetch, newVisitorId, previewMode, readVisitorCookie } from "./requests.js";
-import { BAN_AFTER, MODES, RATE_LIMIT } from "./settings.js";
+import { BAN_AFTER, MODES, RATE_LIMIT, TRAP_FOLDERS, TRAPS } from "./settings.js";
 
 // The pages busy mode works on. The guard also stands in front of the other
 // pages (see the function's config), but only to keep banned addresses out.
@@ -67,6 +69,14 @@ export function createGuard() {
     const now = Date.now();
 
     if (await bans.isBanned(context.ip, now)) return bannedPage();
+
+    // Honeypot: only a break-in bot asks for these. Ban it, and let it think
+    // there is nothing here.
+    const asked = new URL(request.url).pathname;
+    if (TRAPS.includes(asked) || TRAP_FOLDERS.some((folder) => asked.startsWith(folder))) {
+      await bans.ban(context.ip, now, `honeypot: asked for ${asked.slice(0, 80)}`);
+      return notFoundPage();
+    }
     const loads = limiter.count(context.ip, now);
     if (loads > BAN_AFTER) {
       if (loads === BAN_AFTER + 1) await bans.ban(context.ip, now, `${loads} page loads in a minute`);

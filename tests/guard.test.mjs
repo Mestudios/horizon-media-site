@@ -699,7 +699,8 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html",
+      "/wp-login.php", "/wp-admin", "/wp-admin/*", "/xmlrpc.php", "/.env", "/.git/config", "/phpmyadmin", "/phpmyadmin/*", "/administrator"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },
@@ -707,6 +708,38 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const reply = await visit(entry.default, newVisitor());
   assert.equal(reply.status, 200);
   assert.equal(reply.mode, "off");
+});
+
+test("honeypot: a bot that asks for a break-in page sees Not found, then is blocked from the whole site", async () => {
+  const { TRAPS, TRAP_FOLDERS } = await import("../netlify/guard/settings.js");
+  const entry = await import("../netlify/edge-functions/guard.js");
+  for (const trap of TRAPS) assert.ok(entry.config.path.includes(trap), `${trap} runs through the guard`);
+  for (const folder of TRAP_FOLDERS) assert.ok(entry.config.path.includes(`${folder}*`), `${folder}* runs through the guard`);
+
+  for (const [n, path] of [...TRAPS, "/wp-admin/install.php", "/phpmyadmin/index.php"].entries()) {
+    const handler = newInstance();
+    const bot = { ip: `203.0.113.${n + 1}`, cookie: null, agent: BROWSER };
+    const trapped = await visit(handler, bot, { path });
+    assert.equal(trapped.status, 404, `${path} looks like nothing is there`);
+    assert.equal(trapped.body, "Not found");
+    assert.equal(trapped.headers.get("x-frame-options"), "DENY");
+    clock.now += SECOND;
+    assert.equal((await visit(newInstance(), bot)).status, 403, `${path}: then blocked on the homepage, on every server`);
+    assert.equal((await visit(newInstance(), bot, { path: "/privacy.html" })).status, 403);
+  }
+  clock.now += 61 * 60 * SECOND;
+  assert.equal((await visit(newInstance(), { ip: "203.0.113.1", cookie: null, agent: BROWSER })).status, 200, "the ban ends after an hour");
+});
+
+test("honeypot: real pages, and people browsing them, are never trapped", async () => {
+  const handler = newInstance();
+  const person = newVisitor("198.51.100.250");
+  for (const path of ["/", "/portfolio.html", "/cars", "/book.html", "/presets", "/recap.html?id=1", "/privacy.html", "/terms", "/wp-adminx", "/admin", "/login"]) {
+    const reply = await visit(handler, person, { path });
+    assert.notEqual(reply.status, 403, path);
+    assert.notEqual(reply.status, 404, path);
+  }
+  assert.equal((await visit(newInstance(), person)).status, 200);
 });
 
 test("every reply from the guard carries the security headers", async () => {

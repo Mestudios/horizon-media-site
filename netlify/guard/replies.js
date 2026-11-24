@@ -81,6 +81,14 @@ export function bannedPage() {
   });
 }
 
+// What a honeypot address answers: an ordinary "Not found", so the bot learns nothing.
+export function notFoundPage() {
+  return new Response("Not found", {
+    status: 404,
+    headers: { ...SECURITY_HEADERS, "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 export function timeoutPage() {
   return new Response(TIMEOUT_PAGE, {
     status: 429,

@@ -6,7 +6,9 @@ import { createGuard } from "../guard/guard.js";
 export default createGuard();
 
 export const config = {
-  path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
+  path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html",
+    // Honeypot addresses (TRAPS and TRAP_FOLDERS in ../guard/settings.js).
+    "/wp-login.php", "/wp-admin", "/wp-admin/*", "/xmlrpc.php", "/.env", "/.git/config", "/phpmyadmin", "/phpmyadmin/*", "/administrator"],
   method: "GET",
   // If the guard fails, Netlify serves the page without it.
   onError: "bypass",
