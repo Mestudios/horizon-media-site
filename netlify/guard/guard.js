@@ -17,7 +17,7 @@ import { createBanList } from "./bans.js";
 import { createHomepagePhoto } from "./homepage.js";
 import { createNoticeReader } from "./notice.js";
 import { bannedPage, reply, timeoutPage } from "./replies.js";
-import { createRateLimiter, isBot, isPrefetch, newVisitorId, previewMode, readVisitorCookie } from "./requests.js";
+import { cookiesAllowed, createRateLimiter, hasVisitorCookie, isBot, isPrefetch, newVisitorId, previewMode, readVisitorCookie } from "./requests.js";
 import { BAN_AFTER, MODES, RATE_LIMIT } from "./settings.js";
 
 // The pages busy mode works on. The guard also stands in front of the other
@@ -38,12 +38,15 @@ export function createGuard() {
   async function welcome(request, context, now) {
     try {
       const counted = !isPrefetch(request);
-      let id = counted ? readVisitorCookie(request) : null;
+      // Only visitors who said yes to cookies are told apart by one.
+      const allowed = cookiesAllowed(request);
+      let id = counted && allowed ? readVisitorCookie(request) : null;
       let cookie;
       if (counted && id === null) {
-        // A first visit, or a client that does not keep cookies: a new visitor.
+        // A first visit, someone who said no to cookies, or a client that does
+        // not keep them: a new visitor. Only those who said yes get the cookie.
         id = newVisitorId();
-        cookie = id;
+        if (allowed) cookie = id;
       }
 
       const count = await visitors.count(id, context, now);
@@ -71,21 +74,25 @@ export function createGuard() {
     }
     if (loads > RATE_LIMIT) return timeoutPage();
 
+    // Said no to cookies (or never answered) but still holding a visitor
+    // cookie from before: every reply tells the browser to delete it.
+    const forget = !cookiesAllowed(request) && hasVisitorCookie(request);
+
     // Pages without photos only need the checks above, and the notice bar if one is on.
     const notice = await notices.current(now);
-    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return notice ? reply(await context.next(), { notice }) : undefined;
+    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return notice || forget ? reply(await context.next(), { notice, forget }) : undefined;
 
     const path = new URL(request.url).pathname;
     const hero = path === "/" || path === "/index.html" ? await homepage.current(now) : null;
 
     const preview = previewMode(request);
-    if (preview !== null) return reply(await context.next(), { mode: preview, preview: true, hero, notice });
+    if (preview !== null) return reply(await context.next(), { mode: preview, preview: true, hero, notice, forget });
 
     // Search engines and link-preview bots always get the normal page (with the
     // chosen homepage photo) and are not counted.
-    if (isBot(request)) return hero || notice ? reply(await context.next(), { hero, notice }) : undefined;
+    if (isBot(request)) return hero || notice || forget ? reply(await context.next(), { hero, notice, forget }) : undefined;
 
     const [response, state] = await Promise.all([context.next(), welcome(request, context, now)]);
-    return reply(response, { ...state, hero, notice });
+    return reply(response, { ...state, hero, notice, forget });
   };
 }

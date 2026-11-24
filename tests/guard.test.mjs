@@ -84,8 +84,9 @@ function useStore(port, { strong = true } = {}) {
 // A guard with its own memory, like a separate Netlify instance.
 const newInstance = () => createGuard();
 
-function newVisitor(ip = `198.51.100.${1 + (visitorCounter++ % 200)}`) {
-  return { ip, cookie: null, agent: BROWSER };
+// Visitors have said yes to cookies unless a test says otherwise (allowed: false).
+function newVisitor(ip = `198.51.100.${1 + (visitorCounter++ % 200)}`, { allowed = true } = {}) {
+  return { ip, cookie: null, agent: BROWSER, allowed };
 }
 
 // One page load. Returns what the visitor's browser would get.
@@ -93,7 +94,10 @@ async function visit(handler, visitor, { path = "/", headers = {}, origin } = {}
   const background = [];
   const requestHeaders = new Headers({ "user-agent": visitor.agent, ...headers });
   if (visitor.agent === "") requestHeaders.delete("user-agent");
-  if (visitor.cookie) requestHeaders.set("cookie", `theme=dark; hm_visitor=${visitor.cookie}`);
+  const cookies = ["theme=dark"];
+  if (visitor.allowed !== false) cookies.push("hm_cookies=yes");
+  if (visitor.cookie) cookies.push(`hm_visitor=${visitor.cookie}`);
+  requestHeaders.set("cookie", cookies.join("; "));
   const context = {
     ip: visitor.ip,
     waitUntil: (promise) => background.push(promise),
@@ -188,6 +192,42 @@ test("someone reloading the page counts once", async () => {
     assert.equal(reply.mode, "off");
     assert.equal(reply.visitors, "1");
     assert.equal(reply.setCookie, null, "the cookie is only set once");
+  }
+});
+
+test("a visitor who said no to cookies (or hasn't answered) gets no cookie on any page", async () => {
+  const handler = newInstance();
+  for (const path of ["/", "/portfolio", "/cars", "/book", "/privacy"]) {
+    const visitor = newVisitor(undefined, { allowed: false });
+    for (let i = 0; i < 3; i++) {
+      const reply = await visit(handler, visitor, { path });
+      assert.equal(reply.setCookie ?? null, null, `${path}: no cookie`);
+    }
+  }
+});
+
+test("saying no removes a visitor cookie the browser still has, and the server ignores it", async () => {
+  const handler = newInstance();
+  const visitor = newVisitor();
+  await visit(handler, visitor);
+  assert.match(visitor.cookie, /^[0-9a-f]{16}$/, "they said yes first, so they got the cookie");
+
+  visitor.allowed = false;
+  for (const path of ["/", "/privacy"]) {
+    const reply = await visit(handler, visitor, { path });
+    assert.equal(reply.setCookie, "hm_visitor=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax", `${path}: told to delete it`);
+  }
+  clock.now += 2 * SECOND;
+  const again = await visit(handler, visitor);
+  assert.equal(again.visitors, "3", "the old id is not used to tell them apart any more");
+});
+
+test("only the exact answer \"yes\" counts as saying yes", async () => {
+  const handler = newInstance();
+  for (const value of ["no", "yes2", "YES", ""]) {
+    const visitor = newVisitor(undefined, { allowed: false });
+    const reply = await visit(handler, visitor, { headers: { cookie: `hm_cookies=${value}` } });
+    assert.equal(reply.setCookie ?? null, null, `hm_cookies=${value}`);
   }
 });
 

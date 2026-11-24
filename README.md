@@ -19,7 +19,7 @@ The guard runs on Netlify in front of every page (busy mode only on the pages wi
 - It steps back as traffic falls: lite switches off at 8 visitors or fewer, saver at 24 or fewer.
 - Search engines and link-preview bots always get the normal page and are not counted.
 
-Visitors are told apart by an anonymous cookie, `hm_visitor`: a random id that lasts 30 minutes. Counting stores no IP addresses.
+Visitors who press **Allow** on the cookie question are told apart by an anonymous cookie, `hm_visitor`: a random id that lasts 30 minutes. Everyone else gets no cookie, and each of their page loads counts as a visitor (so busy mode can switch on a little sooner). Counting stores no IP addresses.
 
 **Rate limit.** An address that loads a page more than 300 times in a minute gets a small "Timeout" page instead, which reloads itself after a minute. That address is written to the function's log.
 
@@ -81,7 +81,8 @@ The **studio** at `/studio` lets Horizon Media add and remove portfolio photos f
 
 ## Cookies, consent and third parties
 
-- The privacy page's **Cookies** section (`privacy.html#cookies`) lists everything the site stores. There are no advertising, analytics or tracking cookies, so no cookie banner is needed: `hm_visitor` (busy mode) and `hm_studio` (team sign-in) are needed for the site to work, and `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
+- The privacy page's **Cookies** section (`privacy.html#cookies`) lists everything the site stores. There are no advertising, analytics or tracking cookies.
+- **The cookie question** (`js/site.js`, styled as `.cookie-ask` in `css/site.css`) appears on every public page until the visitor answers. **Allow** sets `hm_cookies=yes` (180 days); only then does the guard hand out `hm_visitor`. **No thanks** sets no cookie: the answer is kept in the browser's storage as `hm-cookies=no`, and the guard tells the browser to delete any `hm_visitor` it still has. The privacy page has a **Change your cookie choice** button. The studio never asks: `hm_studio` is only for signed-in team members. `hm-theme` / `hm-forms` are only saved in the visitor's own browser when they choose.
 - The only third-party content is the Google booking form. `book.html` doesn't load it until the visitor presses "Load the booking form" (`js/book.js`); "Remember my choice" saves `hm-forms` in their browser.
 - Fonts and photos are served from this site. Instagram is only linked to, never loaded. `npm test` fails if any page starts loading something from another company.
 - **Removal:** every opened photo has a "Request removal" link (an email or Instagram message to the team with the photo named), the portfolio and car pages say so above the photos, and every footer links to the removal steps on the privacy page.

@@ -1,5 +1,5 @@
 // Who is asking: reading a request, and limiting how often one address may ask.
-import { COOKIE, MODES, RATE_LIMIT } from "./settings.js";
+import { CONSENT, COOKIE, MODES, RATE_LIMIT } from "./settings.js";
 
 const COOKIE_VALUE = new RegExp(`(?:^|;\\s*)${COOKIE.name}=([0-9a-f]{16})(?:;|$)`);
 
@@ -8,6 +8,19 @@ const COOKIE_VALUE = new RegExp(`(?:^|;\\s*)${COOKIE.name}=([0-9a-f]{16})(?:;|$)
 export function readVisitorCookie(request) {
   const match = COOKIE_VALUE.exec(request.headers.get("cookie") || "");
   return match === null ? null : match[1];
+}
+
+const CONSENT_GIVEN = new RegExp(`(?:^|;\\s*)${CONSENT.name}=${CONSENT.value}(?:;|$)`);
+
+// True only when the visitor pressed Allow on the cookie question.
+export function cookiesAllowed(request) {
+  return CONSENT_GIVEN.test(request.headers.get("cookie") || "");
+}
+
+// The browser still holds a visitor cookie (from before they said no, or
+// from before the question existed).
+export function hasVisitorCookie(request) {
+  return new RegExp(`(?:^|;\\s*)${COOKIE.name}=`).test(request.headers.get("cookie") || "");
 }
 
 export function newVisitorId() {

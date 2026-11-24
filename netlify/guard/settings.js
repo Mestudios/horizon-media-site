@@ -26,7 +26,13 @@ export const BAN_AFTER = 2 * RATE_LIMIT;
 export const BAN_MINUTES = 60;
 
 // The anonymous cookie that stops someone who reloads being counted twice.
+// It is only ever set for visitors who said yes to cookies (CONSENT below).
 export const COOKIE = { name: "hm_visitor", maxAgeSeconds: 30 * 60 };
+
+// The visitor's answer to "Can we use a cookie?", set by js/site.js only when
+// they press Allow. Without it the guard sets no cookie and ignores any
+// hm_visitor it finds (and tells the browser to delete it).
+export const CONSENT = { name: "hm_cookies", value: "yes", maxAgeSeconds: 180 * 24 * 60 * 60 };
 
 // Sent with the homepage. netlify.toml sends the same ones with every other
 // file; tests/guard.test.mjs checks the two lists match.
