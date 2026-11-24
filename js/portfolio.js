@@ -382,6 +382,24 @@
       shots.unshift(...added);
       // Pinned photos come first, in the studio's order.
       const pinned = pins.map((path) => shots.find((shot) => original(shot.dataset.full) === path)).filter(Boolean);
+      // Each pinned photo gets a little pin in its top-right corner.
+      for (const shot of pinned) {
+        if (shot.querySelector(".shot-pin")) continue;
+        const pin = document.createElement("span");
+        pin.className = "shot-pin";
+        pin.title = "Pinned";
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", "M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z");
+        svg.append(path);
+        const label = document.createElement("span");
+        label.className = "visually-hidden";
+        label.textContent = "Pinned";
+        pin.append(svg, label);
+        shot.append(pin);
+      }
       if (pinned.length) {
         gallery.prepend(...pinned);
         shots.splice(0, shots.length, ...pinned, ...shots.filter((shot) => !pinned.includes(shot)));
