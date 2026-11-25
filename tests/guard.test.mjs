@@ -747,6 +747,37 @@ test("honeypot: real pages, and people browsing them, are never trapped", async 
   assert.equal((await visit(newInstance(), person)).status, 200);
 });
 
+test("a built-in photo taken off the site stops loading at every address, within a minute", async () => {
+  const { builtInPath, createHiddenPhotos } = await import("../netlify/guard/hidden.js");
+  const copies = ["/img/cars/grille.jpg", "/img/cars/thumb/grille.jpg", "/img/lite/cars/grille.jpg", "/img/saver/cars/grille.jpg", "/img/saver/cars/thumb/grille.jpg"];
+  for (const copy of copies) assert.equal(builtInPath(copy), "img/cars/grille.jpg", copy);
+  for (const other of ["/img/favicon.png", "/img/cars/../x.jpg", "/img/og-image.jpg", "/uploads/0123456789abcdef/full.jpg"]) assert.equal(builtInPath(other), null, other);
+
+  const studioStore = getStore("studio-photos");
+  await studioStore.setJSON("hidden", ["img/cars/grille.jpg"]);
+  const photos = createHiddenPhotos();
+  assert.equal(await photos.isHidden("img/cars/grille.jpg", clock.now), true);
+  assert.equal(await photos.isHidden("img/cars/nose.jpg", clock.now), false);
+
+  // The edge function Netlify runs: 404 for every copy of a hidden photo, the rest passed through.
+  const gate = await import("../netlify/edge-functions/photos.js");
+  assert.deepEqual(gate.config.path, ["/img/portfolio/*", "/img/cars/*", "/img/lite/portfolio/*", "/img/lite/cars/*", "/img/saver/portfolio/*", "/img/saver/cars/*"]);
+  for (const copy of copies) {
+    const reply = await gate.default(new Request(`https://horizon.example${copy}`));
+    assert.equal(reply.status, 404, copy);
+    assert.equal(reply.headers.get("cache-control"), "no-store");
+  }
+  assert.equal(await gate.default(new Request("https://horizon.example/img/cars/nose.jpg")), undefined, "other photos load as normal");
+
+  // Put back in the studio: it loads again once the list is re-read (at most a minute).
+  await studioStore.setJSON("hidden", []);
+  clock.now += 61 * SECOND;
+  await photos.isHidden("img/cars/grille.jpg", clock.now);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(await photos.isHidden("img/cars/grille.jpg", clock.now), false);
+  await studioStore.delete("hidden");
+});
+
 test("every reply from the guard carries the security headers", async () => {
   const handler = newInstance();
   const replies = await crowd(handler, 11);

@@ -36,8 +36,8 @@ beforeEach(() => {
   studio = createStudio();
 });
 
-async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "198.51.100.1" } = {}) {
-  const headers = new Headers();
+async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "198.51.100.1", headers: extra = {} } = {}) {
+  const headers = new Headers(extra);
   if (cookie) headers.set("cookie", cookie);
   if (method === "POST" && origin) headers.set("origin", origin);
   let body;
@@ -532,6 +532,41 @@ test("a scheduled photo can't become the homepage photo before it goes live", as
   assert.equal((await call("/portfolio-photos.json")).body.hero, "");
   await call("/studio/edit-photo", { method: "POST", cookie, form: { id, title: "Tomorrow", credit: "x", sport: "football", liveAt: "" } });
   assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: `uploads/${id}/full.jpg` } })).status, 200, "once live, it can");
+});
+
+test("public photos are kept by browsers for a day, then checked cheaply, and stop once removed", async () => {
+  const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  const first = await call(`/uploads/${id}/full.jpg`);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("cache-control"), "public, max-age=86400, must-revalidate", "a day, not a year");
+  assert.doesNotMatch(first.headers.get("cache-control"), /immutable/);
+  const tag = first.headers.get("etag");
+  assert.match(tag, /^"[0-9a-f]{16}-full-\d+"$/);
+  const again = await call(`/uploads/${id}/full.jpg`, { headers: { "if-none-match": tag } });
+  assert.equal(again.status, 304, "unchanged: no photo sent again");
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call(`/uploads/${id}/full.jpg`, { headers: { "if-none-match": tag } })).status, 404, "once removed, the check says it's gone");
+});
+
+test("requests nobody handles are deleted after 90 days, with the visitor's details", async () => {
+  const { getStore } = await import("@netlify/blobs");
+  const store = getStore("studio-photos");
+  const old = Date.now() - 91 * 86_400_000;
+  const recent = Date.now() - 89 * 86_400_000;
+  await store.setJSON("req/00000000000000a1", { id: "00000000000000a1", photo: "img/cars/grille.jpg", name: "Old", contact: "@old", added: old });
+  await store.setJSON("req/00000000000000a2", { id: "00000000000000a2", photo: "img/cars/grille.jpg", name: "Recent", contact: "@recent", added: recent });
+  await store.setJSON("rem/00000000000000b1", { id: "00000000000000b1", photo: "img/cars/nose.jpg", name: "Old", contact: "@old", relation: "owner", added: old, status: "open" });
+  await store.setJSON("rem/00000000000000b2", { id: "00000000000000b2", photo: "img/cars/nose.jpg", added: old, status: "kept", handledAt: old });
+  const cookie = await signIn();
+  const requests = (await call("/studio/requests.json", { cookie })).body;
+  assert.deepEqual(requests.map((r) => r.name), ["Recent"]);
+  const removals = (await call("/studio/removals.json", { cookie })).body;
+  assert.deepEqual(removals.map((r) => r.id), ["00000000000000b2"], "the old open request is gone; a handled record (no details) stays");
+  // A new request also clears old ones, even if nobody opens the studio.
+  await store.setJSON("req/00000000000000a3", { id: "00000000000000a3", photo: "img/cars/grille.jpg", name: "Old 2", contact: "@old2", added: old });
+  await call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "New", contact: "@new" } });
+  assert.equal(await store.get("req/00000000000000a3"), null);
 });
 
 test("the studio counts how often each photo is requested, even after requests are done", async () => {

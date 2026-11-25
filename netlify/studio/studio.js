@@ -37,6 +37,9 @@ const MAX_ANNOUNCEMENTS = 50;
 const MAX_PINS = 24;
 // Removed photos wait in the trash this long before they are deleted for good.
 const TRASH_DAYS = 30;
+// Photo and removal requests nobody has handled are deleted after this long,
+// with the visitor's details (the privacy page promises it).
+const REQUEST_DAYS = 90;
 // Removal requests: at most this many waiting, and handled ones kept as a record (without anyone's details).
 const MAX_REMOVALS = 200;
 const KEEP_HANDLED = 100;
@@ -139,6 +142,17 @@ async function signedIn(request, list, now) {
   if (!match || Number(match[1]) <= now) return null;
   const account = list.find((a) => a.n === Number(match[2]));
   return account !== undefined && (await same(match[3], await sign(match[1], account))) ? account : null;
+}
+
+// A public photo (studio upload or announcement photo). Browsers keep it for a
+// day, then check back cheaply ("has it changed?"), so a photo that is removed
+// or taken down stops showing within a day, not a year.
+const PHOTO_CACHE = "public, max-age=86400, must-revalidate";
+function photoReply(request, bytes, name) {
+  const tag = `"${name}-${bytes.byteLength}"`;
+  const headers = { ...SECURITY, "content-type": "image/jpeg", "cache-control": PHOTO_CACHE, etag: tag };
+  if ((request.headers.get("if-none-match") || "") === tag) return new Response(null, { status: 304, headers });
+  return new Response(bytes, { headers });
 }
 
 const reply = (body, status = 200, headers = {}) =>
@@ -300,9 +314,25 @@ export function createStudio() {
   const presetIndex = () => readIndex("index/presets", rebuildPresetIndex);
 
   async function listRequests() {
+    await forgetOldRequests(Date.now());
     const { blobs } = await store().list({ prefix: "req/" });
     const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
     return items.sort((a, b) => b.added - a.added);
+  }
+
+  // Deletes photo requests, and open removal requests, older than
+  // REQUEST_DAYS. Run when the studio lists them and when a new one comes in,
+  // so old ones go even if nobody opens the studio. Handled removal records
+  // hold no personal details and are kept (KEEP_HANDLED).
+  async function forgetOldRequests(now) {
+    const cutoff = now - REQUEST_DAYS * 86_400_000;
+    for (const prefix of ["req/", "rem/"]) {
+      const { blobs } = await store().list({ prefix });
+      const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+      const old = items.filter((item) => item.added < cutoff && (prefix === "req/" || item.status === "open"));
+      await Promise.all(old.map((item) => store().delete(`${prefix}${item.id}`)));
+      if (old.length) console.log(`studio: deleted ${old.length} unhandled ${prefix === "req/" ? "photo" : "removal"} request(s) older than ${REQUEST_DAYS} days`);
+    }
   }
 
   // Every item stored under a prefix, newest first.
@@ -399,6 +429,7 @@ export function createStudio() {
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       // Counted only for requests that would be saved, so a mistyped form doesn't use up the hour.
       if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      await forgetOldRequests(now);
       if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
@@ -424,6 +455,7 @@ export function createStudio() {
       if (!relation) return json({ error: "Choose how you're connected to the photo." }, 400);
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      await forgetOldRequests(now);
       if ((await store().list({ prefix: "rem/" })).blobs.length >= MAX_REMOVALS) return json({ error: "We couldn't save your request right now, so please email or message us on Instagram instead." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`rem/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, relation, message, added: now, status: "open" });
@@ -463,7 +495,7 @@ export function createStudio() {
       const bytes = await store().get(`ann-photo/${annPhoto[1]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
       // The page asks for it with ?v=<when it was added>, so a new photo gets a new address.
-      return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
+      return photoReply(request, bytes, `a-${annPhoto[1]}`);
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
@@ -471,7 +503,7 @@ export function createStudio() {
       if ((limited = await tooManyLoads("image", ip, now))) return limited;
       const bytes = await store().get(`photo/${file[1]}/${file[2]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
-      return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
+      return photoReply(request, bytes, `${file[1]}-${file[2]}`);
     }
     if (!url.pathname.startsWith("/studio")) return;
 
@@ -485,7 +517,7 @@ export function createStudio() {
       if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json"].includes(url.pathname)) {
         if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
         if (url.pathname === "/studio/trash.json") return json(await listTrash(now));
-        if (url.pathname === "/studio/removals.json") return json(await listAll("rem/"));
+        if (url.pathname === "/studio/removals.json") { await forgetOldRequests(now); return json(await listAll("rem/")); }
         if (url.pathname === "/studio/templates.json") return json((await store().get("templates", { type: "json" })) || DEFAULT_TEMPLATES);
         if (url.pathname === "/studio/recaps.json") return json(await listAll("recap/"));
         if (url.pathname === "/studio/stats.json") return json({ requestCounts: (await store().get("request-counts", { type: "json" })) || {} });
