@@ -36,6 +36,7 @@ const realRandom = Math.random;
 const realConsole = { log: console.log, warn: console.warn, error: console.error };
 const clock = { now: 0 };
 const operations = { set: 0, list: 0, delete: 0, get: 0, getMetadata: 0 };
+const banOperations = {};
 const logs = [];
 let blobs;
 let blobsDirectory;
@@ -48,8 +49,10 @@ before(async () => {
   blobs = new BlobsServer({
     directory: blobsDirectory,
     token: "test-token",
-    onRequest: ({ type }) => {
-      operations[type] += 1;
+    onRequest: ({ type, url }) => {
+      // The shared ban list is read once a minute per server and counted on its own.
+      if (/site-bans/.test(url || "")) banOperations[type] = (banOperations[type] || 0) + 1;
+      else operations[type] += 1;
     },
   });
   blobsPort = (await blobs.start()).port;
@@ -101,8 +104,8 @@ async function visit(handler, visitor, { path = "/", headers = {}, origin } = {}
   const context = {
     ip: visitor.ip,
     waitUntil: (promise) => background.push(promise),
-    next: async () =>
-      origin ? origin() : new Response(PAGE, { headers: { "content-type": "text/html; charset=UTF-8", etag: '"page-v1"' } }),
+    next: async (forwarded) =>
+      origin ? origin(forwarded) : new Response(PAGE, { headers: { "content-type": "text/html; charset=UTF-8", etag: '"page-v1"' } }),
   };
   const response = await handler(new Request(`https://horizon.example${path}`, { headers: requestHeaders }), context);
   await Promise.all(background);
@@ -776,6 +779,52 @@ test("a built-in photo taken off the site stops loading at every address, within
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(await photos.isHidden("img/cars/grille.jpg", clock.now), false);
   await studioStore.delete("hidden");
+});
+
+test("a browser re-checking its saved page still gets a new notice bar or homepage photo", async () => {
+  // Netlify answers "not modified" to a browser that still has the page saved,
+  // unless the guard asks for the whole page.
+  const origin = (forwarded) =>
+    // No request passed on means the browser's own one, with its "has it changed?" check.
+    (forwarded ? forwarded.headers.get("if-none-match") : '"page-v1"') === '"page-v1"'
+      ? new Response(null, { status: 304, headers: { etag: '"page-v1"' } })
+      : new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<div class="hero-photo" style="background-image: url('img/portfolio/golden-hour.jpg')"></div></body>`, { headers: { "content-type": "text/html", etag: '"page-v1"' } });
+  const studioStore = getStore("studio-photos");
+  const saved = { "if-none-match": '"page-v1"' };
+  // Nothing to change: the browser keeps its copy (cheap).
+  assert.equal((await visit(newInstance(), newVisitor(), { origin, headers: saved })).status, 304);
+  await studioStore.setJSON("notice", { id: "n1", text: "Game moved", until: "" });
+  const withNotice = await visit(newInstance(), newVisitor(), { origin, headers: saved, path: "/privacy.html" });
+  assert.equal(withNotice.status, 200);
+  assert.match(withNotice.body, /notice-bar/);
+  await studioStore.delete("notice");
+  await studioStore.setJSON("hero", { path: "img/cars/grille.jpg" });
+  const withHero = await visit(newInstance(), newVisitor(), { origin, headers: saved });
+  assert.equal(withHero.status, 200);
+  assert.match(withHero.body, /img\/cars\/grille\.jpg/);
+  await studioStore.delete("hero");
+});
+
+test("the ban list survives a failed read, and two servers banning at once keep both bans", async () => {
+  const { createBanList } = await import("../netlify/guard/bans.js");
+  const [a, b] = [createBanList(), createBanList()];
+  await Promise.all([a.ban("192.0.2.201", clock.now, "test"), b.ban("192.0.2.202", clock.now, "test")]);
+  const c = createBanList();
+  assert.equal(await c.isBanned("192.0.2.201", clock.now), true, "the first server's ban was kept");
+  assert.equal(await c.isBanned("192.0.2.202", clock.now), true, "and the second's");
+  // A server whose first read fails, then bans someone, must not erase the others.
+  const d = createBanList();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => (String(input?.url || input).includes("site-bans") && (init?.method || "GET") === "GET" ? Promise.reject(new Error("storage hiccup")) : realFetch(input, init));
+  try {
+    await d.isBanned("192.0.2.9", clock.now);
+    await d.settled();
+    await d.ban("192.0.2.203", clock.now, "test");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const e = createBanList();
+  for (const ip of ["192.0.2.201", "192.0.2.202", "192.0.2.203"]) assert.equal(await e.isBanned(ip, clock.now), true, ip);
 });
 
 test("every reply from the guard carries the security headers", async () => {

@@ -130,10 +130,12 @@
     const title = document.createElement("b");
     title.textContent = shot.dataset.title;
     const link = document.createElement("a");
-    link.href = shot.dataset.post;
-    link.textContent = shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
+    link.href = shot.dataset.post || "https://www.instagram.com/hor1zonmedia/";
+    link.textContent = shot.dataset.post && shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
     const owner = shot.dataset.owner ? ` Car: @${shot.dataset.owner}.` : "";
-    caption.append(title, `Photo by @${shot.dataset.credit}.${owner} `, link);
+    // An uncredited photo (older studio uploads could have none) says Horizon Media.
+    const credit = shot.dataset.credit ? `Photo by @${shot.dataset.credit}.` : "Photo by Horizon Media.";
+    caption.append(title, `${credit}${owner} `, link);
     count.textContent = `${open + 1} / ${shots.length}`;
     requestForm.hidden = true;
     removal.hidden = true;
@@ -172,7 +174,7 @@
   const say = (text) => { toast.textContent = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.textContent = ""; }, 2500); };
   viewer.querySelector(".viewer-share").addEventListener("click", async () => {
     const shot = shots[open];
-    const data = { title: shot.dataset.title + " · Horizon Media", text: shot.dataset.title + ", photo by @" + shot.dataset.credit, url: linkTo(shot) };
+    const data = { title: shot.dataset.title + " · Horizon Media", text: shot.dataset.title + (shot.dataset.credit ? ", photo by @" + shot.dataset.credit : ", by Horizon Media"), url: linkTo(shot) };
     if (navigator.share) {
       try { await navigator.share(data); } catch (error) {}
       return;
@@ -327,7 +329,7 @@
     shot.dataset.title = title;
     shot.dataset.credit = credit;
     if (owner) shot.dataset.owner = owner;
-    shot.dataset.post = `https://www.instagram.com/${encodeURIComponent(credit)}/`;
+    shot.dataset.post = credit ? `https://www.instagram.com/${encodeURIComponent(credit)}/` : "https://www.instagram.com/hor1zonmedia/";
     const image = document.createElement("img");
     image.src = path.replace(/\/full\.jpg$/, "/thumb.jpg").replace(/^img\/(portfolio|cars)\//, "img/$1/thumb/");
     image.alt = alt || title;
@@ -338,7 +340,7 @@
     const name = document.createElement("b");
     name.textContent = title;
     const by = document.createElement("span");
-    by.textContent = `Photo by @${credit}` + (owner ? ` · Car: @${owner}` : "");
+    by.textContent = (credit ? `Photo by @${credit}` : "Photo by Horizon Media") + (owner ? ` · Car: @${owner}` : "");
     info.append(name, by);
     shot.append(image, info);
     if (isNew) {

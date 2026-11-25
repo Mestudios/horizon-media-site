@@ -282,11 +282,21 @@ const off = `<p>The studio is switched off because no sign-in has been set.</p><
 
 const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
 <script>
+// Reads a reply from the server. Refusals sent as plain text (blocked, too
+// many tries, signed out) become a plain sentence instead of an error.
+async function readReply(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch (error) {}
+  if (response.status === 403) return { error: "This network is blocked for a while after too many requests. Try again in an hour, or from another network." };
+  if (response.status === 429) return { error: "Too many tries in a short time. Wait a minute and try again." };
+  if (response.status === 401) return { error: "You've been signed out. Sign in again." };
+  return { error: "That didn't work (error " + response.status + "). Try again in a moment." };
+}
 document.getElementById("login").addEventListener("submit", async (event) => {
   event.preventDefault();
   const status = event.target.querySelector("[role=status]");
   const response = await fetch("/studio/login", { method: "POST", body: new FormData(event.target) });
-  if (response.ok) location.reload(); else status.textContent = (await response.json()).error;
+  if (response.ok) location.reload(); else status.textContent = (await readReply(response)).error;
 });
 </script>`;
 
@@ -431,6 +441,16 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Edit photo</h2><div class="tool-bar"><div class="tool-modes" role="group" aria-label="What dragging does"><button type="button" class="btn" data-mode="crop" aria-pressed="false">Crop</button><button type="button" class="btn" data-mode="blur" aria-pressed="true">Blur plates</button></div><button type="button" class="btn tool-rotate">Rotate &#8635;</button><button type="button" class="btn tool-reset">Start over</button></div><p class="note tool-note"></p><canvas aria-label="The photo; drag on it to crop or to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
 <div id="undo" class="undo" role="status" hidden><span></span><button type="button" class="btn btn-hot">Undo</button></div>
 <script>
+// Reads a reply from the server. Refusals sent as plain text (blocked, too
+// many tries, signed out) become a plain sentence instead of an error.
+async function readReply(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch (error) {}
+  if (response.status === 403) return { error: "This network is blocked for a while after too many requests. Try again in an hour, or from another network." };
+  if (response.status === 429) return { error: "Too many tries in a short time. Wait a minute and try again." };
+  if (response.status === 401) return { error: "You've been signed out. Sign in again." };
+  return { error: "That didn't work (error " + response.status + "). Try again in a moment." };
+}
 // Remembers that this device belongs to the team, so the site's footer shows the studio link here.
 try { localStorage.setItem("hm-team", "1"); } catch (error) {}
 // The side menu: one section shows at a time, and the address remembers which.
@@ -487,7 +507,7 @@ credit.addEventListener("input", () => { credit.dataset.auto = ""; });
 meForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await post("/studio/profile", { credit: document.getElementById("me-credit").value });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (response.ok) flash(meForm.querySelector(".me-status"), "Saved."); else meForm.querySelector(".me-status").textContent = reply.error;
   if (response.ok) { ME.credit = reply.credit; credit.dataset.auto = "1"; credit.value = ""; meEdit.hidden = true; showMe(); }
 });
@@ -667,22 +687,24 @@ function fingerprint(source) {
   return bits;
 }
 const apart = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++; return n; };
-let siteFingerprints = null;
+// Fingerprints of the site's photos, by path. Made once per photo, and
+// topped up with photos added since (by anyone), so new ones are compared too.
+// Waits for the studio's own photo list, which photos shared from a phone can
+// arrive before.
+const printCache = new Map();
 async function loadFingerprints() {
-  if (siteFingerprints) return siteFingerprints;
+  await photosReady;
   await loadBuiltIn();
   const known = everyPhoto().filter((p) => !state.hidden.includes(p.path));
-  siteFingerprints = (await Promise.all(known.map(async (photo) => {
+  await Promise.all(known.filter((photo) => !printCache.has(photo.path)).map(async (photo) => {
     try {
       const image = new Image();
       image.src = photo.thumb;
       await image.decode();
-      return { title: photo.title, bits: fingerprint(image) };
-    } catch (error) {
-      return null;
-    }
-  }))).filter(Boolean);
-  return siteFingerprints;
+      printCache.set(photo.path, { title: photo.title, bits: fingerprint(image) });
+    } catch (error) {}
+  }));
+  return known.map((photo) => printCache.get(photo.path)).filter(Boolean);
 }
 async function findTwins() {
   const mine = picks;
@@ -809,6 +831,7 @@ function finishPending() {
 function removeLater(label, run, restore) {
   finishPending();
   undoBar.querySelector("span").textContent = "Removed " + label + ".";
+  undoBar.querySelector("button").hidden = false;
   undoBar.hidden = false;
   pending = { run, restore, timer: setTimeout(finishPending, 10000) };
 }
@@ -823,6 +846,21 @@ undoBar.querySelector("button").addEventListener("click", () => {
 // Leaving the page or switching apps carries out a removal that is still waiting.
 addEventListener("pagehide", finishPending);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") finishPending(); });
+// A removal the server refused (signed out, blocked, already gone): the item
+// is back in the list, and the bar at the bottom says why for 8 seconds.
+async function removalFailed(label, response) {
+  const reason = response ? (await readReply(response)).error : "The connection dropped.";
+  undoBar.querySelector("span").textContent = "Couldn't remove " + label + ". " + reason;
+  undoBar.querySelector("button").hidden = true;
+  undoBar.hidden = false;
+  setTimeout(() => { if (!pending) { undoBar.hidden = true; undoBar.querySelector("button").hidden = false; } }, 8000);
+}
+// Runs a removal and reports a refusal; then always refreshes the list.
+function removeNow(path, fields, label, after) {
+  return post(path, fields)
+    .then((response) => { after(); if (!response.ok) removalFailed(label, response); })
+    .catch(() => { after(); removalFailed(label, null); });
+}
 const post = (path, fields) => {
   const body = new FormData();
   for (const key in fields) body.set(key, fields[key]);
@@ -888,7 +926,7 @@ function shown(photo) {
 const byRequests = (list) => (filterBox.value === "requested" ? list.slice().sort((a, b) => (requestCounts[b.path] || 0) - (requestCounts[a.path] || 0)) : list);
 async function setHomepage(path) {
   const response = await post("/studio/hero", { path });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (!response.ok) { status.textContent = reply.error; return; }
   state.hero = reply.hero;
   flash(status, reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.");
@@ -942,7 +980,7 @@ async function refreshTrash() {
     const restore = iconButton("back", "Restore", "", async () => {
       restore.disabled = true;
       const response = await post("/studio/restore", { id: item.id });
-      if (response.ok) flash(status, '"' + item.title + '" is back on the site.'); else status.textContent = (await response.json()).error;
+      if (response.ok) flash(status, '"' + item.title + '" is back on the site.'); else status.textContent = (await readReply(response)).error;
       refresh();
     });
     const forever = iconButton("trash", "Delete for good", "danger", async () => {
@@ -968,7 +1006,7 @@ function everyPhoto() {
 
 async function savePins(pins) {
   const response = await post("/studio/pins", { pins: JSON.stringify(pins) });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (!response.ok) { status.textContent = reply.error; return; }
   state.pins = reply.pins;
   render();
@@ -1056,7 +1094,7 @@ function render() {
       removing.add(id);
       render();
       removeLater('"' + photo.title + '" (it\u2019s in the Trash for 30 days)',
-        () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
+        () => removeNow("/studio/delete", { id }, '"' + photo.title + '"', () => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
     // A scheduled photo can't be the homepage photo until it goes live.
@@ -1073,7 +1111,7 @@ function render() {
     const toggle = iconButton(off ? "back" : "trash", off ? "Put back" : "Remove", off ? "" : "danger", async () => {
       toggle.disabled = true;
       const response = await post(off ? "/studio/unhide" : "/studio/hide", { path: photo.path });
-      const reply = await response.json();
+      const reply = await readReply(response);
       if (response.ok) { state.hidden = reply.hidden; render(); }
       else { status.textContent = reply.error; toggle.disabled = false; }
     });
@@ -1125,7 +1163,7 @@ function openEditor(item, photo) {
     body.set("liveAt", live.value ? String(new Date(live.value).getTime()) : "");
     const response = await fetch("/studio/edit-photo", { method: "POST", body });
     if (response.ok) refresh();
-    else note.textContent = (await response.json()).error;
+    else note.textContent = (await readReply(response)).error;
   });
   item.append(form);
   form.querySelector("input").focus();
@@ -1212,7 +1250,7 @@ async function refreshRemovals() {
     const act = (path, done) => async () => {
       for (const b of buttons.children) b.disabled = true;
       const response = await post(path, { id: item.id });
-      if (!response.ok) { status.textContent = (await response.json()).error; }
+      if (!response.ok) { status.textContent = (await readReply(response)).error; }
       if (response.ok) flash(requestsNote, done); else requestsNote.textContent = "";
       refreshRemovals().then(refreshRequests);
       refresh();
@@ -1287,7 +1325,7 @@ document.getElementById("tpl-add").addEventListener("click", () => {
 });
 document.getElementById("tpl-save").addEventListener("click", async () => {
   const response = await post("/studio/templates", { templates: JSON.stringify(templates) });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (response.ok) flash(document.getElementById("tpl-status"), "Saved."); else document.getElementById("tpl-status").textContent = reply.error;
   if (response.ok) { templates = reply.templates; showTemplates(); refreshRequests(); }
 });
@@ -1397,7 +1435,7 @@ document.getElementById("add").addEventListener("submit", async (event) => {
       addStatus.textContent = "Sending photo" + of + "...";
       const response = await fetch("/studio/upload", { method: "POST", body });
       if (response.ok) added += 1;
-      else { problems.push(file.name + ": " + (await response.json()).error); if (response.status === 409 || response.status === 401) break; }
+      else { problems.push(file.name + ": " + (await readReply(response)).error); if (response.status === 409 || response.status === 401) break; }
     } catch (error) {
       problems.push(file.name + ": this device could not read it. Try a JPEG.");
     }
@@ -1468,7 +1506,7 @@ dateBox.value = today();
 const removingAnn = new Set(); // announcements waiting out their 10 seconds
 async function refreshAnnouncements() {
   const { today: day, items: everything, notice } = await (await fetch("/studio/announcements.json", { cache: "no-store" })).json();
-  showNotice(notice);
+  showNotice(notice, true);
   const items = everything.filter((item) => !removingAnn.has(item.id));
   announceList.textContent = "";
   const stateOf = (item) => (item.date > day ? "Scheduled" : item.until && item.until < day ? "Ended" : "Live");
@@ -1535,7 +1573,7 @@ async function refreshAnnouncements() {
       removingAnn.add(item.id);
       refreshAnnouncements();
       removeLater('"' + item.title + '"',
-        () => post("/studio/announce-delete", { id: item.id }).then(() => { removingAnn.delete(item.id); refreshAnnouncements(); }),
+        () => removeNow("/studio/announce-delete", { id: item.id }, '"' + item.title + '"', () => { removingAnn.delete(item.id); refreshAnnouncements(); }),
         () => { removingAnn.delete(item.id); refreshAnnouncements(); });
     });
     const thumbSrc = annThumb(item);
@@ -1636,7 +1674,7 @@ announceForm.addEventListener("submit", async (event) => {
   const response = await fetch("/studio/announce", { method: "POST", body });
   const scheduled = dateBox.value > today();
   if (response.ok) flash(announceStatus, (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away."));
-  else announceStatus.textContent = (await response.json()).error;
+  else announceStatus.textContent = (await readReply(response)).error;
   if (response.ok) { stopEditing(); annFormCard.hidden = true; flash(document.getElementById("ann-list-status"), announceStatus.textContent); announceStatus.textContent = ""; refreshAnnouncements(); }
 });
 
@@ -1777,20 +1815,29 @@ updatePreview();
 // ---- Notice bar
 const noticeForm = document.getElementById("notice-form");
 const noticeStatus = noticeForm.querySelector("[role=status]");
-function showNotice(notice) {
+// Shows the notice bar's state. A refresh of the lists (keepDraft) never
+// overwrites a notice someone is still typing; saving or turning it off does.
+let noticeDraft = false;
+noticeForm.addEventListener("input", () => { noticeDraft = true; });
+function showNotice(notice, keepDraft) {
+  // A notice past its last day no longer shows on the site.
+  const ended = !!notice && !!notice.until && notice.until < today();
+  const on = !!notice && !ended;
   const pill = document.getElementById("tab-notice-state");
-  pill.textContent = notice ? "On" : "Off";
-  pill.className = "pill" + (notice ? " on" : "");
+  pill.textContent = on ? "On" : ended ? "Ended" : "Off";
+  pill.className = "pill" + (on ? " on" : "");
+  document.getElementById("notice-now").textContent = on ? "On now" + (notice.until ? ", until " + notice.until : "") + (notice.by ? " (set by " + notice.by + ")" : "") + ". It shows on the site within a minute of changes." : ended ? "Ended on " + notice.until + ". It no longer shows on the site." : "Off.";
+  if (keepDraft && noticeDraft) return;
+  noticeDraft = false;
   document.getElementById("notice-text").value = notice ? notice.text : "";
   document.getElementById("notice-until").value = notice ? notice.until || "" : "";
   document.getElementById("notice-link").value = notice ? notice.link || "" : "";
   document.getElementById("notice-link-text").value = notice ? notice.linkText || "" : "";
-  document.getElementById("notice-now").textContent = notice ? "On now" + (notice.until ? ", until " + notice.until : "") + (notice.by ? " (set by " + notice.by + ")" : "") + ". It shows on the site within a minute of changes." : "Off.";
 }
 noticeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await fetch("/studio/notice", { method: "POST", body: new FormData(noticeForm) });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (response.ok) flash(noticeStatus, reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.");
   else noticeStatus.textContent = reply.error;
   if (response.ok) showNotice(reply.notice);
@@ -1869,7 +1916,7 @@ recapForm.addEventListener("submit", async (event) => {
   const body = new FormData(recapForm);
   body.set("photos", JSON.stringify(photos));
   const response = await fetch("/studio/recap", { method: "POST", body });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (!response.ok) { recapStatus.textContent = reply.error; return; }
   const editing = document.getElementById("recap-id").value;
   stopRecapEditing();
@@ -1951,7 +1998,7 @@ async function refreshPresets() {
     const remove = button("Remove", "btn-danger", () => {
       removingPresets.add(item.id);
       refreshPresets();
-      removeLater('"' + item.name + '"', () => post("/studio/preset-delete", { id: item.id }).then(() => { removingPresets.delete(item.id); refreshPresets(); }), () => { removingPresets.delete(item.id); refreshPresets(); });
+      removeLater('"' + item.name + '"', () => removeNow("/studio/preset-delete", { id: item.id }, '"' + item.name + '"', () => { removingPresets.delete(item.id); refreshPresets(); }), () => { removingPresets.delete(item.id); refreshPresets(); });
     });
     info.append(remove);
     row.append(info);
@@ -1980,7 +2027,7 @@ presetForm.addEventListener("submit", async (event) => {
   }
   presetStatus.textContent = "Sending...";
   const response = await fetch("/studio/preset", { method: "POST", body });
-  const reply = await response.json().catch(() => ({ error: "That didn't send. The files may be too large." }));
+  const reply = await readReply(response).catch(() => ({ error: "That didn't send. The files may be too large." }));
   if (response.ok) flash(presetStatus, "Added. It's on the presets page now."); else presetStatus.textContent = reply.error;
   if (response.ok) { presetForm.reset(); refreshPresets(); }
 });
@@ -1993,6 +2040,13 @@ refreshRecaps();
 
 // Photos shared from the phone's gallery (sw.js keeps them for a moment) land here.
 async function takeShared() {
+  // The share arrived before this phone had the studio's helper installed.
+  if (new URLSearchParams(location.search).get("share") === "again") {
+    history.replaceState(null, "", "/studio#add");
+    go("add");
+    addStatus.textContent = "Those photos didn't come through, because this phone hadn't opened the studio yet. It's ready now: share them again, or choose them below.";
+    return;
+  }
   if (!new URLSearchParams(location.search).has("shared") || !("caches" in window)) return;
   history.replaceState(null, "", "/studio#add");
   const box = await caches.open("studio-share");

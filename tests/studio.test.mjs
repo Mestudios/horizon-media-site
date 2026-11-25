@@ -180,7 +180,8 @@ test("a signed-in upload appears in the public list and can be fetched", async (
   const list = await call("/portfolio-photos.json");
   assert.equal(list.headers.get("cache-control"), "no-cache", "removals show on the next page load");
   assert.equal(list.body.photos.length, 1);
-  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0, by: USERNAME });
+  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 }, "no sign-in name in the public list");
+  assert.doesNotMatch(JSON.stringify(list.body), new RegExp(USERNAME));
 
   for (const size of ["full", "thumb"]) {
     const image = await call(`/uploads/${id}/${size}.jpg`);
@@ -330,10 +331,16 @@ test("visitors can request a photo; only the team can read requests, and Done de
   assert.match(noConsent.body.error, /tick the box/);
   assert.equal((await ask({ website: "spam.example" })).status, 200, "a bot gets a quiet yes");
   assert.equal((await ask({ name: "<b>Sam</b>", message: "For my <script>mom</script>" })).status, 200);
-  assert.equal((await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" })).status, 200);
+  const missing = await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" });
+  assert.equal(missing.status, 400, "a photo that isn't on the site can't be requested (no padding the counts)");
+  assert.match(missing.body.error, /isn't on the site/);
 
   assert.equal((await call("/studio/requests.json")).status, 401);
   const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  assert.equal((await ask({ photo: `uploads/${id}/full.jpg` }, { ip: "198.51.100.9" })).status, 200, "a studio photo on the site can be requested");
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/portfolio/flex.jpg" } });
+  assert.equal((await ask({ photo: "img/portfolio/flex.jpg" }, { ip: "198.51.100.10" })).status, 400, "nor a built-in photo taken off the site");
   const requests = (await call("/studio/requests.json", { cookie })).body;
   assert.equal(requests.length, 2, "the bot's request was not stored");
   const sam = requests.find((r) => r.photo === "img/portfolio/golden-hour.jpg");
@@ -401,7 +408,7 @@ test("photos can be pinned in order; only real photo paths, by signed-in team me
     assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins: bad } })).status, 400, bad);
   }
   assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins } })).status, 200);
-  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, JSON.parse(pins));
+  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, ["img/cars/grille.jpg", "img/portfolio/golden-hour.jpg"], "a pin to a photo that isn't on the site is left out of the public list");
   await call("/studio/pins", { method: "POST", cookie, form: { pins: "[]" } });
   assert.deepEqual((await call("/portfolio-photos.json")).body.pins, []);
 });
@@ -439,6 +446,54 @@ test("ten wrong sign-ins from one address lock it out for 15 minutes, across Net
   const right = await createStudio()(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", PASSWORD); return f; })() }), { ip: "198.51.100.77" });
   assert.equal(right.status, 429, "even the right password waits out the lock");
   assert.equal((await wrong(createStudio(), "198.51.100.78")).status, 401, "other addresses are not affected");
+});
+
+test("the lockout counts a whole IPv6 network as one, and wrong tries sent at once all count", async () => {
+  const wrong = (s, ip) => s(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", "wrong password!!"); return f; })() }), { ip });
+  // Ten different addresses inside one /64 network, each from a fresh server.
+  for (let i = 1; i <= 10; i++) assert.equal((await wrong(createStudio(), `2001:db8:aa:bb::${i.toString(16)}`)).status, 401, `try ${i}`);
+  assert.equal((await wrong(createStudio(), "2001:db8:aa:bb:ffff::1")).status, 429, "another address in the same network is locked out too");
+  assert.equal((await wrong(createStudio(), "2001:db8:aa:cc::1")).status, 401, "a different network is not");
+  // Ten tries sent at the same moment, to ten servers: none of them is lost.
+  await Promise.all(Array.from({ length: 10 }, () => wrong(createStudio(), "198.51.100.90")));
+  assert.equal((await wrong(createStudio(), "198.51.100.90")).status, 429);
+});
+
+test("a request that isn't a form gets a plain 400, not a crash", async () => {
+  for (const path of ["/photo-request", "/removal-request", "/studio/login"]) {
+    const reply = await studio(new Request(SITE + path, { method: "POST", headers: { origin: SITE, "content-type": "multipart/form-data; boundary=x" }, body: "not a form" }), { ip: "198.51.100.2" });
+    assert.equal(reply.status, 400, path);
+  }
+  const cookie = await signIn();
+  const reply = await studio(new Request(SITE + "/studio/upload", { method: "POST", headers: { origin: SITE, cookie, "content-type": "application/json" }, body: "{}" }), { ip: "198.51.100.2" });
+  assert.equal(reply.status, 400);
+});
+
+test("every studio photo needs a photographer credit", async () => {
+  const cookie = await signIn();
+  const reply = await call("/studio/upload", { method: "POST", cookie, form: photo({ credit: "@" }) });
+  assert.equal(reply.status, 400);
+  assert.match(reply.body.error, /Instagram name/);
+});
+
+test("Sign out ends the session on the server, so a copied cookie stops working", async () => {
+  const cookie = await signIn();
+  assert.match((await call("/studio", { cookie })).body, /id="add"/);
+  await call("/studio/logout", { method: "POST", cookie });
+  assert.doesNotMatch((await call("/studio", { cookie })).body, /id="add"/, "the old cookie no longer signs in");
+  assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 401);
+  assert.match((await call("/studio", { cookie: await signIn() })).body, /id="add"/, "signing in again works");
+  // A made-up cookie is not recorded.
+  const { getStore } = await import("@netlify/blobs");
+  const before = (await getStore("studio-photos").list({ prefix: "signed-out/" })).blobs.length;
+  await call("/studio/logout", { method: "POST", cookie: `hm_studio=${Date.now() + 99999}.1.${"a".repeat(64)}` });
+  assert.equal((await getStore("studio-photos").list({ prefix: "signed-out/" })).blobs.length, before);
+});
+
+test("photos shared from a phone before the studio's helper is installed get a plain explanation", async () => {
+  const reply = await studio(new Request(SITE + "/studio/share-target", { method: "POST", body: new FormData() }), { ip: "198.51.100.3" });
+  assert.equal(reply.status, 303);
+  assert.equal(reply.headers.get("location"), "/studio?share=again#add");
 });
 
 test("public lists cost one storage read per view and still change right away", async () => {

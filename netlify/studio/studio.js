@@ -19,6 +19,7 @@ import { studioPage, TEAM } from "./page.js";
 import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 import { createBanList } from "../guard/bans.js";
+import { network } from "../guard/requests.js";
 import { HERO_PATH } from "../guard/homepage.js";
 import { NOTICE_LINK } from "../guard/notice.js";
 
@@ -141,7 +142,33 @@ async function signedIn(request, list, now) {
   const match = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.([1-9])\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
   if (!match || Number(match[1]) <= now) return null;
   const account = list.find((a) => a.n === Number(match[2]));
-  return account !== undefined && (await same(match[3], await sign(match[1], account))) ? account : null;
+  if (account === undefined || !(await same(match[3], await sign(match[1], account)))) return null;
+  // A session ended with Sign out stays ended, even if its cookie was copied.
+  if (await store().get(`signed-out/${match[3]}`)) return null;
+  return account;
+}
+
+// A posted form, or null when the body isn't one (a broken or hand-made request).
+async function readForm(request) {
+  try {
+    return await request.formData();
+  } catch {
+    return null;
+  }
+}
+const BAD_FORM = { error: "That request wasn't a form this site sends." };
+
+// Public lists never name the team member who added something: a sign-in
+// name is half of a login.
+const unsigned = ({ by, editedBy, ...item }) => item;
+
+// The public photo list: no sign-in names, and pins or a homepage photo that
+// point at a photo not on the site (scheduled for later, or removed) are left
+// out, so a scheduled photo's address doesn't leak early.
+function publicPhotos(data) {
+  const live = new Set(data.photos.map((p) => `uploads/${p.id}/full.jpg`));
+  const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !data.hidden.includes(path));
+  return { ...data, photos: data.photos.map(unsigned), pins: data.pins.filter(onSite), hero: data.hero && onSite(data.hero) ? data.hero : "" };
 }
 
 // A public photo (studio upload or announcement photo). Browsers keep it for a
@@ -198,16 +225,27 @@ export function createStudio() {
   const blocked = () => reply("This network is blocked from Horizon Media for an hour for sending far too many requests.", 403, { "content-type": "text/plain; charset=utf-8" });
 
   // Failed sign-ins per address, kept under a scrambled form of the address.
-  const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}`;
+  // Each wrong try is its own entry (login-fail/<scrambled address>/<when>-<random>),
+  // so tries sent at the same moment are all counted: nothing is read, changed
+  // and saved back. Counting them is one "list" call.
+  const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}/`;
+  async function recentFailures(ip, now) {
+    const { blobs } = await store().list({ prefix: await lockKey(ip) });
+    const recent = [];
+    const old = [];
+    for (const { key } of blobs) (now - Number(key.split("/").pop().split("-")[0]) < LOCK_MINUTES * 60_000 ? recent : old).push(key);
+    await Promise.all(old.slice(0, 20).map((key) => store().delete(key)));
+    return recent;
+  }
   async function lockedOut(ip, now) {
-    const entry = await store().get(await lockKey(ip), { type: "json" });
-    return !!entry && entry.count >= LOCK_AFTER && now - entry.since < LOCK_MINUTES * 60_000;
+    return (await recentFailures(ip, now)).length >= LOCK_AFTER;
   }
   async function countFailure(ip, now) {
-    const key = await lockKey(ip);
-    const entry = await store().get(key, { type: "json" });
-    const fresh = !entry || now - entry.since >= LOCK_MINUTES * 60_000;
-    await store().setJSON(key, fresh ? { since: now, count: 1 } : { since: entry.since, count: entry.count + 1 });
+    await store().set(`${await lockKey(ip)}${now}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`, "");
+  }
+  async function clearFailures(ip) {
+    const { blobs } = await store().list({ prefix: await lockKey(ip) });
+    await Promise.all(blobs.map(({ key }) => store().delete(key)));
   }
 
   function tooManyRequests(ip, now) {
@@ -292,11 +330,19 @@ export function createStudio() {
     await store().setJSON("index/announcements", { built: Date.now(), data: items });
     return items;
   }
+  // When a stored list is out of date, one visitor per server rebuilds it;
+  // visitors arriving meanwhile get the previous copy, so a busy moment
+  // doesn't turn into every visitor rebuilding at once.
+  const rebuilding = new Map();
   async function readIndex(key, rebuild) {
     const index = await store().get(key, { type: "json" });
     const now = Date.now();
     const fresh = index && now - index.built < INDEX_MINUTES * 60_000 && !(index.next && now >= index.next);
-    return fresh ? index.data : rebuild();
+    if (fresh) return index.data;
+    if (rebuilding.has(key)) return index ? index.data : rebuilding.get(key);
+    const run = rebuild().finally(() => rebuilding.delete(key));
+    rebuilding.set(key, run);
+    return run;
   }
   const photoIndex = () => readIndex("index/photos", rebuildPhotoIndex);
   const announcementIndex = () => readIndex("index/announcements", rebuildAnnouncementIndex);
@@ -391,7 +437,9 @@ export function createStudio() {
     const now = Date.now();
 
     // ---- Public: the list and the photos themselves
-    const ip = context.ip || "unknown";
+    // Limits and the sign-in lockout count a whole IPv6 network (/64) as one
+    // address, like the site's ban list, so switching addresses inside it doesn't help.
+    const ip = network(context.ip || "unknown");
     // Kicked off the site: nothing here answers a banned address.
     if (await bans.isBanned(context.ip, now)) return blocked();
     let limited;
@@ -399,7 +447,7 @@ export function createStudio() {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
       // Not kept by browsers: a photo or announcement removed in the studio
       // disappears from the site on the next page load.
-      return json(await photoIndex(), 200, { "cache-control": "no-cache" });
+      return json(publicPhotos(await photoIndex()), 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
@@ -412,12 +460,13 @@ export function createStudio() {
         const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !hidden.includes(path));
         up = up.map(({ photoPath, ...item }) => (photoPath && onSite(photoPath) ? { ...item, photoPath } : item));
       }
-      return json(up, 200, { "cache-control": "no-cache" });
+      return json(up.map(unsigned), 200, { "cache-control": "no-cache" });
     }
     if (url.pathname === "/photo-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);
       if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
-      const form = await request.formData();
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
       // A field people never see: forms that fill it in are bots.
       if (String(form.get("website") || "") !== "") return json({ ok: true });
       const name = clean(form.get("name"), 60);
@@ -425,10 +474,15 @@ export function createStudio() {
       const message = clean(form.get("message"), 500);
       const photoPath = String(form.get("photo") || "");
       if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
+      // Only a photo that is on the site now (not removed, deleted or scheduled),
+      // so the "most requested" counts can't be padded with made-up addresses.
+      const listed = await photoIndex();
+      const onSite = photoPath.startsWith("uploads/") ? listed.photos.some((p) => `uploads/${p.id}/full.jpg` === photoPath) : !listed.hidden.includes(photoPath);
+      if (!onSite) return json({ error: "That photo isn't on the site any more." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       // Counted only for requests that would be saved, so a mistyped form doesn't use up the hour.
-      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
       await forgetOldRequests(now);
       if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
@@ -443,7 +497,8 @@ export function createStudio() {
     if (url.pathname === "/removal-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);
       if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
-      const form = await request.formData();
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
       if (String(form.get("website") || "") !== "") return json({ ok: true });
       const name = clean(form.get("name"), 60);
       const contact = clean(form.get("contact"), 100);
@@ -454,7 +509,7 @@ export function createStudio() {
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can let you know when it's down." }, 400);
       if (!relation) return json({ error: "Choose how you're connected to the photo." }, 400);
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
-      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
       await forgetOldRequests(now);
       if ((await store().list({ prefix: "rem/" })).blobs.length >= MAX_REMOVALS) return json({ error: "We couldn't save your request right now, so please email or message us on Instagram instead." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
@@ -473,7 +528,7 @@ export function createStudio() {
     }
     if (request.method === "GET" && url.pathname === "/presets.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
-      return json(await presetIndex(), 200, { "cache-control": "no-cache" });
+      return json((await presetIndex()).map(unsigned), 200, { "cache-control": "no-cache" });
     }
     const presetFile = /^\/preset-files\/([0-9a-f]{16})\/(dng|xmp|before|after)$/.exec(url.pathname);
     if (presetFile) {
@@ -538,6 +593,12 @@ export function createStudio() {
       if (!me) return reply(studioPage({ state: "out" }));
       return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me) } }));
     }
+    // Photos shared from a phone's gallery are normally caught on the phone by
+    // sw.js. If it isn't installed yet, the share lands here: nothing is kept,
+    // and the studio explains what to do.
+    if (url.pathname === "/studio/share-target" && request.method === "POST") {
+      return new Response(null, { status: 303, headers: { ...SECURITY, location: "/studio?share=again#add", "cache-control": "no-store" } });
+    }
     if (request.method !== "POST") return reply("Not allowed", 405);
     // Forms must come from this site itself.
     if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
@@ -545,7 +606,8 @@ export function createStudio() {
     if (url.pathname === "/studio/login") {
       if (tooManyAttempts(ip, now)) return json({ error: "Too many tries. Wait a minute." }, 429);
       if (await lockedOut(ip, now)) return json({ error: `Too many wrong tries from here. Wait ${LOCK_MINUTES} minutes.` }, 429);
-      const form = await request.formData();
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
       // Check every account, both fields each time, so the reply does not reveal
       // which account exists or which field was wrong.
       // Usernames ignore spaces around them and capital letters (phones add
@@ -564,7 +626,7 @@ export function createStudio() {
         return json({ error: "Wrong username or password." }, 401);
       }
       console.log(`studio: ${account.username} signed in`);
-      await store().delete(await lockKey(ip));
+      await clearFailures(ip);
       const seconds = form.get("remember") === "on" ? REMEMBER_DAYS * 86_400 : SESSION_HOURS * 3600;
       const expires = now + seconds * 1000;
       return json({ ok: true }, 200, {
@@ -572,12 +634,20 @@ export function createStudio() {
       });
     }
     if (url.pathname === "/studio/logout") {
+      // Ends this session on the server too (until its cookie would have run
+      // out anyway), and tidies away records of sessions that have run out.
+      const ended = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.[1-9]\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
+      if (ended && (await signedIn(request, list, now))) await store().set(`signed-out/${ended[2]}`, ended[1]);
+      const { blobs } = await store().list({ prefix: "signed-out/" });
+      const old = (await Promise.all(blobs.map(async ({ key }) => ({ key, until: Number(await store().get(key)) })))).filter((r) => r.until < now);
+      await Promise.all(old.map(({ key }) => store().delete(key)));
       return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=; Max-Age=0; Path=/studio; Secure; HttpOnly; SameSite=Strict` });
     }
 
     const me = await signedIn(request, list, now);
     if (!me) return json({ error: "Sign in first." }, 401);
-    const form = await request.formData();
+    const form = await readForm(request);
+    if (!form) return json(BAD_FORM, 400);
 
     // Who you are: the Instagram name your photos are credited to by default.
     if (url.pathname === "/studio/profile") {
@@ -598,6 +668,8 @@ export function createStudio() {
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now, by: me.username };
+      // Every photo is credited, as Edit already requires.
+      if (!photo.credit) return json({ error: "Give the photographer's Instagram name." }, 400);
       const liveAt = liveTime(form.get("liveAt"), now);
       if (liveAt) photo.liveAt = liveAt; // scheduled: hidden from the site until then
       const alt = clean(form.get("alt"), 150);

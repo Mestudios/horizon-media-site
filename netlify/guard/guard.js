@@ -27,6 +27,14 @@ import { BAN_AFTER, MODES, RATE_LIMIT, TRAP_FOLDERS, TRAPS } from "./settings.js
 const PHOTO_PAGES = new Set(["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html"]);
 import { createVisitorCounter, pickMode, visitorLabel } from "./visitors.js";
 
+// The same request without the browser's "has it changed?" headers.
+function withoutRevalidation(request) {
+  const headers = new Headers(request.headers);
+  headers.delete("if-none-match");
+  headers.delete("if-modified-since");
+  return new Request(request, { headers });
+}
+
 // Makes one guard with its own memory. Netlify runs several at a time.
 export function createGuard() {
   const limiter = createRateLimiter();
@@ -90,19 +98,26 @@ export function createGuard() {
 
     // Pages without photos only need the checks above, and the notice bar if one is on.
     const notice = await notices.current(now);
-    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return notice || forget ? reply(await context.next(), { notice, forget }) : undefined;
+    // A page the guard changes (notice bar, homepage photo, busy mode) is always
+    // fetched whole: a browser's "has it changed?" check would otherwise get
+    // "not modified" and keep showing its saved copy without the change.
+    const whole = () => context.next(withoutRevalidation(request));
+
+    if (!PHOTO_PAGES.has(new URL(request.url).pathname)) return notice || forget ? reply(await (notice ? whole() : context.next()), { notice, forget }) : undefined;
 
     const path = new URL(request.url).pathname;
     const hero = path === "/" || path === "/index.html" ? await homepage.current(now) : null;
 
     const preview = previewMode(request);
-    if (preview !== null) return reply(await context.next(), { mode: preview, preview: true, hero, notice, forget });
+    if (preview !== null) return reply(await whole(), { mode: preview, preview: true, hero, notice, forget });
 
     // Search engines and link-preview bots always get the normal page (with the
     // chosen homepage photo) and are not counted.
-    if (isBot(request)) return hero || notice || forget ? reply(await context.next(), { hero, notice, forget }) : undefined;
+    if (isBot(request)) return hero || notice || forget ? reply(await (hero || notice ? whole() : context.next()), { hero, notice, forget }) : undefined;
 
-    const [response, state] = await Promise.all([context.next(), welcome(request, context, now)]);
+    // Busy mode is decided while the page is fetched, so the last mode stands in for it.
+    const changes = hero || notice || mode !== 0;
+    const [response, state] = await Promise.all([changes ? whole() : context.next(), welcome(request, context, now)]);
     return reply(response, { ...state, hero, notice, forget });
   };
 }

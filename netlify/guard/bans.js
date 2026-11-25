@@ -10,8 +10,13 @@ import { network } from "./requests.js";
 import { BAN_MINUTES } from "./settings.js";
 
 const STORE = "site-bans";
-const KEY = "bans";
+// Each ban is its own entry, named ban/<scrambled address>/<banned until>, so
+// adding one never rewrites the others: a failed read can't wipe the list, and
+// two servers banning at the same moment can't overwrite each other. Reading
+// the list is one "list" call, with no file to open.
+const PREFIX = "ban/";
 const MAX_BANS = 2_000;
+const CLEANUP_PER_READ = 50; // expired entries deleted per read, at most
 const REFRESH_MS = 60_000;
 // A slow store must never hold up a page: give up on a call after this long.
 const CALL_TIMEOUT_MS = 1_500;
@@ -46,8 +51,21 @@ export function createBanList() {
   function refresh(now) {
     if (!pending) {
       readAt = now;
-      pending = withStore((store) => store.get(KEY, { type: "json" }))
-        .then((list) => { bans = list || {}; })
+      pending = withStore(async (store) => {
+        const { blobs } = await store.list({ prefix: PREFIX });
+        const next = {};
+        const expired = [];
+        for (const { key } of blobs) {
+          const [, who, until] = key.split("/");
+          const end = Number(until);
+          if (!who || !Number.isFinite(end)) continue;
+          if (end <= now) expired.push(key);
+          else next[who] = Math.max(next[who] || 0, end);
+        }
+        bans = next;
+        // Tidy up: expired entries are deleted a few at a time.
+        await Promise.all(expired.slice(0, CLEANUP_PER_READ).map((key) => store.delete(key)));
+      })
         // A warning, not an error: the site carries on with the last list it had.
         .catch((error) => console.warn("bans: could not read the list; using the last one", error?.message || error))
         .finally(() => { pending = null; });
@@ -77,17 +95,15 @@ export function createBanList() {
   async function ban(ip, now, why) {
     if (!ip) return;
     try {
-      const key = await scramble(ip);
-      readAt = -Infinity;
-      await refresh(now);
-      const fresh = bans;
-      const next = Object.fromEntries(Object.entries(fresh).filter(([, until]) => until > now).slice(-(MAX_BANS - 1)));
-      next[key] = now + BAN_MINUTES * 60_000;
-      bans = next;
-      await withStore((store) => store.setJSON(KEY, next));
+      const who = await scramble(ip);
+      const until = now + BAN_MINUTES * 60_000;
+      // Banned on this server at once, whatever happens to the save.
+      bans = { ...bans, [who]: until };
+      if (Object.keys(bans).length > MAX_BANS) return console.warn("bans: the list is full; this ban holds on this server only");
+      await withStore((store) => store.set(`${PREFIX}${who}/${until}`, ""));
       console.warn(`bans: ${ip} banned for ${BAN_MINUTES} minutes (${why})`);
     } catch (error) {
-      console.error("bans: could not save a ban", error);
+      console.error("bans: could not save a ban; it holds on this server only", error);
     }
   }
 
