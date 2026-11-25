@@ -493,6 +493,47 @@ test("the homepage photo can be chosen in the studio, only from the site's own p
   assert.equal((await call("/portfolio-photos.json")).body.hero, "");
 });
 
+test("a photo that comes off the site stops being the homepage photo and is unpinned", async () => {
+  const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  const path = `uploads/${id}/full.jpg`;
+  // Removed from All photos (to the Trash).
+  await call("/studio/hero", { method: "POST", cookie, form: { path } });
+  await call("/studio/pins", { method: "POST", cookie, form: { pins: JSON.stringify([path, "img/cars/grille.jpg"]) } });
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  let list = (await call("/portfolio-photos.json")).body;
+  assert.equal(list.hero, "", "no longer the homepage photo");
+  assert.deepEqual(list.pins, ["img/cars/grille.jpg"], "unpinned; other pins stay");
+
+  // A built-in photo taken off its page.
+  await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } });
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } });
+  list = (await call("/portfolio-photos.json")).body;
+  assert.equal(list.hero, "");
+  assert.deepEqual(list.pins, []);
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } })).status, 400, "can't be chosen while it's off the site");
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path } })).status, 400, "nor a photo in the Trash");
+
+  // Taken down after a removal request.
+  await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/nose.jpg" } });
+  await call("/removal-request", { method: "POST", form: { photo: "img/cars/nose.jpg", name: "Sam", contact: "@sam", relation: "owner", consent: "on" } });
+  const request = (await call("/studio/removals.json", { cookie })).body.find((r) => r.photo === "img/cars/nose.jpg");
+  assert.equal((await call("/studio/removal-takedown", { method: "POST", cookie, form: { id: request.id } })).status, 200);
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "");
+});
+
+test("a scheduled photo can't become the homepage photo before it goes live", async () => {
+  const cookie = await signIn();
+  const later = Date.now() + 86_400_000;
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Tomorrow", liveAt: String(later) }) })).body.photo.id;
+  const refused = await call("/studio/hero", { method: "POST", cookie, form: { path: `uploads/${id}/full.jpg` } });
+  assert.equal(refused.status, 400);
+  assert.match(refused.body.error, /isn't live yet/);
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "");
+  await call("/studio/edit-photo", { method: "POST", cookie, form: { id, title: "Tomorrow", credit: "x", sport: "football", liveAt: "" } });
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: `uploads/${id}/full.jpg` } })).status, 200, "once live, it can");
+});
+
 test("the studio counts how often each photo is requested, even after requests are done", async () => {
   const ask = (photo, ip) => call("/photo-request", { method: "POST", form: { photo, name: "A", contact: "a@b.c" }, ip });
   await ask("img/portfolio/golden-hour.jpg", "192.0.2.101");

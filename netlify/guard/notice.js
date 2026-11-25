@@ -50,5 +50,5 @@ const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;"
 export function useNotice(html, notice) {
   const link = notice.link && NOTICE_LINK.test(notice.link) ? ` <a href="${escape(notice.link)}">${escape(notice.linkText || "More")}</a>` : "";
   const bar = `<div class="notice-bar" role="region" aria-label="Notice" data-notice="${escape(notice.id || "")}"><p>${escape(notice.text)}${link}</p><button type="button" class="notice-close" aria-label="Close this notice">&times;</button></div>`;
-  return /<a class="skip"[^>]*>[^<]*<\/a>/.test(html) ? html.replace(/(<a class="skip"[^>]*>[^<]*<\/a>)/, `$1${bar}`) : html.replace(/(<body[^>]*>)/i, `$1${bar}`);
+  return /<a class="skip"[^>]*>[^<]*<\/a>/.test(html) ? html.replace(/(<a class="skip"[^>]*>[^<]*<\/a>)/, (skip) => skip + bar) : html.replace(/(<body[^>]*>)/i, (body) => body + bar);
 }

@@ -96,6 +96,20 @@
       watermark(context, canvas.width, canvas.height);
       canvas.classList.remove("is-loading");
     };
+    // A photo that can't load (offline, or gone) never leaves the last one showing.
+    image.onerror = () => {
+      if (ticket !== loading) return;
+      canvas.width = 800;
+      canvas.height = 600;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#151515";
+      context.fillRect(0, 0, 800, 600);
+      context.fillStyle = "#c9c9c9";
+      context.font = "28px Archivo, Arial, sans-serif";
+      context.textAlign = "center";
+      context.fillText("This photo couldn't load. Check your connection and try again.", 400, 300);
+      canvas.classList.remove("is-loading");
+    };
     canvas.classList.add("is-loading");
     image.src = src;
   }
@@ -432,7 +446,7 @@
     if (viewer.hidden) return;
     if (event.key === "Escape") {
       if (!removal.hidden) return closeRemoval();
-      return requestForm.hidden ? close() : !requestAlert.hidden ? (requestAlert.hidden = true) : closeRequest();
+      return requestForm.hidden ? close() : !requestAlert.hidden ? requestAlert.querySelector(".request-alert-ok").click() : closeRequest();
     }
     if (!requestForm.hidden || !removal.hidden) return; // a box is open
     if (event.key === "ArrowLeft") show(open - 1);

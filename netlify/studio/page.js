@@ -354,7 +354,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p>
 </div></section>
 <section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
-<div class="tabs" role="tablist" aria-label="News sections">
+<div class="tabs" role="tablist" aria-label="News sections" id="ann-tabs">
 <button type="button" role="tab" id="tab-ann" aria-controls="panel-ann" aria-selected="true">Announcements <span class="count" id="tab-ann-count"></span></button>
 <button type="button" role="tab" id="tab-recaps" aria-controls="panel-recaps" aria-selected="false" tabindex="-1">Recaps <span class="count" id="tab-recap-count"></span></button>
 <button type="button" role="tab" id="tab-notice" aria-controls="panel-notice" aria-selected="false" tabindex="-1">Notice bar <span class="pill" id="tab-notice-state">Off</span></button>
@@ -623,7 +623,9 @@ function showPicks() {
   picks.forEach((pick, i) => {
     const item = document.createElement("li");
     const image = document.createElement("img");
-    image.src = URL.createObjectURL(pick.file);
+    // One preview address per photo, made once (not on every redraw).
+    if (!pick.url) pick.url = URL.createObjectURL(pick.file);
+    image.src = pick.url;
     image.alt = "";
     if (pick.rotate) image.style.transform = "rotate(" + pick.rotate + "deg)";
     const label = document.createElement("b");
@@ -703,7 +705,13 @@ const toolNote = blurTool.querySelector(".tool-note");
 let blurPick = null, blurImage = null, preview = null, mode = "blur", dragFrom = null, dragBox = null;
 async function openTool(pick) {
   blurPick = pick;
-  blurImage = await createImageBitmap(pick.file, { imageOrientation: "from-image" });
+  try {
+    blurImage = await createImageBitmap(pick.file, { imageOrientation: "from-image" });
+  } catch (error) {
+    blurPick = null;
+    addStatus.textContent = "This device can't open that photo for editing (HEIC photos only open in Safari). Save it as a JPEG and choose it again.";
+    return;
+  }
   preview = turned(blurImage, pick.rotate, 1400);
   setMode("blur");
   blurTool.hidden = false;
@@ -853,6 +861,9 @@ const button = (text, className, onClick) => {
 const sitePhotos = document.getElementById("site-photos");
 const pinnedList = document.getElementById("pinned");
 let state = { photos: [], hidden: [], pins: [], hero: "" };
+// Lists that name photos (requests, "Most requested") wait for the first photo list.
+let photosLoaded;
+const photosReady = new Promise((resolve) => { photosLoaded = resolve; });
 let requestCounts = {}; // photo path -> how often it was requested
 async function refreshStats() {
   try { requestCounts = (await (await fetch("/studio/stats.json", { cache: "no-store" })).json()).requestCounts || {}; } catch (error) {}
@@ -910,6 +921,7 @@ async function refresh() {
   const data = await (await fetch("/studio/photos.json", { cache: "no-store" })).json();
   state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [], hero: data.hero || "" };
   await Promise.all([loadBuiltIn(), refreshStats()]);
+  photosLoaded();
   render();
   refreshTrash();
 }
@@ -1047,7 +1059,9 @@ function render() {
         () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
-    item = thumbItem(photo, [edit, pinButton(photo), homepageButton(photo), remove]);
+    // A scheduled photo can't be the homepage photo until it goes live.
+    const waiting = photo.added.liveAt > Date.now();
+    item = thumbItem(photo, waiting ? [edit, pinButton(photo), remove] : [edit, pinButton(photo), homepageButton(photo), remove]);
     list.append(item);
   }
   if (!list.children.length) list.append(miniRow(all.some((p) => p.added) ? "No added photos match." : "Nothing added in the studio yet.", ""));
@@ -1305,6 +1319,7 @@ function replyTools(item) {
 
 async function refreshRequests() {
   const items = await (await fetch("/studio/requests.json", { cache: "no-store" })).json();
+  await photosReady;
   waitingRequests = items.length;
   requestList.textContent = "";
   setText("stat-requests", items.length);
@@ -1328,7 +1343,7 @@ async function refreshRequests() {
   const top = Object.entries(requestCounts).sort((a, b) => b[1] - a[1])[0];
   if (top) {
     const known = everyPhoto().find((p) => p.path === top[0]);
-    ovRequests.append(miniRow("Most requested: ", (known ? known.title : top[0].replace(/^.*\\//, "")) + " (" + top[1] + (top[1] === 1 ? " request)" : " requests)")));
+    ovRequests.append(miniRow("Most requested: ", (known ? known.title : top[0].startsWith("uploads/") ? "a photo no longer on the site" : top[0].replace(/^.*\\//, "")) + " (" + top[1] + (top[1] === 1 ? " request)" : " requests)")));
   }
   if (!items.length) ovRequests.append(miniRow("No requests right now.", ""));
   if (!items.length) {
@@ -1413,7 +1428,7 @@ function showTab(name) {
   }
 }
 for (const [key, id] of Object.entries(tabs)) document.getElementById(id).addEventListener("click", () => showTab(key));
-document.querySelector(".tabs").addEventListener("keydown", (event) => {
+document.getElementById("ann-tabs").addEventListener("keydown", (event) => {
   const keys = Object.keys(tabs);
   const now = keys.findIndex((k) => document.getElementById(tabs[k]).getAttribute("aria-selected") === "true");
   const next = event.key === "ArrowRight" ? now + 1 : event.key === "ArrowLeft" ? now - 1 : null;
@@ -1494,6 +1509,8 @@ async function refreshAnnouncements() {
       document.getElementById("ann-link-text").value = item.linkText || "";
       const now = document.getElementById("ann-photo-now");
       pickPath.value = "";
+      document.getElementById("ann-photo").value = "";
+      closePicker();
       if (item.photoPath) {
         const known = everyPhoto().find((p) => p.path === item.photoPath);
         showPicked(item.photoPath, known ? known.title : "");
@@ -1539,6 +1556,7 @@ async function refreshAnnouncements() {
 const pickBox = document.getElementById("ann-pick-box");
 const pickButton = document.getElementById("ann-pick");
 const pickPath = document.getElementById("ann-photo-path");
+function closePicker() { pickBox.hidden = true; pickButton.setAttribute("aria-expanded", "false"); }
 const smallCopy = (path) => "/" + path.replace(/\\/full\\.jpg$/, "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
 function showPicked(path, title) {
   pickPath.value = path;
@@ -1586,7 +1604,7 @@ pickButton.addEventListener("click", async () => {
 });
 document.getElementById("ann-pick-search").addEventListener("input", showAnnPicker);
 // Uploading a photo replaces one picked from the site.
-document.getElementById("ann-photo").addEventListener("change", () => { if (document.getElementById("ann-photo").files[0]) { pickPath.value = ""; document.getElementById("ann-photo-now").hidden = true; } });
+document.getElementById("ann-photo").addEventListener("change", () => { if (document.getElementById("ann-photo").files[0]) { pickPath.value = ""; document.getElementById("ann-photo-now").hidden = true; document.getElementById("ann-photo-remove").checked = false; } });
 
 function stopEditing() {
   announceForm.reset();
@@ -1614,7 +1632,7 @@ announceForm.addEventListener("submit", async (event) => {
     announceStatus.textContent = "This device could not read that photo. Try a JPEG.";
     return;
   }
-  if (document.getElementById("ann-photo-remove").checked) { body.set("removePhoto", "1"); body.delete("photoPath"); body.delete("photoCrop"); }
+  if (document.getElementById("ann-photo-remove").checked && !document.getElementById("ann-photo-now").hidden) { body.set("removePhoto", "1"); body.delete("photoPath"); body.delete("photoCrop"); }
   const response = await fetch("/studio/announce", { method: "POST", body });
   const scheduled = dateBox.value > today();
   if (response.ok) flash(announceStatus, (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away."));

@@ -481,6 +481,11 @@ test("the notice bar from the studio shows at the top of every page, safely, unt
     assert.match(reply.body, /Game moved &lt;script&gt;alert\(1\)&lt;\/script&gt; <a href="book\.html">Book &quot;now&quot;<\/a>/);
     assert.doesNotMatch(reply.body, /<script>alert/);
   }
+  // Dollar signs are shown as typed (they once had a special meaning here).
+  await studioStore.setJSON("notice", { id: "1b", text: "Tickets $10, $1 off, $& $$ $' $`", until: "" });
+  const money = await visit(newInstance(), newVisitor(), { origin: () => new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<nav></nav></body>`, { headers: { "content-type": "text/html" } }) });
+  assert.match(money.body, /<p>Tickets \$10, \$1 off, \$&amp; \$\$ \$&#39; \$`/);
+  assert.equal(money.body.match(/<a class="skip"/g).length, 1, "the skip link is not copied into the bar");
   // A bad link in storage is left out; a notice past its last day disappears.
   await studioStore.setJSON("notice", { id: "2", text: "Hi", link: "javascript:alert(1)", until: "" });
   assert.doesNotMatch((await visit(newInstance(), newVisitor(), { path: "/book.html", origin: () => new Response("<body><a class=\"skip\" href=\"#main\">Skip</a></body>", { headers: { "content-type": "text/html" } }) })).body, /javascript:/);

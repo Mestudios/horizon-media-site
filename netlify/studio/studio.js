@@ -327,6 +327,14 @@ export function createStudio() {
     await store().delete(`meta/${id}`);
     return true;
   }
+  // A photo that comes off the site stops being the homepage photo and is
+  // unpinned, so the homepage never shows a removed photo.
+  async function forgetPhoto(path) {
+    const hero = await store().get("hero", { type: "json" });
+    if (hero && hero.path === path) await store().delete("hero");
+    const pins = await listPins();
+    if (pins.includes(path)) await store().setJSON("pins", pins.filter((p) => p !== path));
+  }
   async function deleteForGood(id) {
     await Promise.all([store().delete(`trash/${id}`), store().delete(`trash-photo/${id}/full`), store().delete(`trash-photo/${id}/thumb`)]);
   }
@@ -666,6 +674,14 @@ export function createStudio() {
     if (url.pathname === "/studio/hero") {
       const path = String(form.get("path") || "");
       if (path && !HERO_PATH.test(path)) return json({ error: "Unknown photo." }, 400);
+      // Only a photo that is on the site now: not one scheduled for later
+      // (that would publish it early), removed, or taken off its page.
+      const added = /^uploads\/([0-9a-f]{16})\/full\.jpg$/.exec(path);
+      if (added) {
+        const meta = await store().get(`meta/${added[1]}`, { type: "json" });
+        if (!meta) return json({ error: "That photo is no longer on the site." }, 400);
+        if (meta.liveAt > now) return json({ error: "That photo isn't live yet. Make it the homepage photo once it goes live." }, 400);
+      } else if (path && (await listHidden()).includes(path)) return json({ error: "That photo is off the site. Put it back first." }, 400);
       if (path) await store().setJSON("hero", { path, set: now });
       else await store().delete("hero");
       await rebuildPhotoIndex();
@@ -770,6 +786,7 @@ export function createStudio() {
       const hidden = (await listHidden()).filter((p) => p !== path);
       if (url.pathname === "/studio/hide") hidden.push(path);
       await store().setJSON("hidden", hidden.slice(-500));
+      if (url.pathname === "/studio/hide") await forgetPhoto(path);
       await rebuildPhotoIndex();
       console.log(`studio: ${url.pathname === "/studio/hide" ? "removed" : "put back"} ${path}`);
       return json({ ok: true, hidden });
@@ -788,6 +805,7 @@ export function createStudio() {
       const id = String(form.get("id") || "");
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
       await trashPhoto(id, me.username);
+      await forgetPhoto(`uploads/${id}/full.jpg`);
       await rebuildPhotoIndex();
       await listTrash(now);
       console.log(`studio: moved photo ${id} to the trash`);
@@ -831,6 +849,7 @@ export function createStudio() {
           hidden.push(item.photo);
           await store().setJSON("hidden", hidden.slice(-500));
         }
+        await forgetPhoto(item.photo);
         await rebuildPhotoIndex();
       }
       await store().setJSON(`rem/${id}`, { id, photo: item.photo, title: item.title, added: item.added, status: down ? "taken-down" : "kept", handledAt: now, handledBy: me.username });
