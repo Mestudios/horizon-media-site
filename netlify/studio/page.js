@@ -65,6 +65,10 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .undo[role=status]{color:var(--night);margin-top:0;min-height:0}
 .studio .undo .btn,.undo .btn{margin:0;padding:9px 18px;min-height:40px}
 @media (max-width:760px){.undo{bottom:84px}}
+.studio .setup-list{display:block;margin:10px 0 0}
+.studio .setup-list li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.studio .setup-list .ok{color:var(--accent-2);font-weight:600}
+.studio .setup-list .bad{color:var(--danger);font-weight:600}
 .studio ol.roadmap{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:0;border-left:3px solid var(--line)}
 .studio ol.roadmap>li{display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;padding:18px 0 18px 22px;position:relative;border-bottom:1px solid var(--line)}
 .studio ol.roadmap>li::before{content:"";position:absolute;left:-9px;top:24px;width:15px;height:15px;border-radius:50%;background:var(--panel);border:3px solid var(--line)}
@@ -336,6 +340,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="stats"><button type="button" class="card" data-go="requests" data-needs="editor"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements" data-needs="editor"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
 <div class="two" data-needs="editor"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
 <div class="card"><h2>Announcements</h2><ul class="mini" id="ov-ann"></ul><button class="btn" type="button" data-go="announcements">+ New announcement</button></div></div>
+<div class="card setup-card" id="setup-card" hidden><h2>Sign-ins</h2><p class="note">Each team sign-in set in Netlify, and whether it works. Only Admins see this. Passwords are never shown.</p><ul class="setup-list" id="setup-list"></ul><p class="note">Changes made in Netlify (Project configuration, Environment variables) only take effect after the next deploy.</p></div>
 <div class="card"><h2>Latest photos</h2><ul class="latest" id="ov-photos"></ul><button class="btn" type="button" data-go="photos">See all photos</button></div>
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
@@ -2167,12 +2172,32 @@ presetForm.addEventListener("submit", async (event) => {
 if (atLeast("admin")) refreshPresets();
 showMe();
 refresh();
+// Sign-ins check (Admins): which logins work, and why one doesn't.
+async function loadSetup() {
+  const slots = await readReply(await fetch("/studio/setup.json", { cache: "no-store" }));
+  if (!Array.isArray(slots)) return;
+  const why = { ok: "Working", "no-username": "Not working: the username is missing", "no-password": "Not working: the password is missing", "short-password": "Not working: the password is shorter than 12 characters" };
+  const list = document.getElementById("setup-list");
+  list.textContent = "";
+  for (const slot of slots) {
+    const row = document.createElement("li");
+    const who = document.createElement("span");
+    who.textContent = "Login " + slot.n + (slot.username ? " \u00b7 " + slot.username : "");
+    const state = document.createElement("span");
+    state.className = slot.state === "ok" ? "ok" : "bad";
+    state.textContent = why[slot.state] || slot.state;
+    row.append(who, state);
+    list.append(row);
+  }
+  document.getElementById("setup-card").hidden = false;
+}
 if (atLeast("editor")) {
   refreshAnnouncements();
   (atLeast("admin") ? refreshRemovals() : Promise.resolve()).then(loadTemplates).then(refreshRequests);
   refreshRecaps();
 }
 if (atLeast("admin")) loadTeam();
+if (atLeast("admin")) loadSetup();
 
 // Photos shared from the phone's gallery (sw.js keeps them for a moment) land here.
 async function takeShared() {

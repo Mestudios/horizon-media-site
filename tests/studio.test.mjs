@@ -1028,3 +1028,44 @@ test("the studio's Roadmap tab shows every planned release in order, to everyone
   // Signed out, it isn't shown.
   assert.doesNotMatch((await call("/studio")).body, /data-view="roadmap"/);
 });
+
+test("logins 1 to 5 each sign in on their own, and stray spaces pasted into Netlify don't break them", async () => {
+  const env = {
+    STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD,
+    STUDIO_USERNAME_2: "cb.framed.it", STUDIO_PASSWORD_2: "second long password",
+    STUDIO_USERNAME_3: " createddbyabby\n", STUDIO_PASSWORD_3: "third long password ",
+    STUDIO_USERNAME_4: "connors.visualss", STUDIO_PASSWORD_4: "\tfourth long password\n",
+    STUDIO_USERNAME_5: "fifth-person", STUDIO_PASSWORD_5: "fifth long password",
+  };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  const logins = [[USERNAME, PASSWORD], ["cb.framed.it", "second long password"], ["createddbyabby", "third long password"], ["Connors.Visualss ", "fourth long password"], ["fifth-person", "fifth long password"]];
+  for (const [i, [username, password]] of logins.entries()) {
+    const reply = await call("/studio/login", { method: "POST", form: { username, password }, ip: `198.51.100.${120 + i}` });
+    assert.equal(reply.status, 200, `login ${i + 1}`);
+    const cookie = reply.headers.get("set-cookie").split(";")[0];
+    assert.match(cookie, new RegExp(`^hm_studio=\\d{13}\\.${i + 1}\\.`), `signed in as login ${i + 1}`);
+    assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 200, `login ${i + 1} can add photos`);
+  }
+  // One login's password doesn't work for another.
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: "connors.visualss", password: "third long password" }, ip: "198.51.100.130" })).status, 401);
+});
+
+test("the Sign-ins check tells the first sign-in which logins work and why one doesn't, without showing passwords", async () => {
+  const env = {
+    STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD,
+    STUDIO_USERNAME_2: "cb.framed.it", STUDIO_PASSWORD_2: "second long password",
+    STUDIO_USERNAME_3: "createddbyabby", STUDIO_PASSWORD_3: "short",
+    STUDIO_USERNAME_4: "connors.visualss",
+    STUDIO_PASSWORD_5: "a password with no username",
+  };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  const first = await signIn();
+  const setup = await call("/studio/setup.json", { cookie: first });
+  assert.equal(setup.status, 200);
+  assert.deepEqual(setup.body.map((s) => [s.n, s.state]), [[1, "ok"], [2, "ok"], [3, "short-password"], [4, "no-password"], [5, "no-username"]]);
+  assert.doesNotMatch(JSON.stringify(setup.body), /password with no username|second long password|short"/, "no password is ever sent");
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: "createddbyabby", password: "short" }, ip: "198.51.100.140" })).status, 401, "a short password stays switched off");
+  const second = (await call("/studio/login", { method: "POST", form: { username: "cb.framed.it", password: "second long password" }, ip: "198.51.100.141" })).headers.get("set-cookie").split(";")[0];
+  assert.equal((await call("/studio/setup.json", { cookie: second })).status, 403, "only the first sign-in sees it");
+  assert.equal((await call("/studio/setup.json")).status, 401);
+});

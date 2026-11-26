@@ -57,6 +57,7 @@ export const NEEDS = {
   "/studio/team.json": "admin",
   "/studio/roles": "admin",
   "/studio/log.json": "admin",
+  "/studio/setup.json": "admin", // the Sign-ins check
 };
 
 export const atLeast = (role, need) => RANK[role] !== undefined && RANK[role] >= RANK[need];
