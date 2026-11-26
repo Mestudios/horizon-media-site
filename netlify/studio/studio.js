@@ -19,6 +19,7 @@ import { studioPage, TEAM } from "./page.js";
 import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 import { createBanList } from "../guard/bans.js";
+import { network } from "../guard/requests.js";
 import { HERO_PATH } from "../guard/homepage.js";
 import { NOTICE_LINK } from "../guard/notice.js";
 
@@ -35,6 +36,39 @@ const MAX_THUMB = 250_000;
 const MAX_PHOTOS = 200;
 const MAX_ANNOUNCEMENTS = 50;
 const MAX_PINS = 24;
+// Removed photos wait in the trash this long before they are deleted for good.
+const TRASH_DAYS = 30;
+// Photo and removal requests nobody has handled are deleted after this long,
+// with the visitor's details (the privacy page promises it).
+const REQUEST_DAYS = 90;
+// Removal requests: at most this many waiting, and handled ones kept as a record (without anyone's details).
+const MAX_REMOVALS = 200;
+const KEEP_HANDLED = 100;
+const RELATIONS = { pictured: "I am in the photo", parent: "I'm a parent or guardian of someone in it", owner: "I own the car in it", other: "Other" };
+// Reply templates for photo requests.
+const MAX_TEMPLATES = 12;
+const DEFAULT_TEMPLATES = [
+  { name: "Here's your photo", text: "Hi {name}! Thanks for asking about \"{photo}\". Here it is. If you post it, please tag @hor1zonmedia. Thanks for supporting us!" },
+  { name: "Coming soon", text: "Hi {name}! Thanks for your request for \"{photo}\" ({link}). We'll send it to you within a week." },
+  { name: "Can't share this one", text: "Hi {name}, thanks for asking about \"{photo}\". Sorry, we can't share that one, but you can see more of our work at https://www.instagram.com/hor1zonmedia/." },
+];
+// Recaps: a page of chosen photos, announced on the homepage.
+const MAX_RECAPS = 30;
+const MAX_RECAP_PHOTOS = 60;
+
+// How an announcement's photo is cropped for its card: the part of the photo
+// shown, as fractions of its width and height. Anything else is ignored.
+function readCrop(raw) {
+  let crop;
+  try { crop = JSON.parse(String(raw || "")); } catch { return null; }
+  if (!crop || typeof crop !== "object") return null;
+  const n = ["x", "y", "w", "h"].map((k) => Number(crop[k]));
+  if (!n.every(Number.isFinite)) return null;
+  const [x, y, w, h] = n;
+  if (x < 0 || y < 0 || w <= 0.02 || h <= 0.02 || w > 1 || h > 1 || x + w > 1.001 || y + h > 1.001) return null;
+  const r = (v) => Math.round(v * 10000) / 10000;
+  return { x: r(x), y: r(y), w: r(w), h: r(h) };
+}
 // Password guessing: this many wrong sign-ins from one address locks it out for
 // LOCK_MINUTES. Counted in Netlify Blobs, so it holds across all of Netlify's servers.
 const LOCK_AFTER = 10;
@@ -66,15 +100,27 @@ const MAX_ACCOUNTS = 5;
 // The team's sign-ins: STUDIO_USERNAME and STUDIO_PASSWORD, then
 // STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5. A pair with no
 // username, or a password shorter than 12 characters, is ignored.
+// Spaces or a line break pasted around a value in Netlify are ignored.
+const MIN_PASSWORD = 12;
 function accounts() {
-  const found = [];
+  return accountSetup().filter((a) => a.state === "ok").map(({ n, username, password }) => ({ n, username, password }));
+}
+
+// Every sign-in slot 1 to MAX_ACCOUNTS that has anything set, and whether it
+// works. The studio's Sign-ins check shows this to the first sign-in, without
+// any password, so a broken login says why instead of looking like a wrong
+// password.
+function accountSetup() {
+  const slots = [];
   for (let n = 1; n <= MAX_ACCOUNTS; n++) {
     const suffix = n === 1 ? "" : `_${n}`;
-    const username = setting(`STUDIO_USERNAME${suffix}`);
-    const password = setting(`STUDIO_PASSWORD${suffix}`);
-    if (username !== "" && password.length >= 12) found.push({ n, username, password });
+    const username = setting(`STUDIO_USERNAME${suffix}`).trim();
+    const password = setting(`STUDIO_PASSWORD${suffix}`).trim();
+    if (!username && !password) continue;
+    const state = !username ? "no-username" : !password ? "no-password" : password.length < MIN_PASSWORD ? "short-password" : "ok";
+    slots.push({ n, username, password, state });
   }
-  return found;
+  return slots;
 }
 
 // Compares two strings without leaking, through timing, how much of them matched.
@@ -108,7 +154,44 @@ async function signedIn(request, list, now) {
   const match = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.([1-9])\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
   if (!match || Number(match[1]) <= now) return null;
   const account = list.find((a) => a.n === Number(match[2]));
-  return account !== undefined && (await same(match[3], await sign(match[1], account))) ? account : null;
+  if (account === undefined || !(await same(match[3], await sign(match[1], account)))) return null;
+  // A session ended with Sign out stays ended, even if its cookie was copied.
+  if (await store().get(`signed-out/${match[3]}`)) return null;
+  return account;
+}
+
+// A posted form, or null when the body isn't one (a broken or hand-made request).
+async function readForm(request) {
+  try {
+    return await request.formData();
+  } catch {
+    return null;
+  }
+}
+const BAD_FORM = { error: "That request wasn't a form this site sends." };
+
+// Public lists never name the team member who added something: a sign-in
+// name is half of a login.
+const unsigned = ({ by, editedBy, ...item }) => item;
+
+// The public photo list: no sign-in names, and pins or a homepage photo that
+// point at a photo not on the site (scheduled for later, or removed) are left
+// out, so a scheduled photo's address doesn't leak early.
+function publicPhotos(data) {
+  const live = new Set(data.photos.map((p) => `uploads/${p.id}/full.jpg`));
+  const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !data.hidden.includes(path));
+  return { ...data, photos: data.photos.map(unsigned), pins: data.pins.filter(onSite), hero: data.hero && onSite(data.hero) ? data.hero : "" };
+}
+
+// A public photo (studio upload or announcement photo). Browsers keep it for a
+// day, then check back cheaply ("has it changed?"), so a photo that is removed
+// or taken down stops showing within a day, not a year.
+const PHOTO_CACHE = "public, max-age=86400, must-revalidate";
+function photoReply(request, bytes, name) {
+  const tag = `"${name}-${bytes.byteLength}"`;
+  const headers = { ...SECURITY, "content-type": "image/jpeg", "cache-control": PHOTO_CACHE, etag: tag };
+  if ((request.headers.get("if-none-match") || "") === tag) return new Response(null, { status: 304, headers });
+  return new Response(bytes, { headers });
 }
 
 const reply = (body, status = 200, headers = {}) =>
@@ -154,16 +237,27 @@ export function createStudio() {
   const blocked = () => reply("This network is blocked from Horizon Media for an hour for sending far too many requests.", 403, { "content-type": "text/plain; charset=utf-8" });
 
   // Failed sign-ins per address, kept under a scrambled form of the address.
-  const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}`;
+  // Each wrong try is its own entry (login-fail/<scrambled address>/<when>-<random>),
+  // so tries sent at the same moment are all counted: nothing is read, changed
+  // and saved back. Counting them is one "list" call.
+  const lockKey = async (ip) => `login-fail/${(await sha256(`lock:${ip}`)).slice(0, 24)}/`;
+  async function recentFailures(ip, now) {
+    const { blobs } = await store().list({ prefix: await lockKey(ip) });
+    const recent = [];
+    const old = [];
+    for (const { key } of blobs) (now - Number(key.split("/").pop().split("-")[0]) < LOCK_MINUTES * 60_000 ? recent : old).push(key);
+    await Promise.all(old.slice(0, 20).map((key) => store().delete(key)));
+    return recent;
+  }
   async function lockedOut(ip, now) {
-    const entry = await store().get(await lockKey(ip), { type: "json" });
-    return !!entry && entry.count >= LOCK_AFTER && now - entry.since < LOCK_MINUTES * 60_000;
+    return (await recentFailures(ip, now)).length >= LOCK_AFTER;
   }
   async function countFailure(ip, now) {
-    const key = await lockKey(ip);
-    const entry = await store().get(key, { type: "json" });
-    const fresh = !entry || now - entry.since >= LOCK_MINUTES * 60_000;
-    await store().setJSON(key, fresh ? { since: now, count: 1 } : { since: entry.since, count: entry.count + 1 });
+    await store().set(`${await lockKey(ip)}${now}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`, "");
+  }
+  async function clearFailures(ip) {
+    const { blobs } = await store().list({ prefix: await lockKey(ip) });
+    await Promise.all(blobs.map(({ key }) => store().delete(key)));
   }
 
   function tooManyRequests(ip, now) {
@@ -248,11 +342,19 @@ export function createStudio() {
     await store().setJSON("index/announcements", { built: Date.now(), data: items });
     return items;
   }
+  // When a stored list is out of date, one visitor per server rebuilds it;
+  // visitors arriving meanwhile get the previous copy, so a busy moment
+  // doesn't turn into every visitor rebuilding at once.
+  const rebuilding = new Map();
   async function readIndex(key, rebuild) {
     const index = await store().get(key, { type: "json" });
     const now = Date.now();
     const fresh = index && now - index.built < INDEX_MINUTES * 60_000 && !(index.next && now >= index.next);
-    return fresh ? index.data : rebuild();
+    if (fresh) return index.data;
+    if (rebuilding.has(key)) return index ? index.data : rebuilding.get(key);
+    const run = rebuild().finally(() => rebuilding.delete(key));
+    rebuilding.set(key, run);
+    return run;
   }
   const photoIndex = () => readIndex("index/photos", rebuildPhotoIndex);
   const announcementIndex = () => readIndex("index/announcements", rebuildAnnouncementIndex);
@@ -270,9 +372,76 @@ export function createStudio() {
   const presetIndex = () => readIndex("index/presets", rebuildPresetIndex);
 
   async function listRequests() {
+    await forgetOldRequests(Date.now());
     const { blobs } = await store().list({ prefix: "req/" });
     const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
     return items.sort((a, b) => b.added - a.added);
+  }
+
+  // Deletes photo requests, and open removal requests, older than
+  // REQUEST_DAYS. Run when the studio lists them and when a new one comes in,
+  // so old ones go even if nobody opens the studio. Handled removal records
+  // hold no personal details and are kept (KEEP_HANDLED).
+  async function forgetOldRequests(now) {
+    const cutoff = now - REQUEST_DAYS * 86_400_000;
+    for (const prefix of ["req/", "rem/"]) {
+      const { blobs } = await store().list({ prefix });
+      const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+      const old = items.filter((item) => item.added < cutoff && (prefix === "req/" || item.status === "open"));
+      await Promise.all(old.map((item) => store().delete(`${prefix}${item.id}`)));
+      if (old.length) console.log(`studio: deleted ${old.length} unhandled ${prefix === "req/" ? "photo" : "removal"} request(s) older than ${REQUEST_DAYS} days`);
+    }
+  }
+
+  // Every item stored under a prefix, newest first.
+  async function listAll(prefix, field = "added") {
+    const { blobs } = await store().list({ prefix });
+    const items = (await Promise.all(blobs.map(({ key }) => store().get(key, { type: "json" })))).filter(Boolean);
+    return items.sort((a, b) => (b[field] || 0) - (a[field] || 0));
+  }
+
+  // ---- Trash: a removed photo keeps its files under trash-photo/ (so its
+  // public address stops working) and is deleted for good after TRASH_DAYS.
+  async function moveFile(from, to) {
+    const bytes = await store().get(from, { type: "arrayBuffer" });
+    if (bytes) await store().set(to, bytes);
+    await store().delete(from);
+  }
+  async function trashPhoto(id, by, why) {
+    const meta = await store().get(`meta/${id}`, { type: "json" });
+    if (!meta) return false;
+    await Promise.all(["full", "thumb"].map((kind) => moveFile(`photo/${id}/${kind}`, `trash-photo/${id}/${kind}`)));
+    await store().setJSON(`trash/${id}`, { ...meta, trashedAt: Date.now(), trashedBy: by, ...(why ? { why } : {}) });
+    await store().delete(`meta/${id}`);
+    return true;
+  }
+  // A photo that comes off the site stops being the homepage photo and is
+  // unpinned, so the homepage never shows a removed photo.
+  async function forgetPhoto(path) {
+    const hero = await store().get("hero", { type: "json" });
+    if (hero && hero.path === path) await store().delete("hero");
+    const pins = await listPins();
+    if (pins.includes(path)) await store().setJSON("pins", pins.filter((p) => p !== path));
+  }
+  async function deleteForGood(id) {
+    await Promise.all([store().delete(`trash/${id}`), store().delete(`trash-photo/${id}/full`), store().delete(`trash-photo/${id}/thumb`)]);
+  }
+  async function listTrash(now) {
+    const items = await listAll("trash/", "trashedAt");
+    const keep = [];
+    for (const item of items) {
+      if (now - item.trashedAt >= TRASH_DAYS * 86_400_000) await deleteForGood(item.id);
+      else keep.push({ ...item, deletesOn: item.trashedAt + TRASH_DAYS * 86_400_000 });
+    }
+    return keep;
+  }
+
+  // ---- Recaps
+  // A recap's photos, leaving out any that are no longer on the site.
+  async function recapForVisitors(recap) {
+    const { photos, hidden } = await photoIndex();
+    const live = new Set(photos.map((p) => `uploads/${p.id}/full.jpg`));
+    return { ...recap, photos: recap.photos.filter((p) => (p.path.startsWith("uploads/") ? live.has(p.path) : !hidden.includes(p.path))) };
   }
 
   return async function studio(request, context) {
@@ -280,7 +449,9 @@ export function createStudio() {
     const now = Date.now();
 
     // ---- Public: the list and the photos themselves
-    const ip = context.ip || "unknown";
+    // Limits and the sign-in lockout count a whole IPv6 network (/64) as one
+    // address, like the site's ban list, so switching addresses inside it doesn't help.
+    const ip = network(context.ip || "unknown");
     // Kicked off the site: nothing here answers a banned address.
     if (await bans.isBanned(context.ip, now)) return blocked();
     let limited;
@@ -288,18 +459,26 @@ export function createStudio() {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
       // Not kept by browsers: a photo or announcement removed in the studio
       // disappears from the site on the next page load.
-      return json(await photoIndex(), 200, { "cache-control": "no-cache" });
+      return json(publicPhotos(await photoIndex()), 200, { "cache-control": "no-cache" });
     }
     if (request.method === "GET" && url.pathname === "/announcements.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
       const today = todayIn(now);
-      const up = (await announcementIndex()).filter((item) => isUp(item, today));
-      return json(up, 200, { "cache-control": "no-cache" });
+      let up = (await announcementIndex()).filter((item) => isUp(item, today));
+      // A photo picked from the site that has since come off it is left out.
+      if (up.some((item) => item.photoPath)) {
+        const { photos, hidden } = await photoIndex();
+        const live = new Set(photos.map((p) => `uploads/${p.id}/full.jpg`));
+        const onSite = (path) => (path.startsWith("uploads/") ? live.has(path) : !hidden.includes(path));
+        up = up.map(({ photoPath, ...item }) => (photoPath && onSite(photoPath) ? { ...item, photoPath } : item));
+      }
+      return json(up.map(unsigned), 200, { "cache-control": "no-cache" });
     }
     if (url.pathname === "/photo-request") {
       if (request.method !== "POST") return reply("Not allowed", 405);
       if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
-      const form = await request.formData();
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
       // A field people never see: forms that fill it in are bots.
       if (String(form.get("website") || "") !== "") return json({ ok: true });
       const name = clean(form.get("name"), 60);
@@ -307,10 +486,16 @@ export function createStudio() {
       const message = clean(form.get("message"), 500);
       const photoPath = String(form.get("photo") || "");
       if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
+      // Only a photo that is on the site now (not removed, deleted or scheduled),
+      // so the "most requested" counts can't be padded with made-up addresses.
+      const listed = await photoIndex();
+      const onSite = photoPath.startsWith("uploads/") ? listed.photos.some((p) => `uploads/${p.id}/full.jpg` === photoPath) : !listed.hidden.includes(photoPath);
+      if (!onSite) return json({ error: "That photo isn't on the site any more." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       // Counted only for requests that would be saved, so a mistyped form doesn't use up the hour.
-      if (tooManyRequests(context.ip || "unknown", now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      await forgetOldRequests(now);
       if ((await store().list({ prefix: "req/" })).blobs.length >= MAX_REQUESTS) return json({ full: true, error: "We have too many photo requests to answer right now, so please try again in a few days or message us on Instagram." }, 503);
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       await store().setJSON(`req/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, message, added: now });
@@ -321,9 +506,41 @@ export function createStudio() {
       console.log(`studio: photo request ${id}`);
       return json({ ok: true });
     }
+    if (url.pathname === "/removal-request") {
+      if (request.method !== "POST") return reply("Not allowed", 405);
+      if (request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin" }, 403);
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
+      if (String(form.get("website") || "") !== "") return json({ ok: true });
+      const name = clean(form.get("name"), 60);
+      const contact = clean(form.get("contact"), 100);
+      const message = clean(form.get("message"), 500);
+      const relation = Object.hasOwn(RELATIONS, String(form.get("relation"))) ? String(form.get("relation")) : "";
+      const photoPath = String(form.get("photo") || "");
+      if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
+      if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can let you know when it's down." }, 400);
+      if (!relation) return json({ error: "Choose how you're connected to the photo." }, 400);
+      if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
+      if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
+      await forgetOldRequests(now);
+      if ((await store().list({ prefix: "rem/" })).blobs.length >= MAX_REMOVALS) return json({ error: "We couldn't save your request right now, so please email or message us on Instagram instead." }, 503);
+      const id = hex(crypto.getRandomValues(new Uint8Array(8)));
+      await store().setJSON(`rem/${id}`, { id, photo: photoPath, title: clean(form.get("title"), 60), name, contact, relation, message, added: now, status: "open" });
+      console.log(`studio: removal request ${id}`);
+      return json({ ok: true });
+    }
+    const recapFile = /^\/recaps\/([0-9a-f]{16})\.json$/.exec(url.pathname);
+    if (recapFile) {
+      if (request.method !== "GET") return reply("Not allowed", 405);
+      if ((limited = await tooManyLoads("list", ip, now))) return limited;
+      const recap = await store().get(`recap/${recapFile[1]}`, { type: "json" });
+      if (!recap || recap.date > todayIn(now)) return json({ error: "Not found" }, 404);
+      const { by, ...shown } = await recapForVisitors(recap);
+      return json(shown, 200, { "cache-control": "no-cache" });
+    }
     if (request.method === "GET" && url.pathname === "/presets.json") {
       if ((limited = await tooManyLoads("list", ip, now))) return limited;
-      return json(await presetIndex(), 200, { "cache-control": "no-cache" });
+      return json((await presetIndex()).map(unsigned), 200, { "cache-control": "no-cache" });
     }
     const presetFile = /^\/preset-files\/([0-9a-f]{16})\/(dng|xmp|before|after)$/.exec(url.pathname);
     if (presetFile) {
@@ -345,7 +562,7 @@ export function createStudio() {
       const bytes = await store().get(`ann-photo/${annPhoto[1]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
       // The page asks for it with ?v=<when it was added>, so a new photo gets a new address.
-      return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
+      return photoReply(request, bytes, `a-${annPhoto[1]}`);
     }
     const file = /^\/uploads\/([0-9a-f]{16})\/(full|thumb)\.jpg$/.exec(url.pathname);
     if (file) {
@@ -353,7 +570,7 @@ export function createStudio() {
       if ((limited = await tooManyLoads("image", ip, now))) return limited;
       const bytes = await store().get(`photo/${file[1]}/${file[2]}`, { type: "arrayBuffer" });
       if (!bytes) return reply("Not found", 404);
-      return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
+      return photoReply(request, bytes, `${file[1]}-${file[2]}`);
     }
     if (!url.pathname.startsWith("/studio")) return;
 
@@ -364,17 +581,40 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (url.pathname === "/studio/announcements.json" || url.pathname === "/studio/requests.json" || url.pathname === "/studio/stats.json" || url.pathname === "/studio/photos.json") {
-        if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json", "/studio/setup.json"].includes(url.pathname)) {
+        const who = await signedIn(request, list, now);
+        if (!who) return json({ error: "Sign in first." }, 401);
+        if (url.pathname === "/studio/trash.json") return json(await listTrash(now));
+        if (url.pathname === "/studio/setup.json") {
+          if (who.n !== 1) return json({ error: "Only the first sign-in can see this." }, 403);
+          return json(accountSetup().map(({ n, username, state }) => ({ n, username, state })));
+        }
+        if (url.pathname === "/studio/removals.json") { await forgetOldRequests(now); return json(await listAll("rem/")); }
+        if (url.pathname === "/studio/templates.json") return json((await store().get("templates", { type: "json" })) || DEFAULT_TEMPLATES);
+        if (url.pathname === "/studio/recaps.json") return json(await listAll("recap/"));
         if (url.pathname === "/studio/stats.json") return json({ requestCounts: (await store().get("request-counts", { type: "json" })) || {} });
         if (url.pathname === "/studio/photos.json") return json(await allPhotoData());
         if (url.pathname === "/studio/requests.json") return json(await listRequests());
         return json({ today: todayIn(now), items: await listAnnouncements(), notice: (await store().get("notice", { type: "json" })) || null });
       }
+      // Thumbnails of photos in the trash, for the team only.
+      const trashThumb = /^\/studio\/trash-photo\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
+      if (trashThumb) {
+        if (!(await signedIn(request, list, now))) return reply("Sign in first.", 401);
+        const bytes = await store().get(`trash-photo/${trashThumb[1]}/thumb`, { type: "arrayBuffer" });
+        if (!bytes) return reply("Not found", 404);
+        return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, no-store" } });
+      }
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       const me = await signedIn(request, list, now);
       if (!me) return reply(studioPage({ state: "out" }));
-      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me) } }));
+      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me), first: me.n === 1 } }));
+    }
+    // Photos shared from a phone's gallery are normally caught on the phone by
+    // sw.js. If it isn't installed yet, the share lands here: nothing is kept,
+    // and the studio explains what to do.
+    if (url.pathname === "/studio/share-target" && request.method === "POST") {
+      return new Response(null, { status: 303, headers: { ...SECURITY, location: "/studio?share=again#add", "cache-control": "no-store" } });
     }
     if (request.method !== "POST") return reply("Not allowed", 405);
     // Forms must come from this site itself.
@@ -383,14 +623,17 @@ export function createStudio() {
     if (url.pathname === "/studio/login") {
       if (tooManyAttempts(ip, now)) return json({ error: "Too many tries. Wait a minute." }, 429);
       if (await lockedOut(ip, now)) return json({ error: `Too many wrong tries from here. Wait ${LOCK_MINUTES} minutes.` }, 429);
-      const form = await request.formData();
+      const form = await readForm(request);
+      if (!form) return json(BAD_FORM, 400);
       // Check every account, both fields each time, so the reply does not reveal
       // which account exists or which field was wrong.
-      const username = String(form.get("username") || "");
+      // Usernames ignore spaces around them and capital letters (phones add
+      // both); passwords must match exactly.
+      const username = String(form.get("username") || "").trim().toLowerCase();
       const password = String(form.get("password") || "");
       let account;
       for (const candidate of list) {
-        const nameOk = await same(username, candidate.username);
+        const nameOk = await same(username, candidate.username.trim().toLowerCase());
         const passwordOk = await same(password, candidate.password);
         if (nameOk && passwordOk && account === undefined) account = candidate;
       }
@@ -400,7 +643,7 @@ export function createStudio() {
         return json({ error: "Wrong username or password." }, 401);
       }
       console.log(`studio: ${account.username} signed in`);
-      await store().delete(await lockKey(ip));
+      await clearFailures(ip);
       const seconds = form.get("remember") === "on" ? REMEMBER_DAYS * 86_400 : SESSION_HOURS * 3600;
       const expires = now + seconds * 1000;
       return json({ ok: true }, 200, {
@@ -408,12 +651,20 @@ export function createStudio() {
       });
     }
     if (url.pathname === "/studio/logout") {
+      // Ends this session on the server too (until its cookie would have run
+      // out anyway), and tidies away records of sessions that have run out.
+      const ended = new RegExp(`(?:^|;\\s*)${COOKIE}=(\\d{13})\\.[1-9]\\.([0-9a-f]{64})(?:;|$)`).exec(request.headers.get("cookie") || "");
+      if (ended && (await signedIn(request, list, now))) await store().set(`signed-out/${ended[2]}`, ended[1]);
+      const { blobs } = await store().list({ prefix: "signed-out/" });
+      const old = (await Promise.all(blobs.map(async ({ key }) => ({ key, until: Number(await store().get(key)) })))).filter((r) => r.until < now);
+      await Promise.all(old.map(({ key }) => store().delete(key)));
       return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=; Max-Age=0; Path=/studio; Secure; HttpOnly; SameSite=Strict` });
     }
 
     const me = await signedIn(request, list, now);
     if (!me) return json({ error: "Sign in first." }, 401);
-    const form = await request.formData();
+    const form = await readForm(request);
+    if (!form) return json(BAD_FORM, 400);
 
     // Who you are: the Instagram name your photos are credited to by default.
     if (url.pathname === "/studio/profile") {
@@ -434,6 +685,8 @@ export function createStudio() {
       const id = hex(crypto.getRandomValues(new Uint8Array(8)));
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { id, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, added: now, by: me.username };
+      // Every photo is credited, as Edit already requires.
+      if (!photo.credit) return json({ error: "Give the photographer's Instagram name." }, 400);
       const liveAt = liveTime(form.get("liveAt"), now);
       if (liveAt) photo.liveAt = liveAt; // scheduled: hidden from the site until then
       const alt = clean(form.get("alt"), 150);
@@ -542,6 +795,14 @@ export function createStudio() {
     if (url.pathname === "/studio/hero") {
       const path = String(form.get("path") || "");
       if (path && !HERO_PATH.test(path)) return json({ error: "Unknown photo." }, 400);
+      // Only a photo that is on the site now: not one scheduled for later
+      // (that would publish it early), removed, or taken off its page.
+      const added = /^uploads\/([0-9a-f]{16})\/full\.jpg$/.exec(path);
+      if (added) {
+        const meta = await store().get(`meta/${added[1]}`, { type: "json" });
+        if (!meta) return json({ error: "That photo is no longer on the site." }, 400);
+        if (meta.liveAt > now) return json({ error: "That photo isn't live yet. Make it the homepage photo once it goes live." }, 400);
+      } else if (path && (await listHidden()).includes(path)) return json({ error: "That photo is off the site. Put it back first." }, 400);
       if (path) await store().setJSON("hero", { path, set: now });
       else await store().delete("hero");
       await rebuildPhotoIndex();
@@ -573,7 +834,7 @@ export function createStudio() {
       if (!form.get("id") && (await store().list({ prefix: "ann/" })).blobs.length >= MAX_ANNOUNCEMENTS) return json({ error: `The studio holds ${MAX_ANNOUNCEMENTS} announcements at most. Remove some first.` }, 409);
       // An optional link: a page of this site (cars.html, portfolio.html#x) or an https address.
       const rawLink = String(form.get("link") || "").trim();
-      const link = /^(https:\/\/[^\s<>"']{1,300}|[a-z0-9-]{1,40}\.html(#[a-z0-9-]{1,40})?)$/i.test(rawLink) ? rawLink : "";
+      const link = NOTICE_LINK.test(rawLink) ? rawLink : "";
       if (rawLink && !link) return json({ error: "The link must be a page of this site, like cars.html, or start with https://." }, 400);
       const linkText = link ? clean(form.get("linkText"), 40) || "Read more" : "";
       // An optional photo, shrunk on the device like portfolio photos.
@@ -585,6 +846,10 @@ export function createStudio() {
         if (!isJpeg(photoBytes)) return json({ error: "Only JPEG photos are accepted." }, 415);
       }
       const dropPhoto = form.get("removePhoto") === "1";
+      // Or a photo already on the site, picked from the portfolio or car page.
+      const photoPath = dropPhoto || photoBytes ? "" : String(form.get("photoPath") || "");
+      if (photoPath && !REQUESTABLE.test(photoPath)) return json({ error: "That photo isn't on the site." }, 400);
+      const crop = dropPhoto ? null : readCrop(form.get("photoCrop"));
 
       // Editing: an existing id keeps its place; otherwise a new announcement.
       const editing = String(form.get("id") || "");
@@ -596,10 +861,18 @@ export function createStudio() {
         if (photoBytes) {
           await store().set(`ann-photo/${editing}`, photoBytes.buffer);
           announcement.photo = now;
-        } else if (dropPhoto && old.photo) {
-          await store().delete(`ann-photo/${editing}`);
+          delete announcement.photoPath;
+        } else if (photoPath) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
           delete announcement.photo;
+          announcement.photoPath = photoPath;
+        } else if (dropPhoto) {
+          if (old.photo) await store().delete(`ann-photo/${editing}`);
+          delete announcement.photo;
+          delete announcement.photoPath;
         }
+        if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
+        else delete announcement.photoCrop;
         await store().setJSON(`ann/${editing}`, announcement);
         await rebuildAnnouncementIndex();
         console.log(`studio: edited announcement ${editing}`);
@@ -610,7 +883,8 @@ export function createStudio() {
       if (photoBytes) {
         await store().set(`ann-photo/${id}`, photoBytes.buffer);
         announcement.photo = now;
-      }
+      } else if (photoPath) announcement.photoPath = photoPath;
+      if (crop && (announcement.photo || announcement.photoPath)) announcement.photoCrop = crop;
       await store().setJSON(`ann/${id}`, announcement);
       await rebuildAnnouncementIndex();
       console.log(`studio: added announcement ${id}`);
@@ -633,6 +907,7 @@ export function createStudio() {
       const hidden = (await listHidden()).filter((p) => p !== path);
       if (url.pathname === "/studio/hide") hidden.push(path);
       await store().setJSON("hidden", hidden.slice(-500));
+      if (url.pathname === "/studio/hide") await forgetPhoto(path);
       await rebuildPhotoIndex();
       console.log(`studio: ${url.pathname === "/studio/hide" ? "removed" : "put back"} ${path}`);
       return json({ ok: true, hidden });
@@ -646,12 +921,116 @@ export function createStudio() {
       return json({ ok: true });
     }
 
+    // Removing a photo puts it in the trash for TRASH_DAYS.
     if (url.pathname === "/studio/delete") {
       const id = String(form.get("id") || "");
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
-      await Promise.all([store().delete(`meta/${id}`), store().delete(`photo/${id}/full`), store().delete(`photo/${id}/thumb`)]);
+      await trashPhoto(id, me.username);
+      await forgetPhoto(`uploads/${id}/full.jpg`);
       await rebuildPhotoIndex();
-      console.log(`studio: removed photo ${id}`);
+      await listTrash(now);
+      console.log(`studio: moved photo ${id} to the trash`);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/studio/restore") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      const item = await store().get(`trash/${id}`, { type: "json" });
+      if (!item) return json({ error: "That photo is no longer in the trash." }, 404);
+      const { trashedAt, trashedBy, why, deletesOn, ...meta } = item;
+      await Promise.all(["full", "thumb"].map((kind) => moveFile(`trash-photo/${id}/${kind}`, `photo/${id}/${kind}`)));
+      await store().setJSON(`meta/${id}`, meta);
+      await store().delete(`trash/${id}`);
+      await rebuildPhotoIndex();
+      console.log(`studio: restored photo ${id}`);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/studio/trash-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      await deleteForGood(id);
+      console.log(`studio: deleted photo ${id} for good`);
+      return json({ ok: true });
+    }
+
+    // Removal requests: take the photo down (it goes to the trash, or a built-in
+    // photo comes off its page), or keep it up. Either way only a record of what
+    // was done is kept; the visitor's name, contact and message are deleted.
+    if (url.pathname === "/studio/removal-takedown" || url.pathname === "/studio/removal-keep") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown request." }, 400);
+      const item = await store().get(`rem/${id}`, { type: "json" });
+      if (!item || item.status !== "open") return json({ error: "That request was already handled." }, 409);
+      const down = url.pathname === "/studio/removal-takedown";
+      if (down) {
+        const upload = /^uploads\/([0-9a-f]{16})\/full\.jpg$/.exec(item.photo);
+        if (upload) await trashPhoto(upload[1], me.username, "removal request");
+        else {
+          const hidden = (await listHidden()).filter((p) => p !== item.photo);
+          hidden.push(item.photo);
+          await store().setJSON("hidden", hidden.slice(-500));
+        }
+        await forgetPhoto(item.photo);
+        await rebuildPhotoIndex();
+      }
+      await store().setJSON(`rem/${id}`, { id, photo: item.photo, title: item.title, added: item.added, status: down ? "taken-down" : "kept", handledAt: now, handledBy: me.username });
+      // Only the newest KEEP_HANDLED records are kept.
+      const handled = (await listAll("rem/", "handledAt")).filter((r) => r.status !== "open");
+      await Promise.all(handled.slice(KEEP_HANDLED).map((r) => store().delete(`rem/${r.id}`)));
+      console.log(`studio: removal request ${id} ${down ? "taken down" : "kept up"}`);
+      return json({ ok: true });
+    }
+
+    // Reply templates for photo requests.
+    if (url.pathname === "/studio/templates") {
+      let items;
+      try { items = JSON.parse(String(form.get("templates") || "[]")); } catch { items = null; }
+      if (!Array.isArray(items) || items.length > MAX_TEMPLATES) return json({ error: `Keep up to ${MAX_TEMPLATES} templates.` }, 400);
+      const tidy = items.map((t) => ({ name: clean(t && t.name, 40), text: String((t && t.text) || "").replace(/[\u0000-\u0009\u000b-\u001f<>]/g, "").trim().slice(0, 600) })).filter((t) => t.name && t.text);
+      await store().setJSON("templates", tidy);
+      return json({ ok: true, templates: tidy });
+    }
+
+    // Recaps: a page of chosen photos, with an announcement linking to it.
+    if (url.pathname === "/studio/recap") {
+      const editing = String(form.get("id") || "");
+      if (editing && !/^[0-9a-f]{16}$/.test(editing)) return json({ error: "Unknown recap." }, 400);
+      const title = clean(form.get("title"), 80);
+      const text = clean(form.get("text"), 400);
+      const date = DAY.test(String(form.get("date") || "")) ? String(form.get("date")) : todayIn(now);
+      if (!title) return json({ error: "Give the recap a headline." }, 400);
+      let picked;
+      try { picked = JSON.parse(String(form.get("photos") || "[]")); } catch { picked = null; }
+      if (!Array.isArray(picked) || !picked.length) return json({ error: "Pick at least one photo." }, 400);
+      if (picked.length > MAX_RECAP_PHOTOS) return json({ error: `Pick up to ${MAX_RECAP_PHOTOS} photos.` }, 400);
+      const photos = [];
+      for (const p of picked) {
+        const path = String((p && p.path) || "");
+        if (!REQUESTABLE.test(path)) return json({ error: "One of those photos isn't on the site." }, 400);
+        if (photos.some((q) => q.path === path)) continue;
+        photos.push({ path, title: clean(p.title, 60) || "Untitled", credit: clean(p.credit, 40).replace(/^@+/, ""), ...(clean(p.owner, 40) ? { owner: clean(p.owner, 40).replace(/^@+/, "") } : {}) });
+      }
+      const old = editing ? await store().get(`recap/${editing}`, { type: "json" }) : null;
+      if (editing && !old) return json({ error: "That recap was removed." }, 404);
+      if (!editing && (await store().list({ prefix: "recap/" })).blobs.length >= MAX_RECAPS) return json({ error: `The studio holds ${MAX_RECAPS} recaps at most. Remove some first.` }, 409);
+      const id = editing || hex(crypto.getRandomValues(new Uint8Array(8)));
+      const recap = { id, title, text, date, photos, added: old ? old.added : now, by: old ? old.by : me.username, ...(old ? { editedBy: me.username } : {}) };
+      await store().setJSON(`recap/${id}`, recap);
+      // Its announcement shares its id and links to the recap page.
+      await seedAnnouncements();
+      const oldAnn = await store().get(`ann/${id}`, { type: "json" });
+      const cover = oldAnn && (oldAnn.photo || (oldAnn.photoPath && photos.some((p) => p.path === oldAnn.photoPath))) ? {} : { photoPath: photos[0].path };
+      await store().setJSON(`ann/${id}`, { ...(oldAnn || {}), id, title, text: text || `${photos.length} photos from Horizon Media.`, date, until: (oldAnn && oldAnn.until) || "", link: `recap.html?r=${id}`, linkText: "See the photos", added: oldAnn ? oldAnn.added : now, by: oldAnn ? oldAnn.by : me.username, recap: true, ...cover });
+      await rebuildAnnouncementIndex();
+      console.log(`studio: ${old ? "edited" : "posted"} recap ${id}`);
+      return json({ ok: true, recap });
+    }
+    if (url.pathname === "/studio/recap-delete") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown recap." }, 400);
+      await Promise.all([store().delete(`recap/${id}`), store().delete(`ann/${id}`), store().delete(`ann-photo/${id}`)]);
+      await rebuildAnnouncementIndex();
+      console.log(`studio: removed recap ${id}`);
       return json({ ok: true });
     }
     return json({ error: "Not found" }, 404);

@@ -53,6 +53,52 @@
     });
   }
 
+  // The cookie question. The site sets no cookie until the visitor presses
+  // Allow: that saves hm_cookies=yes, and only then does the server hand out
+  // its visitor cookie (netlify/guard). "No thanks" sets no cookie at all; the
+  // answer is kept in this browser's storage instead, so the question doesn't
+  // come back on every page. The studio (team only) never asks.
+  const CONSENT = "hm_cookies";
+  const DECLINED = "hm-cookies";
+  const consented = () => new RegExp("(?:^|;\\s*)" + CONSENT + "=yes(?:;|$)").test(document.cookie);
+  let declined = false;
+  try { declined = localStorage.getItem(DECLINED) === "no"; } catch (error) {}
+
+  let banner = null;
+  function askAboutCookies() {
+    if (banner) { banner.hidden = false; return; }
+    banner = document.createElement("section");
+    banner.className = "cookie-ask";
+    banner.setAttribute("aria-label", "Cookies");
+    banner.innerHTML =
+      '<p><b>Can we use one cookie?</b> It only counts how many people are on the site, so we can keep it fast when it gets busy. No ads and no tracking. <a href="/privacy.html#cookies">Details</a></p>' +
+      '<div class="cookie-ask-btns"><button type="button" class="btn btn-hot" data-answer="yes">Allow</button><button type="button" class="btn" data-answer="no">No thanks</button></div>';
+    banner.addEventListener("click", (event) => {
+      const answer = event.target.closest("[data-answer]")?.dataset.answer;
+      if (!answer) return;
+      if (answer === "yes") {
+        document.cookie = CONSENT + "=yes; Max-Age=15552000; Path=/; Secure; SameSite=Lax";
+        try { localStorage.removeItem(DECLINED); } catch (error) {}
+      } else {
+        document.cookie = CONSENT + "=; Max-Age=0; Path=/; Secure; SameSite=Lax";
+        try { localStorage.setItem(DECLINED, "no"); } catch (error) {}
+      }
+      banner.hidden = true;
+    });
+    document.body.append(banner);
+  }
+  const onStudio = location.pathname === "/studio" || location.pathname.startsWith("/studio/");
+  if (!onStudio && !consented() && !declined) askAboutCookies();
+
+  // "Change your cookie choice" on the privacy page asks again.
+  for (const button of document.querySelectorAll("[data-cookie-choice]")) {
+    button.addEventListener("click", () => {
+      document.cookie = CONSENT + "=; Max-Age=0; Path=/; Secure; SameSite=Lax";
+      try { localStorage.removeItem(DECLINED); } catch (error) {}
+      askAboutCookies();
+    });
+  }
+
   // The service worker (sw.js) lets team members share photos from a phone's
   // gallery straight into the studio. Only the studio installs it, and it only
   // covers /studio/, so visitors' browsers never get it.

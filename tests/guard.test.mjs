@@ -36,6 +36,7 @@ const realRandom = Math.random;
 const realConsole = { log: console.log, warn: console.warn, error: console.error };
 const clock = { now: 0 };
 const operations = { set: 0, list: 0, delete: 0, get: 0, getMetadata: 0 };
+const banOperations = {};
 const logs = [];
 let blobs;
 let blobsDirectory;
@@ -48,8 +49,10 @@ before(async () => {
   blobs = new BlobsServer({
     directory: blobsDirectory,
     token: "test-token",
-    onRequest: ({ type }) => {
-      operations[type] += 1;
+    onRequest: ({ type, url }) => {
+      // The shared ban list is read once a minute per server and counted on its own.
+      if (/site-bans/.test(url || "")) banOperations[type] = (banOperations[type] || 0) + 1;
+      else operations[type] += 1;
     },
   });
   blobsPort = (await blobs.start()).port;
@@ -84,8 +87,9 @@ function useStore(port, { strong = true } = {}) {
 // A guard with its own memory, like a separate Netlify instance.
 const newInstance = () => createGuard();
 
-function newVisitor(ip = `198.51.100.${1 + (visitorCounter++ % 200)}`) {
-  return { ip, cookie: null, agent: BROWSER };
+// Visitors have said yes to cookies unless a test says otherwise (allowed: false).
+function newVisitor(ip = `198.51.100.${1 + (visitorCounter++ % 200)}`, { allowed = true } = {}) {
+  return { ip, cookie: null, agent: BROWSER, allowed };
 }
 
 // One page load. Returns what the visitor's browser would get.
@@ -93,12 +97,15 @@ async function visit(handler, visitor, { path = "/", headers = {}, origin } = {}
   const background = [];
   const requestHeaders = new Headers({ "user-agent": visitor.agent, ...headers });
   if (visitor.agent === "") requestHeaders.delete("user-agent");
-  if (visitor.cookie) requestHeaders.set("cookie", `theme=dark; hm_visitor=${visitor.cookie}`);
+  const cookies = ["theme=dark"];
+  if (visitor.allowed !== false) cookies.push("hm_cookies=yes");
+  if (visitor.cookie) cookies.push(`hm_visitor=${visitor.cookie}`);
+  requestHeaders.set("cookie", cookies.join("; "));
   const context = {
     ip: visitor.ip,
     waitUntil: (promise) => background.push(promise),
-    next: async () =>
-      origin ? origin() : new Response(PAGE, { headers: { "content-type": "text/html; charset=UTF-8", etag: '"page-v1"' } }),
+    next: async (forwarded) =>
+      origin ? origin(forwarded) : new Response(PAGE, { headers: { "content-type": "text/html; charset=UTF-8", etag: '"page-v1"' } }),
   };
   const response = await handler(new Request(`https://horizon.example${path}`, { headers: requestHeaders }), context);
   await Promise.all(background);
@@ -188,6 +195,42 @@ test("someone reloading the page counts once", async () => {
     assert.equal(reply.mode, "off");
     assert.equal(reply.visitors, "1");
     assert.equal(reply.setCookie, null, "the cookie is only set once");
+  }
+});
+
+test("a visitor who said no to cookies (or hasn't answered) gets no cookie on any page", async () => {
+  const handler = newInstance();
+  for (const path of ["/", "/portfolio", "/cars", "/book", "/privacy"]) {
+    const visitor = newVisitor(undefined, { allowed: false });
+    for (let i = 0; i < 3; i++) {
+      const reply = await visit(handler, visitor, { path });
+      assert.equal(reply.setCookie ?? null, null, `${path}: no cookie`);
+    }
+  }
+});
+
+test("saying no removes a visitor cookie the browser still has, and the server ignores it", async () => {
+  const handler = newInstance();
+  const visitor = newVisitor();
+  await visit(handler, visitor);
+  assert.match(visitor.cookie, /^[0-9a-f]{16}$/, "they said yes first, so they got the cookie");
+
+  visitor.allowed = false;
+  for (const path of ["/", "/privacy"]) {
+    const reply = await visit(handler, visitor, { path });
+    assert.equal(reply.setCookie, "hm_visitor=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax", `${path}: told to delete it`);
+  }
+  clock.now += 2 * SECOND;
+  const again = await visit(handler, visitor);
+  assert.equal(again.visitors, "3", "the old id is not used to tell them apart any more");
+});
+
+test("only the exact answer \"yes\" counts as saying yes", async () => {
+  const handler = newInstance();
+  for (const value of ["no", "yes2", "YES", ""]) {
+    const visitor = newVisitor(undefined, { allowed: false });
+    const reply = await visit(handler, visitor, { headers: { cookie: `hm_cookies=${value}` } });
+    assert.equal(reply.setCookie ?? null, null, `hm_cookies=${value}`);
   }
 });
 
@@ -441,6 +484,11 @@ test("the notice bar from the studio shows at the top of every page, safely, unt
     assert.match(reply.body, /Game moved &lt;script&gt;alert\(1\)&lt;\/script&gt; <a href="book\.html">Book &quot;now&quot;<\/a>/);
     assert.doesNotMatch(reply.body, /<script>alert/);
   }
+  // Dollar signs are shown as typed (they once had a special meaning here).
+  await studioStore.setJSON("notice", { id: "1b", text: "Tickets $10, $1 off, $& $$ $' $`", until: "" });
+  const money = await visit(newInstance(), newVisitor(), { origin: () => new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<nav></nav></body>`, { headers: { "content-type": "text/html" } }) });
+  assert.match(money.body, /<p>Tickets \$10, \$1 off, \$&amp; \$\$ \$&#39; \$`/);
+  assert.equal(money.body.match(/<a class="skip"/g).length, 1, "the skip link is not copied into the bar");
   // A bad link in storage is left out; a notice past its last day disappears.
   await studioStore.setJSON("notice", { id: "2", text: "Hi", link: "javascript:alert(1)", until: "" });
   assert.doesNotMatch((await visit(newInstance(), newVisitor(), { path: "/book.html", origin: () => new Response("<body><a class=\"skip\" href=\"#main\">Skip</a></body>", { headers: { "content-type": "text/html" } }) })).body, /javascript:/);
@@ -659,7 +707,8 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const { RATE_LIMIT } = await import("../netlify/guard/settings.js");
   assert.equal(typeof entry.default, "function");
   assert.deepEqual(entry.config, {
-    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/privacy", "/privacy.html", "/terms", "/terms.html"],
+    path: ["/", "/index.html", "/portfolio", "/portfolio.html", "/cars", "/cars.html", "/book", "/book.html", "/presets", "/presets.html", "/recap", "/recap.html", "/privacy", "/privacy.html", "/terms", "/terms.html",
+      "/wp-login.php", "/wp-admin", "/wp-admin/*", "/xmlrpc.php", "/.env", "/.git/config", "/phpmyadmin", "/phpmyadmin/*", "/administrator"],
     method: "GET",
     onError: "bypass",
     rateLimit: { windowLimit: RATE_LIMIT, windowSize: 60, aggregateBy: ["ip", "domain"] },
@@ -667,6 +716,115 @@ test("the function Netlify runs is the guard, in front of every page", async () 
   const reply = await visit(entry.default, newVisitor());
   assert.equal(reply.status, 200);
   assert.equal(reply.mode, "off");
+});
+
+test("honeypot: a bot that asks for a break-in page sees Not found, then is blocked from the whole site", async () => {
+  const { TRAPS, TRAP_FOLDERS } = await import("../netlify/guard/settings.js");
+  const entry = await import("../netlify/edge-functions/guard.js");
+  for (const trap of TRAPS) assert.ok(entry.config.path.includes(trap), `${trap} runs through the guard`);
+  for (const folder of TRAP_FOLDERS) assert.ok(entry.config.path.includes(`${folder}*`), `${folder}* runs through the guard`);
+
+  for (const [n, path] of [...TRAPS, "/wp-admin/install.php", "/phpmyadmin/index.php"].entries()) {
+    const handler = newInstance();
+    const bot = { ip: `203.0.113.${n + 1}`, cookie: null, agent: BROWSER };
+    const trapped = await visit(handler, bot, { path });
+    assert.equal(trapped.status, 404, `${path} looks like nothing is there`);
+    assert.equal(trapped.body, "Not found");
+    assert.equal(trapped.headers.get("x-frame-options"), "DENY");
+    clock.now += SECOND;
+    assert.equal((await visit(newInstance(), bot)).status, 403, `${path}: then blocked on the homepage, on every server`);
+    assert.equal((await visit(newInstance(), bot, { path: "/privacy.html" })).status, 403);
+  }
+  clock.now += 61 * 60 * SECOND;
+  assert.equal((await visit(newInstance(), { ip: "203.0.113.1", cookie: null, agent: BROWSER })).status, 200, "the ban ends after an hour");
+});
+
+test("honeypot: real pages, and people browsing them, are never trapped", async () => {
+  const handler = newInstance();
+  const person = newVisitor("198.51.100.250");
+  for (const path of ["/", "/portfolio.html", "/cars", "/book.html", "/presets", "/recap.html?id=1", "/privacy.html", "/terms", "/wp-adminx", "/admin", "/login"]) {
+    const reply = await visit(handler, person, { path });
+    assert.notEqual(reply.status, 403, path);
+    assert.notEqual(reply.status, 404, path);
+  }
+  assert.equal((await visit(newInstance(), person)).status, 200);
+});
+
+test("a built-in photo taken off the site stops loading at every address, within a minute", async () => {
+  const { builtInPath, createHiddenPhotos } = await import("../netlify/guard/hidden.js");
+  const copies = ["/img/cars/grille.jpg", "/img/cars/thumb/grille.jpg", "/img/lite/cars/grille.jpg", "/img/saver/cars/grille.jpg", "/img/saver/cars/thumb/grille.jpg"];
+  for (const copy of copies) assert.equal(builtInPath(copy), "img/cars/grille.jpg", copy);
+  for (const other of ["/img/favicon.png", "/img/cars/../x.jpg", "/img/og-image.jpg", "/uploads/0123456789abcdef/full.jpg"]) assert.equal(builtInPath(other), null, other);
+
+  const studioStore = getStore("studio-photos");
+  await studioStore.setJSON("hidden", ["img/cars/grille.jpg"]);
+  const photos = createHiddenPhotos();
+  assert.equal(await photos.isHidden("img/cars/grille.jpg", clock.now), true);
+  assert.equal(await photos.isHidden("img/cars/nose.jpg", clock.now), false);
+
+  // The edge function Netlify runs: 404 for every copy of a hidden photo, the rest passed through.
+  const gate = await import("../netlify/edge-functions/photos.js");
+  assert.deepEqual(gate.config.path, ["/img/portfolio/*", "/img/cars/*", "/img/lite/portfolio/*", "/img/lite/cars/*", "/img/saver/portfolio/*", "/img/saver/cars/*"]);
+  for (const copy of copies) {
+    const reply = await gate.default(new Request(`https://horizon.example${copy}`));
+    assert.equal(reply.status, 404, copy);
+    assert.equal(reply.headers.get("cache-control"), "no-store");
+  }
+  assert.equal(await gate.default(new Request("https://horizon.example/img/cars/nose.jpg")), undefined, "other photos load as normal");
+
+  // Put back in the studio: it loads again once the list is re-read (at most a minute).
+  await studioStore.setJSON("hidden", []);
+  clock.now += 61 * SECOND;
+  await photos.isHidden("img/cars/grille.jpg", clock.now);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(await photos.isHidden("img/cars/grille.jpg", clock.now), false);
+  await studioStore.delete("hidden");
+});
+
+test("a browser re-checking its saved page still gets a new notice bar or homepage photo", async () => {
+  // Netlify answers "not modified" to a browser that still has the page saved,
+  // unless the guard asks for the whole page.
+  const origin = (forwarded) =>
+    // No request passed on means the browser's own one, with its "has it changed?" check.
+    (forwarded ? forwarded.headers.get("if-none-match") : '"page-v1"') === '"page-v1"'
+      ? new Response(null, { status: 304, headers: { etag: '"page-v1"' } })
+      : new Response(`<!doctype html><body>\n<a class="skip" href="#main">Skip to content</a>\n<div class="hero-photo" style="background-image: url('img/portfolio/golden-hour.jpg')"></div></body>`, { headers: { "content-type": "text/html", etag: '"page-v1"' } });
+  const studioStore = getStore("studio-photos");
+  const saved = { "if-none-match": '"page-v1"' };
+  // Nothing to change: the browser keeps its copy (cheap).
+  assert.equal((await visit(newInstance(), newVisitor(), { origin, headers: saved })).status, 304);
+  await studioStore.setJSON("notice", { id: "n1", text: "Game moved", until: "" });
+  const withNotice = await visit(newInstance(), newVisitor(), { origin, headers: saved, path: "/privacy.html" });
+  assert.equal(withNotice.status, 200);
+  assert.match(withNotice.body, /notice-bar/);
+  await studioStore.delete("notice");
+  await studioStore.setJSON("hero", { path: "img/cars/grille.jpg" });
+  const withHero = await visit(newInstance(), newVisitor(), { origin, headers: saved });
+  assert.equal(withHero.status, 200);
+  assert.match(withHero.body, /img\/cars\/grille\.jpg/);
+  await studioStore.delete("hero");
+});
+
+test("the ban list survives a failed read, and two servers banning at once keep both bans", async () => {
+  const { createBanList } = await import("../netlify/guard/bans.js");
+  const [a, b] = [createBanList(), createBanList()];
+  await Promise.all([a.ban("192.0.2.201", clock.now, "test"), b.ban("192.0.2.202", clock.now, "test")]);
+  const c = createBanList();
+  assert.equal(await c.isBanned("192.0.2.201", clock.now), true, "the first server's ban was kept");
+  assert.equal(await c.isBanned("192.0.2.202", clock.now), true, "and the second's");
+  // A server whose first read fails, then bans someone, must not erase the others.
+  const d = createBanList();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => (String(input?.url || input).includes("site-bans") && (init?.method || "GET") === "GET" ? Promise.reject(new Error("storage hiccup")) : realFetch(input, init));
+  try {
+    await d.isBanned("192.0.2.9", clock.now);
+    await d.settled();
+    await d.ban("192.0.2.203", clock.now, "test");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const e = createBanList();
+  for (const ip of ["192.0.2.201", "192.0.2.202", "192.0.2.203"]) assert.equal(await e.isBanned(ip, clock.now), true, ip);
 });
 
 test("every reply from the guard carries the security headers", async () => {
@@ -710,7 +868,7 @@ test("the published folder holds the website and none of the project's own files
     assert.ok(!published.some((path) => path.startsWith("photos")), "the original photos are not published");
     const allowed = new Set(["index.html", "css", "js", "img"]);
     const extra = readdirSync(out).filter((name) => !allowed.has(name));
-    const privateFiles = ["netlify", "netlify.toml", "photos", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "dist"];
+    const privateFiles = ["netlify", "netlify.toml", "photos", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "SECURITY.md", "docs", "dist"];
     assert.deepEqual(extra.filter((name) => privateFiles.includes(name)), [], "none of the project's own files are published");
     assert.equal(readFileSync(join(out, "index.html"), "utf8"), PAGE);
 

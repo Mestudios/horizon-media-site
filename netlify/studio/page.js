@@ -1,5 +1,11 @@
 import { SEASONS } from "./sports.js";
 import { MAX_REQUESTS, WARN_REQUESTS } from "./limits.js";
+import { ROADMAP, ROADMAP_UPDATED, STATUS_LABELS } from "./roadmap.js";
+
+// The Roadmap tab: the update plan from roadmap.js, for every team member.
+const html = (text) => String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const roadmapList = ROADMAP.map((r) => `<li class="rm-${html(r.status)}"><div class="rm-when"><b>${html(r.version)}</b><time${/^\d{4}-\d{2}-\d{2}$/.test(r.date) ? ` datetime="${html(r.date)}"` : ""}>${html(r.when)}</time><span class="rm-pill">${html(STATUS_LABELS[r.status] || r.status)}</span></div><div class="rm-body"><h2>${html(r.title)}</h2><ul>${r.items.map((i) => `<li>${html(i)}</li>`).join("")}</ul></div></li>`).join("");
+const roadmapUpdated = new Date(ROADMAP_UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
 export const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
@@ -49,16 +55,37 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .photo-edit label{margin:10px 0 4px;font-size:13px}
 .studio .photo-edit input,.studio .photo-edit select{padding:9px;font-size:14px}
 .undo{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:16px;padding:10px 10px 10px 18px;background:var(--chalk);color:var(--night);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);font-weight:600;font-size:15px;max-width:calc(100% - 32px)}
-.undo span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo span{overflow-wrap:anywhere}
+.studio .share-note{margin:0 0 16px;padding:12px 16px;border:1px solid var(--flare);border-radius:8px;background:rgba(255,198,26,.08);color:var(--chalk);min-height:0}
+.studio .undo[role=status]{color:var(--night);margin-top:0;min-height:0}
 .studio .undo .btn,.undo .btn{margin:0;padding:9px 18px;min-height:40px}
 @media (max-width:760px){.undo{bottom:84px}}
+.studio .setup-list{display:block;margin:10px 0 0}
+.studio .setup-list li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.studio .setup-list .ok{color:var(--accent-2);font-weight:600}
+.studio .setup-list .bad{color:var(--danger);font-weight:600}
+.studio ol.roadmap{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:0;border-left:3px solid var(--line)}
+.studio ol.roadmap>li{display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;padding:18px 0 18px 22px;position:relative;border-bottom:1px solid var(--line)}
+.studio ol.roadmap>li::before{content:"";position:absolute;left:-9px;top:24px;width:15px;height:15px;border-radius:50%;background:var(--panel);border:3px solid var(--line)}
+.studio ol.roadmap>li.rm-live::before{background:var(--dim);border-color:var(--dim)}
+.studio ol.roadmap>li.rm-current::before,.studio ol.roadmap>li.rm-next::before{background:var(--flare);border-color:var(--flare)}
+.studio .rm-when{display:flex;flex-direction:column;gap:4px}
+.studio .rm-when b{font:800 30px/1 var(--display)}
+.studio .rm-when time{font-weight:600;font-size:14px}
+.studio .rm-pill{align-self:flex-start;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);color:var(--dim)}
+.studio .rm-current .rm-pill,.studio .rm-next .rm-pill{background:var(--flare);border-color:var(--flare);color:#1a1402}
+.studio .rm-idea .rm-pill{border-style:dashed}
+.studio .rm-body h2{margin:0 0 6px;font-size:24px}
+.studio .rm-body ul{display:block;margin:0;padding-left:18px;list-style:disc;color:var(--dim);font-size:15px}
+.studio .rm-body ul li{margin:3px 0}
+@media (max-width:760px){.studio ol.roadmap>li{grid-template-columns:1fr;gap:8px}.studio .rm-when{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px}}
 .studio ul.picked{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));margin:12px 0 0}
 .blur-tool{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(5,5,5,.85)}
 .blur-panel{width:min(900px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
 .studio .blur-panel h2{margin:0 0 4px;font-size:28px}
 .blur-panel canvas{display:block;max-width:100%;max-height:62vh;margin:14px auto 0;touch-action:none;cursor:crosshair;border-radius:6px}
 .studio .blur-panel .btns{margin-top:14px}.studio .blur-panel .btn{margin:0}
-.studio .note.full{color:var(--danger);font-weight:600}
+.studio .note.full,.studio #requests-room.full{color:var(--danger);font-weight:600}
 .inbox-warn{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 0;padding:14px 18px;border:1px solid var(--flare);border-left-width:5px;border-radius:8px;background:color-mix(in srgb,var(--flare) 12%,var(--panel))}
 .inbox-warn p{margin:0;flex:1 1 260px;font-weight:600;font-size:15px;color:var(--chalk)}
 .studio .inbox-warn .btn{margin:0;padding:9px 16px;font-size:14px}
@@ -136,6 +163,73 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .preset-admin li img{width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:6px;flex:none}
 .studio .preset-admin li p{margin:4px 0 0;color:var(--dim);font-size:14px}
 .studio .requests li.empty{display:block;color:var(--dim);font-size:15px}
+.studio .requests .reply{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.studio .requests .reply select{width:auto;min-width:0}
+.studio .requests li.removal{border-left:3px solid var(--danger);padding-left:12px}
+.studio .req-rows{display:block;list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.studio .req-rows li{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px 16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.studio .req-rows li:last-child{border-bottom:0}
+.studio .req-rows li.empty{display:block;color:var(--dim)}
+.studio .req-rows li img{width:64px;aspect-ratio:3/4;object-fit:cover;border-radius:8px}
+.studio .req-rows .who{margin:0;font-size:16px}
+.studio .req-rows .who b{font-weight:700}
+.studio .req-rows .meta{margin:3px 0 0;color:var(--dim);font-size:14px}
+.studio .req-rows .msg{margin:6px 0 0;font-size:14px;color:var(--soft);font-style:italic}
+.studio .req-rows .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.studio .req-rows .acts .reply{margin:0}
+.studio .tabs .pill.alert{background:var(--danger);color:#fff}
+.studio .tabs .short{display:none}
+@media (max-width:640px){.studio .tabs .long{display:none}.studio .tabs .short{display:inline}}
+@media (max-width:760px){.studio .req-rows li{grid-template-columns:56px minmax(0,1fr)}.studio .req-rows li img{width:56px}.studio .req-rows .acts{grid-column:1/-1;justify-content:flex-start}}
+.studio .requests .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.studio details.handled{margin:6px 0 18px;color:var(--dim);font-size:14px}
+.studio details.handled summary{cursor:pointer;padding:6px 0}
+.studio .templates{display:grid;gap:12px;margin-top:10px}
+.studio .templates .tpl{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.studio .templates .tpl textarea{min-height:70px}
+.studio .trash li .when{display:block;color:var(--dim);font-size:13px}
+.studio .recap-picker{list-style:none;padding:0;margin:8px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;max-height:420px;overflow:auto}
+.studio .recap-picker label{display:block;position:relative;cursor:pointer;font-size:12px;color:var(--dim);line-height:1.25}
+.studio .recap-picker img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;margin-bottom:4px;border:3px solid transparent}
+.studio .recap-picker input{position:absolute;top:8px;left:8px;width:20px;height:20px;margin:0;accent-color:var(--flare)}
+.studio .recap-picker input:checked+img{border-color:var(--flare)}
+.studio .btn-small{padding:6px 12px;font-size:13px;min-height:0}
+.studio .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 18px;overflow-x:auto}
+.studio .tabs [role=tab]{flex:none;border:0;background:none;padding:12px 16px;font:600 15px var(--body);color:var(--dim);border-bottom:3px solid transparent;cursor:pointer;min-height:44px}
+.studio .tabs [role=tab][aria-selected=true]{color:var(--chalk);border-bottom-color:var(--flare)}
+.studio .tabs .count{color:var(--dim);font-weight:500;margin-left:2px}
+.studio .tabs .pill{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:var(--line);font-size:12px;font-weight:700;color:var(--chalk)}
+.studio .tabs .pill.on{background:var(--flare);color:#1a1402}
+.studio .card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.studio .card-top h2{margin:0}
+.studio .panel-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.studio .panel-top .note{margin:0;max-width:60ch}
+.studio .form-card-panel{margin-bottom:22px;border-top:3px solid var(--flare)}
+.studio .list-status{min-height:1.4em;margin:0 0 8px;color:var(--accent-2);font-weight:600;font-size:14px}
+.studio details.more{margin:14px 0 4px;border-top:1px solid var(--line);padding-top:10px}
+.studio details.more summary{cursor:pointer;font-weight:600;padding:6px 0}
+.studio .ann-rows{display:block;list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.studio .ann-rows li{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto auto;gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.studio .ann-rows li:last-child{border-bottom:0}
+.studio .ann-rows li.empty{display:block;color:var(--dim)}
+.studio .ann-rows .thumb{width:96px;aspect-ratio:16/10;border-radius:8px;object-fit:cover;background:var(--line);display:block}
+.studio .ann-rows b{display:block;font-size:16px}
+.studio .ann-rows p{margin:3px 0 0;color:var(--dim);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.studio .ann-rows time{color:var(--dim);font-size:13px;white-space:nowrap}
+.studio .ann-rows time .tag{margin-left:8px}
+@media (max-width:640px){.studio .tabs{gap:0}.studio .tabs [role=tab]{padding:10px 6px;font-size:13px}}
+@media (max-width:380px){.studio .tabs [role=tab]{font-size:12px;padding:10px 5px}.studio .tabs .pill{margin-left:3px;padding:1px 6px;font-size:11px}}
+@media (max-width:760px){.studio .ann-rows li{grid-template-columns:72px minmax(0,1fr);gap:8px 12px}.studio .ann-rows .thumb{width:72px}.studio .ann-rows time{grid-column:2}.studio .ann-rows li .btn{grid-column:auto}}
+.studio .ann-crop{margin:8px 0 12px}
+.studio .crop-frame{position:relative;display:block;width:100%;max-width:460px;aspect-ratio:16/10;overflow:hidden;padding:0;border:2px solid var(--flare);border-radius:10px;background:#000;cursor:grab;touch-action:none}
+.studio .crop-frame:active{cursor:grabbing}
+.studio .crop-frame img{position:absolute;max-width:none;user-select:none;pointer-events:none}
+.studio .ann-crop input[type=range]{width:100%;max-width:460px;accent-color:var(--flare)}
+.studio .ann-pick-box{margin:8px 0 12px}
+.studio .ann-pick-box .recap-picker{max-height:300px}
+.studio .ann-pick-box .recap-picker button{display:block;width:100%;padding:0;border:0;background:none;color:var(--dim);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.studio .ann-pick-box .recap-picker button img{border:3px solid transparent}
+.studio .ann-pick-box .recap-picker button[aria-pressed=true] img{border-color:var(--flare)}
 body:has(.shell) .nav .wrap{width:calc(100% - 52px)}
 @media (max-width:900px){.form-cols{grid-template-columns:1fr}.form-cols .col+.col>label:first-child{margin-top:16px}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
@@ -213,17 +307,27 @@ const signinEnd = `<a class="signin-back" href="/">&larr; Back to the site</a></
 
 const off = `<p>The studio is switched off because no sign-in has been set.</p><p class="note off-note">To switch it on, add two environment variables in the Netlify project settings, STUDIO_USERNAME and STUDIO_PASSWORD (at least 12 characters), then redeploy. More people can sign in with STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5.</p>`;
 
-const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
+const out = `<form id="login"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><label class="remember"><input type="checkbox" name="remember"> Keep me signed in on this device for 30 days</label><p class="note remember-note">Only tick this on your own phone or computer.</p><button class="btn btn-hot">Sign in</button><p role="status"></p></form>
 <script>
+// Reads a reply from the server. Refusals sent as plain text (blocked, too
+// many tries, signed out) become a plain sentence instead of an error.
+async function readReply(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch (error) {}
+  if (response.status === 403) return { error: "This network is blocked for a while after too many requests. Try again in an hour, or from another network." };
+  if (response.status === 429) return { error: "Too many tries in a short time. Wait a minute and try again." };
+  if (response.status === 401) return { error: "You've been signed out. Sign in again." };
+  return { error: "That didn't work (error " + response.status + "). Try again in a moment." };
+}
 document.getElementById("login").addEventListener("submit", async (event) => {
   event.preventDefault();
   const status = event.target.querySelector("[role=status]");
   const response = await fetch("/studio/login", { method: "POST", body: new FormData(event.target) });
-  if (response.ok) location.reload(); else status.textContent = (await response.json()).error;
+  if (response.ok) location.reload(); else status.textContent = (await readReply(response)).error;
 });
 </script>`;
 
-const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
+const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><button type="button" data-view="roadmap"><span class="long">Roadmap</span><span class="short">Plan</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
 <section data-view="overview">
 <div class="view-top"><h1 id="hello">Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
 <form class="me-card" id="me-form"><p id="me-line"></p><div class="me-edit" hidden><label for="me-credit">Your Instagram name (your photos are credited to it)</label><div class="me-row"><input id="me-credit" name="credit" maxlength="40" autocapitalize="none" placeholder="visuals_alex_"><button class="btn btn-hot">Save</button></div></div><p role="status" class="me-status"></p></form>
@@ -231,6 +335,7 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="stats"><button type="button" class="card" data-go="requests"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
 <div class="two"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
 <div class="card"><h2>Announcements</h2><ul class="mini" id="ov-ann"></ul><button class="btn" type="button" data-go="announcements">+ New announcement</button></div></div>
+<div class="card setup-card" id="setup-card" hidden><h2>Sign-ins</h2><p class="note">Each team sign-in set in Netlify, and whether it works. Only you (the first sign-in) see this. Passwords are never shown.</p><ul class="setup-list" id="setup-list"></ul><p class="note">Changes made in Netlify (Project configuration, Environment variables) only take effect after the next deploy.</p></div>
 <div class="card"><h2>Latest photos</h2><ul class="latest" id="ov-photos"></ul><button class="btn" type="button" data-go="photos">See all photos</button></div>
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
@@ -259,38 +364,96 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note">Pinned photos show first on their page, in this order.</p>
 <ul id="pinned" class="pinned"></ul>
 <h2>Added here</h2>
-<p class="note">Photos added in the studio. Remove deletes them for good, after a 10-second chance to undo.</p>
+<p class="note">Photos added in the studio. Remove takes one off the site and puts it in the Trash for 30 days (with a 10-second Undo right away).</p>
 <ul id="photos"></ul>
 <h2>On the site</h2>
 <p class="note">The photos built into the portfolio and car pages. Remove takes one off the site right away; Put back shows it again.</p>
-<ul id="site-photos"></ul></section>
-<section data-view="requests" hidden><div class="view-top"><h1>Photo requests</h1></div>
-<p class="note">Visitors who asked for a photo. Reach out to them, then press Done to delete the request.</p>
-<p class="note" id="requests-room"></p>
-<ul id="requests" class="requests"></ul></section>
-<section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1></div>
-<div class="card notice-card"><h2>Notice bar</h2><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
-<form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
-<div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
-<div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
-<h2>Announcement cards</h2>
-<p class="note">The newest three that are up show on the homepage, newest date first. Press Edit on one below to change it.</p>
-<div class="card"><form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
+<ul id="site-photos"></ul>
+<h2>Trash</h2>
+<p class="note">Removed photos wait here for 30 days, then they are deleted for good. Restore puts one back on the site.</p>
+<ul id="trash" class="trash"></ul></section>
+<section data-view="requests" hidden><div class="view-top"><h1>Requests</h1></div>
+<div class="tabs" role="tablist" aria-label="Request types" id="req-tabs">
+<button type="button" role="tab" id="tab-req" aria-controls="panel-req" aria-selected="true"><span class="long">Photo requests</span><span class="short">Photos</span> <span class="count" id="tab-req-count"></span></button>
+<button type="button" role="tab" id="tab-rem" aria-controls="panel-rem" aria-selected="false" tabindex="-1"><span class="long">Removal requests</span><span class="short">Removals</span> <span class="pill" id="tab-rem-count">0</span></button>
+<button type="button" role="tab" id="tab-tpl" aria-controls="panel-tpl" aria-selected="false" tabindex="-1"><span class="long">Reply templates</span><span class="short">Replies</span></button>
+</div>
+<div role="tabpanel" id="panel-req" aria-labelledby="tab-req">
+<p class="note">Visitors who asked for a photo. Copy a reply, send it to them, then press Done to delete the request. <span id="requests-room"></span></p>
+<ul id="requests" class="requests req-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-rem" aria-labelledby="tab-rem" hidden>
+<p class="note">People asking for a photo to come off the site. Take down moves it to the Trash (or takes a built-in photo off its page). Either way, their details are then deleted and only a record is kept.</p>
+<ul id="removals" class="requests req-rows"></ul>
+<details class="handled"><summary>Handled removal requests</summary><ul id="removals-done" class="ann-admin"></ul></details>
+</div>
+<div role="tabpanel" id="panel-tpl" aria-labelledby="tab-tpl" hidden>
+<p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p>
+<div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p>
+</div></section>
+<section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
+<div class="tabs" role="tablist" aria-label="News sections" id="ann-tabs">
+<button type="button" role="tab" id="tab-ann" aria-controls="panel-ann" aria-selected="true">Announcements <span class="count" id="tab-ann-count"></span></button>
+<button type="button" role="tab" id="tab-recaps" aria-controls="panel-recaps" aria-selected="false" tabindex="-1">Recaps <span class="count" id="tab-recap-count"></span></button>
+<button type="button" role="tab" id="tab-notice" aria-controls="panel-notice" aria-selected="false" tabindex="-1">Notice bar <span class="pill" id="tab-notice-state">Off</span></button>
+</div>
+<div role="tabpanel" id="panel-ann" aria-labelledby="tab-ann">
+<div class="card form-card-panel" id="ann-form-card" hidden><div class="card-top"><h2 id="ann-form-title">New announcement</h2><button type="button" class="btn btn-small" id="ann-close">Close</button></div>
+<form id="announce"><input type="hidden" name="id" id="ann-id"><div class="form-cols"><div class="col">
 <label for="ann-title">Headline</label><input id="ann-title" name="title" maxlength="80" required>
-<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="9" required></textarea>
+<label for="ann-text">Text</label><textarea id="ann-text" name="text" maxlength="400" rows="5" required></textarea>
+<label for="ann-photo">Photo (optional): upload one</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
+<p class="note">Or <button type="button" class="btn btn-small" id="ann-pick" aria-expanded="false" aria-controls="ann-pick-box">Choose from the portfolio</button></p>
+<input type="hidden" name="photoPath" id="ann-photo-path">
+<div id="ann-pick-box" class="ann-pick-box" hidden><input type="search" id="ann-pick-search" placeholder="Search by title or photographer" aria-label="Search the site's photos"><ul id="ann-picker" class="recap-picker"></ul></div>
+<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><p class="note" id="ann-photo-from"></p><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
+<p class="note" id="ann-crop-row" hidden><button type="button" class="btn btn-small" id="ann-crop-open" aria-expanded="false" aria-controls="ann-crop">Crop &amp; position</button> <span id="ann-crop-state"></span></p>
+<div id="ann-crop" class="ann-crop" hidden><p class="note">Drag the photo to move it, or use the arrow keys. The frame is the shape of the homepage card.</p><button type="button" class="crop-frame" aria-label="Photo position in the card: drag, or use the arrow keys, to move it; plus and minus zoom"><img alt="" draggable="false"></button><label for="ann-crop-zoom">Zoom</label><input type="range" id="ann-crop-zoom" min="1" max="3" step="0.01" value="1"><div class="form-end"><button type="button" class="btn btn-hot btn-small" id="ann-crop-done">Done</button><button type="button" class="btn btn-small" id="ann-crop-reset">Reset</button></div></div>
+<input type="hidden" name="photoCrop" id="ann-photo-crop">
 </div><div class="col">
+<div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
+</div></div>
+<details class="more" id="ann-more"><summary>More options: dates and link</summary><div class="form-cols"><div class="col">
 <label for="ann-date">Goes up on</label><input id="ann-date" name="date" type="date" required>
 <label for="ann-until">Comes down after (optional)</label><input id="ann-until" name="until" type="date">
 <p class="note">Pick a future date to schedule it. Leave the second date empty to keep it up.</p>
+</div><div class="col">
 <label for="ann-link">Link (optional)</label><input id="ann-link" name="link" maxlength="300" placeholder="cars.html or https://...">
 <label for="ann-link-text">Link text (optional)</label><input id="ann-link-text" name="linkText" maxlength="40" placeholder="See car shoots">
-<label for="ann-photo">Photo (optional)</label><input id="ann-photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic">
-<div id="ann-photo-now" class="ann-photo-now" hidden><img alt=""><label><input type="checkbox" id="ann-photo-remove"> Remove this photo</label></div>
-</div></div>
-<div class="ann-preview"><h2 class="preview-label">Preview: how it looks on the homepage</h2><div class="ann-list"><article class="ann" id="ann-preview"></article></div></div>
-<div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel" hidden>Cancel editing</button></div>
+</div></div></details>
+<div class="form-end"><button class="btn btn-hot" id="ann-submit">Post announcement</button> <button class="btn" type="button" id="ann-cancel">Cancel</button></div>
 <p role="status"></p></form></div>
-<ul id="announcements" class="ann-admin"></ul></section>
+<p class="note">The newest three that are up show on the homepage, newest date first.</p>
+<p role="status" class="list-status" id="ann-list-status"></p>
+<ul id="announcements" class="ann-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-recaps" aria-labelledby="tab-recaps" hidden>
+<div class="panel-top"><p class="note">A page of photos you pick, like a season or a big game. Posting one adds an announcement on the homepage that links to it.</p><button class="btn btn-hot" type="button" id="recap-new">+ New recap</button></div>
+<div class="card form-card-panel" id="recap-form-card" hidden><div class="card-top"><h2 id="recap-form-title">New recap</h2><button type="button" class="btn btn-small" id="recap-close">Close</button></div>
+<form id="recap-form"><input type="hidden" name="id" id="recap-id"><div class="form-cols"><div class="col">
+<label for="recap-title">Headline</label><input id="recap-title" name="title" maxlength="80" required placeholder="Fall 2026 recap">
+<label for="recap-text">Text (optional)</label><textarea id="recap-text" name="text" maxlength="400" rows="4"></textarea>
+</div><div class="col">
+<label for="recap-date">Goes up on</label><input id="recap-date" name="date" type="date" required>
+<p class="note" id="recap-count">No photos picked yet.</p>
+</div></div>
+<label for="recap-search">Pick the photos</label><input type="search" id="recap-search" placeholder="Search by title or photographer">
+<ul id="recap-picker" class="recap-picker"></ul>
+<div class="form-end"><button class="btn btn-hot" id="recap-submit">Post recap</button> <button class="btn" type="button" id="recap-cancel" hidden>Cancel editing</button></div>
+<p role="status"></p></form></div>
+<p role="status" class="list-status" id="recap-list-status"></p>
+<ul id="recap-list" class="ann-rows"></ul>
+</div>
+<div role="tabpanel" id="panel-notice" aria-labelledby="tab-notice" hidden>
+<div class="card notice-card"><p class="note">One short line across the top of every page, for urgent news like "Game moved to Saturday". Visitors can close it.</p>
+<form id="notice-form"><div class="form-cols"><div class="col"><label for="notice-text">Notice (leave empty for none)</label><input id="notice-text" name="text" maxlength="140" placeholder="Friday's game moved to Saturday, 7 PM"><label for="notice-until">Show until (optional)</label><input id="notice-until" name="until" type="date"></div>
+<div class="col"><label for="notice-link">Link (optional)</label><input id="notice-link" name="link" maxlength="300" placeholder="book.html or https://..."><label for="notice-link-text">Link text (optional)</label><input id="notice-link-text" name="linkText" maxlength="30" placeholder="Book now"></div></div>
+<div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
+</div>
+</section>
+<section data-view="roadmap" hidden><div class="view-top"><h1>Roadmap</h1></div>
+<p class="note">What's coming to the website and the studio, release by release. Each release goes live on its date if it's ready. Updated ${roadmapUpdated}.</p>
+<ol class="roadmap">${roadmapList}</ol></section>
 <section data-view="presets" hidden><div class="view-top"><h1>Presets</h1></div>
 <p class="note">Free Lightroom presets for the presets page. As soon as one is added here, the page switches from "coming soon" to downloads.</p>
 <div class="card"><form id="preset-form"><div class="form-cols"><div class="col">
@@ -309,6 +472,16 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div id="blur-tool" class="blur-tool" hidden><div class="blur-panel"><h2>Edit photo</h2><div class="tool-bar"><div class="tool-modes" role="group" aria-label="What dragging does"><button type="button" class="btn" data-mode="crop" aria-pressed="false">Crop</button><button type="button" class="btn" data-mode="blur" aria-pressed="true">Blur plates</button></div><button type="button" class="btn tool-rotate">Rotate &#8635;</button><button type="button" class="btn tool-reset">Start over</button></div><p class="note tool-note"></p><canvas aria-label="The photo; drag on it to crop or to mark a plate"></canvas><div class="btns"><button type="button" class="btn blur-undo">Undo last box</button><button type="button" class="btn btn-hot blur-done">Done</button></div></div></div>
 <div id="undo" class="undo" role="status" hidden><span></span><button type="button" class="btn btn-hot">Undo</button></div>
 <script>
+// Reads a reply from the server. Refusals sent as plain text (blocked, too
+// many tries, signed out) become a plain sentence instead of an error.
+async function readReply(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch (error) {}
+  if (response.status === 403) return { error: "This network is blocked for a while after too many requests. Try again in an hour, or from another network." };
+  if (response.status === 429) return { error: "Too many tries in a short time. Wait a minute and try again." };
+  if (response.status === 401) return { error: "You've been signed out. Sign in again." };
+  return { error: "That didn't work (error " + response.status + "). Try again in a moment." };
+}
 // Remembers that this device belongs to the team, so the site's footer shows the studio link here.
 try { localStorage.setItem("hm-team", "1"); } catch (error) {}
 // The side menu: one section shows at a time, and the address remembers which.
@@ -324,6 +497,9 @@ menu.forEach((b) => b.addEventListener("click", () => go(b.dataset.view)));
 document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 go(location.hash.slice(1), true);
 const setText = (id, value) => { document.getElementById(id).textContent = value; };
+// A message that something worked goes away by itself after a few seconds;
+// errors stay until the next try.
+const flash = (el, text) => { el.textContent = text; clearTimeout(el.fadeTimer); el.fadeTimer = setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 5000); };
 const miniRow = (strong, rest) => { const li = document.createElement("li"); const b = document.createElement("b"); b.textContent = strong; li.append(b, rest); return li; };
 const counts = { added: 0, builtIn: 0 };
 const showPhotoCount = () => setText("stat-photos", counts.added + counts.builtIn);
@@ -362,8 +538,8 @@ credit.addEventListener("input", () => { credit.dataset.auto = ""; });
 meForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await post("/studio/profile", { credit: document.getElementById("me-credit").value });
-  const reply = await response.json();
-  meForm.querySelector(".me-status").textContent = response.ok ? "Saved." : reply.error;
+  const reply = await readReply(response);
+  if (response.ok) flash(meForm.querySelector(".me-status"), "Saved."); else meForm.querySelector(".me-status").textContent = reply.error;
   if (response.ok) { ME.credit = reply.credit; credit.dataset.auto = "1"; credit.value = ""; meEdit.hidden = true; showMe(); }
 });
 credit.addEventListener("input", markTeam);
@@ -498,7 +674,9 @@ function showPicks() {
   picks.forEach((pick, i) => {
     const item = document.createElement("li");
     const image = document.createElement("img");
-    image.src = URL.createObjectURL(pick.file);
+    // One preview address per photo, made once (not on every redraw).
+    if (!pick.url) pick.url = URL.createObjectURL(pick.file);
+    image.src = pick.url;
     image.alt = "";
     if (pick.rotate) image.style.transform = "rotate(" + pick.rotate + "deg)";
     const label = document.createElement("b");
@@ -540,22 +718,24 @@ function fingerprint(source) {
   return bits;
 }
 const apart = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++; return n; };
-let siteFingerprints = null;
+// Fingerprints of the site's photos, by path. Made once per photo, and
+// topped up with photos added since (by anyone), so new ones are compared too.
+// Waits for the studio's own photo list, which photos shared from a phone can
+// arrive before.
+const printCache = new Map();
 async function loadFingerprints() {
-  if (siteFingerprints) return siteFingerprints;
+  await photosReady;
   await loadBuiltIn();
   const known = everyPhoto().filter((p) => !state.hidden.includes(p.path));
-  siteFingerprints = (await Promise.all(known.map(async (photo) => {
+  await Promise.all(known.filter((photo) => !printCache.has(photo.path)).map(async (photo) => {
     try {
       const image = new Image();
       image.src = photo.thumb;
       await image.decode();
-      return { title: photo.title, bits: fingerprint(image) };
-    } catch (error) {
-      return null;
-    }
-  }))).filter(Boolean);
-  return siteFingerprints;
+      printCache.set(photo.path, { title: photo.title, bits: fingerprint(image) });
+    } catch (error) {}
+  }));
+  return known.map((photo) => printCache.get(photo.path)).filter(Boolean);
 }
 async function findTwins() {
   const mine = picks;
@@ -578,7 +758,14 @@ const toolNote = blurTool.querySelector(".tool-note");
 let blurPick = null, blurImage = null, preview = null, mode = "blur", dragFrom = null, dragBox = null;
 async function openTool(pick) {
   blurPick = pick;
-  blurImage = await createImageBitmap(pick.file, { imageOrientation: "from-image" });
+  try {
+    blurImage = await createImageBitmap(pick.file, { imageOrientation: "from-image" });
+  } catch (error) {
+    blurPick = null;
+    addStatus.textContent = "This device can't open that photo for editing (HEIC photos only open in Safari). Save it as a JPEG and choose it again.";
+    addStatus.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   preview = turned(blurImage, pick.rotate, 1400);
   setMode("blur");
   blurTool.hidden = false;
@@ -676,6 +863,7 @@ function finishPending() {
 function removeLater(label, run, restore) {
   finishPending();
   undoBar.querySelector("span").textContent = "Removed " + label + ".";
+  undoBar.querySelector("button").hidden = false;
   undoBar.hidden = false;
   pending = { run, restore, timer: setTimeout(finishPending, 10000) };
 }
@@ -690,6 +878,21 @@ undoBar.querySelector("button").addEventListener("click", () => {
 // Leaving the page or switching apps carries out a removal that is still waiting.
 addEventListener("pagehide", finishPending);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") finishPending(); });
+// A removal the server refused (signed out, blocked, already gone): the item
+// is back in the list, and the bar at the bottom says why for 8 seconds.
+async function removalFailed(label, response) {
+  const reason = response ? (await readReply(response)).error : "The connection dropped.";
+  undoBar.querySelector("span").textContent = "Couldn't remove " + label + ". " + reason;
+  undoBar.querySelector("button").hidden = true;
+  undoBar.hidden = false;
+  setTimeout(() => { if (!pending) { undoBar.hidden = true; undoBar.querySelector("button").hidden = false; } }, 8000);
+}
+// Runs a removal and reports a refusal; then always refreshes the list.
+function removeNow(path, fields, label, after) {
+  return post(path, fields)
+    .then((response) => { after(); if (!response.ok) removalFailed(label, response); })
+    .catch(() => { after(); removalFailed(label, null); });
+}
 const post = (path, fields) => {
   const body = new FormData();
   for (const key in fields) body.set(key, fields[key]);
@@ -728,6 +931,9 @@ const button = (text, className, onClick) => {
 const sitePhotos = document.getElementById("site-photos");
 const pinnedList = document.getElementById("pinned");
 let state = { photos: [], hidden: [], pins: [], hero: "" };
+// Lists that name photos (requests, "Most requested") wait for the first photo list.
+let photosLoaded;
+const photosReady = new Promise((resolve) => { photosLoaded = resolve; });
 let requestCounts = {}; // photo path -> how often it was requested
 async function refreshStats() {
   try { requestCounts = (await (await fetch("/studio/stats.json", { cache: "no-store" })).json()).requestCounts || {}; } catch (error) {}
@@ -752,10 +958,10 @@ function shown(photo) {
 const byRequests = (list) => (filterBox.value === "requested" ? list.slice().sort((a, b) => (requestCounts[b.path] || 0) - (requestCounts[a.path] || 0)) : list);
 async function setHomepage(path) {
   const response = await post("/studio/hero", { path });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (!response.ok) { status.textContent = reply.error; return; }
   state.hero = reply.hero;
-  status.textContent = reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.";
+  flash(status, reply.hero ? "That photo is now the homepage background." : "The homepage is back to its usual photo.");
   render();
 }
 function homepageButton(photo) {
@@ -785,7 +991,43 @@ async function refresh() {
   const data = await (await fetch("/studio/photos.json", { cache: "no-store" })).json();
   state = { photos: data.photos || [], hidden: data.hidden || [], pins: data.pins || [], hero: data.hero || "" };
   await Promise.all([loadBuiltIn(), refreshStats()]);
+  photosLoaded();
   render();
+  refreshTrash();
+}
+
+// ---- Trash: removed photos, kept 30 days.
+const trashList = document.getElementById("trash");
+async function refreshTrash() {
+  const items = await (await fetch("/studio/trash.json", { cache: "no-store" })).json();
+  trashList.textContent = "";
+  if (!items.length) {
+    const none = document.createElement("li");
+    none.className = "empty";
+    none.textContent = "The trash is empty.";
+    trashList.append(none);
+  }
+  for (const item of items) {
+    const photo = { title: item.title, credit: item.credit, thumb: "/studio/trash-photo/" + item.id + ".jpg", path: "trash/" + item.id };
+    const restore = iconButton("back", "Restore", "", async () => {
+      restore.disabled = true;
+      const response = await post("/studio/restore", { id: item.id });
+      if (response.ok) flash(status, '"' + item.title + '" is back on the site.'); else status.textContent = (await readReply(response)).error;
+      refresh();
+    });
+    const forever = iconButton("trash", "Delete for good", "danger", async () => {
+      if (!confirm('Delete "' + item.title + '" for good? This can\u2019t be undone.')) return;
+      forever.disabled = true;
+      await post("/studio/trash-delete", { id: item.id });
+      refreshTrash();
+    });
+    const row = thumbItem(photo, [restore, forever]);
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = "Removed " + new Date(item.trashedAt).toLocaleDateString() + " by " + (item.trashedBy || "the team") + (item.why ? " (" + item.why + ")" : "") + ". Deleted for good on " + new Date(item.deletesOn).toLocaleDateString() + ".";
+    row.append(when);
+    trashList.append(row);
+  }
 }
 
 // Every photo the studio knows, by the path pins and requests use.
@@ -796,7 +1038,7 @@ function everyPhoto() {
 
 async function savePins(pins) {
   const response = await post("/studio/pins", { pins: JSON.stringify(pins) });
-  const reply = await response.json();
+  const reply = await readReply(response);
   if (!response.ok) { status.textContent = reply.error; return; }
   state.pins = reply.pins;
   render();
@@ -883,11 +1125,13 @@ function render() {
       const id = photo.added.id;
       removing.add(id);
       render();
-      removeLater('"' + photo.title + '"',
-        () => post("/studio/delete", { id }).then(() => { removing.delete(id); refresh(); }),
+      removeLater('"' + photo.title + '" (it\u2019s in the Trash for 30 days)',
+        () => removeNow("/studio/delete", { id }, '"' + photo.title + '"', () => { removing.delete(id); refresh(); }),
         () => { removing.delete(id); render(); });
     });
-    item = thumbItem(photo, [edit, pinButton(photo), homepageButton(photo), remove]);
+    // A scheduled photo can't be the homepage photo until it goes live.
+    const waiting = photo.added.liveAt > Date.now();
+    item = thumbItem(photo, waiting ? [edit, pinButton(photo), remove] : [edit, pinButton(photo), homepageButton(photo), remove]);
     list.append(item);
   }
   if (!list.children.length) list.append(miniRow(all.some((p) => p.added) ? "No added photos match." : "Nothing added in the studio yet.", ""));
@@ -899,7 +1143,7 @@ function render() {
     const toggle = iconButton(off ? "back" : "trash", off ? "Put back" : "Remove", off ? "" : "danger", async () => {
       toggle.disabled = true;
       const response = await post(off ? "/studio/unhide" : "/studio/hide", { path: photo.path });
-      const reply = await response.json();
+      const reply = await readReply(response);
       if (response.ok) { state.hidden = reply.hidden; render(); }
       else { status.textContent = reply.error; toggle.disabled = false; }
     });
@@ -951,21 +1195,208 @@ function openEditor(item, photo) {
     body.set("liveAt", live.value ? String(new Date(live.value).getTime()) : "");
     const response = await fetch("/studio/edit-photo", { method: "POST", body });
     if (response.ok) refresh();
-    else note.textContent = (await response.json()).error;
+    else note.textContent = (await readReply(response)).error;
   });
   item.append(form);
   form.querySelector("input").focus();
 }
 
+// ---- Requests view: tabs for photo requests, removal requests and reply templates.
+(() => {
+  const list = document.getElementById("req-tabs");
+  const all = [...list.querySelectorAll("[role=tab]")];
+  const show = (tab) => {
+    for (const t of all) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  };
+  for (const t of all) t.addEventListener("click", () => show(t));
+  list.addEventListener("keydown", (event) => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    const next = all[(all.findIndex((t) => t.getAttribute("aria-selected") === "true") + step + all.length) % all.length];
+    show(next);
+    next.focus();
+  });
+})();
+// One request row: who wants what, how to reach them and when, and their message.
+const requestThumb = (path) => "/" + path.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+function ago(when) {
+  const minutes = Math.round((Date.now() - when) / 60000);
+  if (minutes < 60) return minutes <= 1 ? "just now" : minutes + " min ago";
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours + (hours === 1 ? " hour ago" : " hours ago");
+  return new Date(when).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function requestWho(name, middle, title) {
+  const p = document.createElement("p");
+  p.className = "who";
+  const b = document.createElement("b");
+  b.textContent = name;
+  const t = document.createElement("b");
+  t.textContent = title;
+  p.append(b, middle, t);
+  return p;
+}
+function requestMeta(contact, when) {
+  const p = document.createElement("p");
+  p.className = "meta";
+  p.textContent = contact + " \u00b7 " + ago(when);
+  p.title = new Date(when).toLocaleString();
+  return p;
+}
+function requestMessage(text) {
+  const p = document.createElement("p");
+  p.className = "msg";
+  p.textContent = "\u201c" + text + "\u201d";
+  return p;
+}
+
 const requestList = document.getElementById("requests");
+const removalList = document.getElementById("removals");
+const RELATIONS = { pictured: "They're in the photo", parent: "Parent or guardian of someone in it", owner: "It shows their car", other: "Other" };
+let openRemovals = 0;
+async function refreshRemovals() {
+  const items = await (await fetch("/studio/removals.json", { cache: "no-store" })).json();
+  const open = items.filter((r) => r.status === "open");
+  openRemovals = open.length;
+  removalList.textContent = "";
+  if (!open.length) {
+    const none = document.createElement("li");
+    none.className = "empty";
+    none.textContent = "No removal requests right now.";
+    removalList.append(none);
+  }
+  for (const item of open) {
+    const row = document.createElement("li");
+    row.className = "removal";
+    const image = document.createElement("img");
+    image.src = requestThumb(item.photo);
+    image.alt = "";
+    const info = document.createElement("div");
+    info.append(requestWho(item.name, " wants this taken down: ", item.title || "a photo"), requestMeta((RELATIONS[item.relation] || item.relation) + " \u00b7 " + item.contact, item.added));
+    if (item.message) info.append(requestMessage(item.message));
+    const act = (path, done) => async () => {
+      for (const b of buttons.children) b.disabled = true;
+      const response = await post(path, { id: item.id });
+      if (!response.ok) { status.textContent = (await readReply(response)).error; }
+      if (response.ok) flash(requestsNote, done); else requestsNote.textContent = "";
+      refreshRemovals().then(refreshRequests);
+      refresh();
+    };
+    const buttons = document.createElement("div");
+    buttons.className = "acts";
+    buttons.append(
+      button("Take down", "btn-hot", act("/studio/removal-takedown", '"' + (item.title || "The photo") + '" is off the site and in the Trash. Let ' + item.name + " know at " + item.contact + ".")),
+      button("Keep it up", "", act("/studio/removal-keep", "Kept up. Let " + item.name + " know why at " + item.contact + "."))
+    );
+    row.append(image, info, buttons);
+    removalList.append(row);
+  }
+  const done = document.getElementById("removals-done");
+  done.textContent = "";
+  for (const item of items.filter((r) => r.status !== "open")) {
+    const li = document.createElement("li");
+    const p = document.createElement("p");
+    p.textContent = (item.title || item.photo) + ": " + (item.status === "taken-down" ? "taken down" : "kept up") + " by " + item.handledBy + ", " + new Date(item.handledAt).toLocaleDateString() + ".";
+    li.append(p);
+    done.append(li);
+  }
+  if (!done.children.length) { const li = document.createElement("li"); li.textContent = "None yet."; done.append(li); }
+  const pill = document.getElementById("tab-rem-count");
+  pill.textContent = open.length;
+  pill.className = "pill" + (open.length ? " alert" : "");
+  showRequestBadge();
+}
+const requestsNote = document.createElement("p");
+requestsNote.setAttribute("role", "status");
+requestsNote.className = "note";
+removalList.before(requestsNote);
+let waitingRequests = 0;
+function showRequestBadge() {
+  const badge = document.getElementById("nav-requests");
+  badge.textContent = waitingRequests + openRemovals;
+  badge.hidden = waitingRequests + openRemovals === 0;
+}
+
+// Reply templates: copied with the visitor's name, the photo and its link filled in.
+let templates = [];
+const templateBox = document.getElementById("templates");
+async function loadTemplates() {
+  templates = await (await fetch("/studio/templates.json", { cache: "no-store" })).json();
+  showTemplates();
+}
+function showTemplates() {
+  templateBox.textContent = "";
+  templates.forEach((t, i) => {
+    const box = document.createElement("div");
+    box.className = "tpl";
+    const name = document.createElement("input");
+    name.value = t.name;
+    name.maxLength = 40;
+    name.setAttribute("aria-label", "Template name");
+    name.addEventListener("input", () => { templates[i].name = name.value; });
+    const text = document.createElement("textarea");
+    text.value = t.text;
+    text.maxLength = 600;
+    text.setAttribute("aria-label", "Template text");
+    text.addEventListener("input", () => { templates[i].text = text.value; });
+    const remove = button("Remove", "", () => { templates.splice(i, 1); showTemplates(); });
+    box.append(name, text, remove);
+    templateBox.append(box);
+  });
+}
+document.getElementById("tpl-add").addEventListener("click", () => {
+  if (templates.length >= 12) return;
+  templates.push({ name: "New reply", text: "Hi {name}! " });
+  showTemplates();
+  templateBox.lastElementChild.querySelector("input").focus();
+});
+document.getElementById("tpl-save").addEventListener("click", async () => {
+  const response = await post("/studio/templates", { templates: JSON.stringify(templates) });
+  const reply = await readReply(response);
+  if (response.ok) flash(document.getElementById("tpl-status"), "Saved."); else document.getElementById("tpl-status").textContent = reply.error;
+  if (response.ok) { templates = reply.templates; showTemplates(); refreshRequests(); }
+});
+// A public link to a photo, like the one the viewer's Share button gives.
+function photoLink(path) {
+  const cars = /^img\\/cars\\//.test(path) || (state.photos.find((p) => "uploads/" + p.id + "/full.jpg" === path) || {}).sport === "cars";
+  const name = path.replace(/^uploads\\/([0-9a-f]{16})\\/full\\.jpg$/, "$1").replace(/^.*\\//, "").replace(/\\.jpg$/, "");
+  return location.origin + "/" + (cars ? "cars" : "portfolio") + ".html#photo=" + name;
+}
+function replyTools(item) {
+  const box = document.createElement("div");
+  box.className = "reply";
+  if (!templates.length) return box;
+  const pick = document.createElement("select");
+  pick.setAttribute("aria-label", "Reply template");
+  for (const [i, t] of templates.entries()) pick.add(new Option(t.name, String(i)));
+  const said = document.createElement("span");
+  said.className = "note";
+  said.setAttribute("role", "status");
+  const copy = button("Copy reply", "", async () => {
+    const t = templates[Number(pick.value)];
+    const text = t.text.split("{name}").join(item.name).split("{photo}").join(item.title || "your photo").split("{link}").join(photoLink(item.photo));
+    try { await navigator.clipboard.writeText(text); said.textContent = "Copied. Paste it into your message to " + item.contact + "."; }
+    catch (error) { window.prompt("Copy this reply:", text); }
+  });
+  box.append(pick, copy, said);
+  return box;
+}
+
 async function refreshRequests() {
   const items = await (await fetch("/studio/requests.json", { cache: "no-store" })).json();
+  await photosReady;
+  waitingRequests = items.length;
   requestList.textContent = "";
   setText("stat-requests", items.length);
   const full = items.length >= ${MAX_REQUESTS};
   const room = document.getElementById("requests-room");
   room.textContent = items.length + " of ${MAX_REQUESTS} waiting." + (full ? " The inbox is full: visitors can\u2019t send new requests until you press Done on some." : "");
-  room.className = "note" + (full ? " full" : "");
+  room.className = full ? "full" : "";
   // The overview warns from ${WARN_REQUESTS} waiting requests, and louder when the inbox is full.
   const warn = document.getElementById("ov-warn");
   warn.hidden = items.length < ${WARN_REQUESTS};
@@ -973,17 +1404,16 @@ async function refreshRequests() {
   warn.querySelector("p").textContent = full
     ? "The request inbox is full (" + items.length + " of ${MAX_REQUESTS}), so visitors can\u2019t ask for photos until you answer some and press Done."
     : items.length + " of ${MAX_REQUESTS} photo requests are waiting. Answer some soon: at ${MAX_REQUESTS}, visitors can\u2019t send new ones.";
-  const badge = document.getElementById("nav-requests");
-  badge.textContent = items.length;
-  badge.hidden = items.length === 0;
+  showRequestBadge();
   const ovRequests = document.getElementById("ov-requests");
   ovRequests.textContent = "";
+  if (openRemovals) ovRequests.append(miniRow(openRemovals + (openRemovals === 1 ? " removal request" : " removal requests") + " waiting.", " Take the photo down or keep it up under Requests."));
   for (const item of items.slice(0, 3)) ovRequests.append(miniRow(item.name, " wants " + (item.title || "a photo") + " \\u00b7 " + item.contact));
   await Promise.all([refreshStats(), loadBuiltIn()]);
   const top = Object.entries(requestCounts).sort((a, b) => b[1] - a[1])[0];
   if (top) {
     const known = everyPhoto().find((p) => p.path === top[0]);
-    ovRequests.append(miniRow("Most requested: ", (known ? known.title : top[0].replace(/^.*\\//, "")) + " (" + top[1] + (top[1] === 1 ? " request)" : " requests)")));
+    ovRequests.append(miniRow("Most requested: ", (known ? known.title : top[0].startsWith("uploads/") ? "a photo no longer on the site" : top[0].replace(/^.*\\//, "")) + " (" + top[1] + (top[1] === 1 ? " request)" : " requests)")));
   }
   if (!items.length) ovRequests.append(miniRow("No requests right now.", ""));
   if (!items.length) {
@@ -995,28 +1425,23 @@ async function refreshRequests() {
   for (const item of items) {
     const row = document.createElement("li");
     const image = document.createElement("img");
-    image.src = "/" + item.photo.replace("/full.jpg", "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+    image.src = requestThumb(item.photo);
     image.alt = "";
     const info = document.createElement("div");
-    const line = (label, value) => { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = label + " "; p.append(b, value); return p; };
-    info.append(line("Photo:", item.title || item.photo), line("From:", item.name), line("Reach them at:", item.contact));
-    if (item.message) info.append(line("Message:", item.message));
-    info.append(line("Sent:", new Date(item.added).toLocaleString()));
-    const done = document.createElement("button");
-    done.className = "btn";
-    done.type = "button";
-    done.textContent = "Done";
-    done.addEventListener("click", async () => {
+    info.append(requestWho(item.name, " wants ", item.title || "a photo"), requestMeta(item.contact, item.added));
+    if (item.message) info.append(requestMessage(item.message));
+    const done = button("Done", "", async () => {
       done.disabled = true;
-      const body = new FormData();
-      body.set("id", item.id);
-      await fetch("/studio/request-done", { method: "POST", body });
+      await post("/studio/request-done", { id: item.id });
       refreshRequests();
     });
-    info.append(done);
-    row.append(image, info);
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    acts.append(done, replyTools(item));
+    row.append(image, info, acts);
     requestList.append(row);
   }
+  document.getElementById("tab-req-count").textContent = items.length;
 }
 
 document.getElementById("add").addEventListener("submit", async (event) => {
@@ -1042,7 +1467,7 @@ document.getElementById("add").addEventListener("submit", async (event) => {
       addStatus.textContent = "Sending photo" + of + "...";
       const response = await fetch("/studio/upload", { method: "POST", body });
       if (response.ok) added += 1;
-      else { problems.push(file.name + ": " + (await response.json()).error); if (response.status === 409 || response.status === 401) break; }
+      else { problems.push(file.name + ": " + (await readReply(response)).error); if (response.status === 409 || response.status === 401) break; }
     } catch (error) {
       problems.push(file.name + ": this device could not read it. Try a JPEG.");
     }
@@ -1050,7 +1475,8 @@ document.getElementById("add").addEventListener("submit", async (event) => {
   button.disabled = false;
   const later = document.getElementById("live-at").value;
   const whenText = later && new Date(later).getTime() > Date.now() ? " They go live " + new Date(later).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "." : "";
-  addStatus.textContent = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") + whenText : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  const addMessage = (added ? "Added " + added + (added === 1 ? " photo." : " photos.") + whenText : "Nothing was added.") + (problems.length ? " " + problems.join(" ") : "");
+  if (added && !problems.length) flash(addStatus, addMessage); else addStatus.textContent = addMessage;
   if (added) { event.target.reset(); picks = []; showPicks(); credit.value = ME.credit || ""; credit.dataset.auto = "1"; markTeam(); refresh(); }
 });
 const signOut = async () => {
@@ -1059,17 +1485,60 @@ const signOut = async () => {
 };
 document.getElementById("logout").addEventListener("click", signOut);
 document.getElementById("logout-top").addEventListener("click", signOut);
+// ---- Announcements view: tabs (Announcements, Recaps, Notice bar), list first,
+// and the forms open only when making or editing something.
+const tabs = { ann: "tab-ann", recaps: "tab-recaps", notice: "tab-notice" };
+function showTab(name) {
+  for (const [key, id] of Object.entries(tabs)) {
+    const tab = document.getElementById(id);
+    const on = key === name;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = !on;
+  }
+}
+for (const [key, id] of Object.entries(tabs)) document.getElementById(id).addEventListener("click", () => showTab(key));
+document.getElementById("ann-tabs").addEventListener("keydown", (event) => {
+  const keys = Object.keys(tabs);
+  const now = keys.findIndex((k) => document.getElementById(tabs[k]).getAttribute("aria-selected") === "true");
+  const next = event.key === "ArrowRight" ? now + 1 : event.key === "ArrowLeft" ? now - 1 : null;
+  if (next === null) return;
+  const key = keys[(next + keys.length) % keys.length];
+  showTab(key);
+  document.getElementById(tabs[key]).focus();
+});
+const annFormCard = document.getElementById("ann-form-card");
+function openAnnForm(heading) {
+  showTab("ann");
+  document.getElementById("ann-form-title").textContent = heading;
+  annFormCard.hidden = false;
+}
+function closeAnnForm() {
+  stopEditing();
+  annFormCard.hidden = true;
+  document.getElementById("ann-new").focus();
+}
+document.getElementById("ann-new").addEventListener("click", () => {
+  stopEditing();
+  openAnnForm("New announcement");
+  document.getElementById("ann-more").open = false;
+  document.getElementById("ann-title").focus();
+});
+document.getElementById("ann-close").addEventListener("click", closeAnnForm);
+const annThumb = (item) => (item.photo ? "/announcement-photos/" + item.id + ".jpg?v=" + item.photo : item.photoPath ? smallCopy(item.photoPath) : "");
+
 const announceForm = document.getElementById("announce");
 const announceStatus = announceForm.querySelector("[role=status]");
 const announceList = document.getElementById("announcements");
 const dateBox = document.getElementById("ann-date");
-const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+// Days follow New York time, like the site (an announcement goes up on its New York date).
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
 dateBox.value = today();
 
 const removingAnn = new Set(); // announcements waiting out their 10 seconds
 async function refreshAnnouncements() {
   const { today: day, items: everything, notice } = await (await fetch("/studio/announcements.json", { cache: "no-store" })).json();
-  showNotice(notice);
+  showNotice(notice, true);
   const items = everything.filter((item) => !removingAnn.has(item.id));
   announceList.textContent = "";
   const stateOf = (item) => (item.date > day ? "Scheduled" : item.until && item.until < day ? "Ended" : "Live");
@@ -1099,6 +1568,8 @@ async function refreshAnnouncements() {
     editButton.type = "button";
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => {
+      openAnnForm("Edit announcement");
+      document.getElementById("ann-more").open = !!(item.until || item.link || item.date > day);
       document.getElementById("ann-id").value = item.id;
       document.getElementById("ann-title").value = item.title;
       document.getElementById("ann-text").value = item.text;
@@ -1107,14 +1578,24 @@ async function refreshAnnouncements() {
       document.getElementById("ann-link").value = item.link || "";
       document.getElementById("ann-link-text").value = item.linkText || "";
       const now = document.getElementById("ann-photo-now");
-      now.hidden = !item.photo;
-      if (item.photo) now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo;
+      pickPath.value = "";
+      document.getElementById("ann-photo").value = "";
+      closePicker();
+      if (item.photoPath) {
+        const known = everyPhoto().find((p) => p.path === item.photoPath);
+        showPicked(item.photoPath, known ? known.title : "");
+      } else {
+        now.hidden = !item.photo;
+        if (item.photo) { now.querySelector("img").src = "/announcement-photos/" + item.id + ".jpg?v=" + item.photo; document.getElementById("ann-photo-from").textContent = "Uploaded photo"; }
+      }
       document.getElementById("ann-photo-remove").checked = false;
+      forgetCrop();
+      if (item.photoCrop) { annCrop = item.photoCrop; cropInput.value = JSON.stringify(item.photoCrop); document.getElementById("ann-crop-state").textContent = "Cropped."; }
       updatePreview();
       document.getElementById("ann-submit").textContent = "Save changes";
-      document.getElementById("ann-cancel").hidden = false;
-      announceStatus.textContent = "Editing: " + item.title;
-      announceForm.scrollIntoView({ behavior: "smooth" });
+          announceStatus.textContent = "";
+      annFormCard.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("ann-title").focus();
     });
     const remove = document.createElement("button");
     remove.className = "btn btn-danger";
@@ -1124,25 +1605,90 @@ async function refreshAnnouncements() {
       removingAnn.add(item.id);
       refreshAnnouncements();
       removeLater('"' + item.title + '"',
-        () => post("/studio/announce-delete", { id: item.id }).then(() => { removingAnn.delete(item.id); refreshAnnouncements(); }),
+        () => removeNow("/studio/announce-delete", { id: item.id }, '"' + item.title + '"', () => { removingAnn.delete(item.id); refreshAnnouncements(); }),
         () => { removingAnn.delete(item.id); refreshAnnouncements(); });
     });
-    row.append(when, title, text, editButton, document.createTextNode(" "), remove);
+    const thumbSrc = annThumb(item);
+    let thumb;
+    if (thumbSrc) { thumb = document.createElement("img"); thumb.src = thumbSrc; thumb.alt = ""; thumb.loading = "lazy"; }
+    else { thumb = document.createElement("span"); thumb.setAttribute("aria-hidden", "true"); }
+    thumb.className = "thumb";
+    const info = document.createElement("div");
+    info.append(title, text);
+    row.append(thumb, info, when, editButton, remove);
     announceList.append(row);
   }
+  document.getElementById("tab-ann-count").textContent = items.length;
+  if (!items.length) { const none = document.createElement("li"); none.className = "empty"; none.textContent = "No announcements yet. Press + New announcement to post one."; announceList.append(none); }
 }
+
+// ---- Announcement photo picked from the site's own photos.
+const pickBox = document.getElementById("ann-pick-box");
+const pickButton = document.getElementById("ann-pick");
+const pickPath = document.getElementById("ann-photo-path");
+function closePicker() { pickBox.hidden = true; pickButton.setAttribute("aria-expanded", "false"); }
+const smallCopy = (path) => "/" + path.replace(/\\/full\\.jpg$/, "/thumb.jpg").replace(/^img\\/(portfolio|cars)\\//, "img/$1/thumb/");
+function showPicked(path, title) {
+  pickPath.value = path;
+  forgetCrop();
+  const now = document.getElementById("ann-photo-now");
+  now.hidden = !path;
+  if (path) {
+    now.querySelector("img").src = smallCopy(path);
+    document.getElementById("ann-photo-from").textContent = "From the site: " + (title || path.replace(/^.*\\//, ""));
+  }
+  document.getElementById("ann-photo-remove").checked = false;
+}
+function showAnnPicker() {
+  const words = document.getElementById("ann-pick-search").value.trim().toLowerCase();
+  const list = document.getElementById("ann-picker");
+  list.textContent = "";
+  for (const photo of recapChoices()) {
+    if (words && !(photo.title + " " + (photo.credit || "")).toLowerCase().includes(words)) continue;
+    const li = document.createElement("li");
+    const choose = document.createElement("button");
+    choose.type = "button";
+    choose.setAttribute("aria-pressed", String(pickPath.value === photo.path));
+    const image = document.createElement("img");
+    image.src = photo.thumb;
+    image.alt = "";
+    image.loading = "lazy";
+    choose.append(image, photo.title);
+    choose.addEventListener("click", () => {
+      document.getElementById("ann-photo").value = "";
+      showPicked(photo.path, photo.title);
+      pickBox.hidden = true;
+      pickButton.setAttribute("aria-expanded", "false");
+      updatePreview();
+      pickButton.focus();
+    });
+    li.append(choose);
+    list.append(li);
+  }
+}
+pickButton.addEventListener("click", async () => {
+  const open = pickBox.hidden;
+  pickBox.hidden = !open;
+  pickButton.setAttribute("aria-expanded", String(open));
+  if (open) { await loadBuiltIn(); showAnnPicker(); document.getElementById("ann-pick-search").focus(); }
+});
+document.getElementById("ann-pick-search").addEventListener("input", showAnnPicker);
+// Uploading a photo replaces one picked from the site.
+document.getElementById("ann-photo").addEventListener("change", () => { if (document.getElementById("ann-photo").files[0]) { pickPath.value = ""; document.getElementById("ann-photo-now").hidden = true; document.getElementById("ann-photo-remove").checked = false; } });
 
 function stopEditing() {
   announceForm.reset();
+  pickPath.value = "";
+  pickBox.hidden = true;
+  forgetCrop();
   document.getElementById("ann-id").value = "";
   dateBox.value = today();
   document.getElementById("ann-submit").textContent = "Post announcement";
-  document.getElementById("ann-cancel").hidden = true;
   document.getElementById("ann-until").value = "";
   document.getElementById("ann-photo-now").hidden = true;
   updatePreview();
 }
-document.getElementById("ann-cancel").addEventListener("click", () => { stopEditing(); announceStatus.textContent = ""; });
+document.getElementById("ann-cancel").addEventListener("click", () => { closeAnnForm(); announceStatus.textContent = ""; });
 
 announceForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1156,11 +1702,12 @@ announceForm.addEventListener("submit", async (event) => {
     announceStatus.textContent = "This device could not read that photo. Try a JPEG.";
     return;
   }
-  if (document.getElementById("ann-photo-remove").checked) body.set("removePhoto", "1");
+  if (document.getElementById("ann-photo-remove").checked && !document.getElementById("ann-photo-now").hidden) { body.set("removePhoto", "1"); body.delete("photoPath"); body.delete("photoCrop"); }
   const response = await fetch("/studio/announce", { method: "POST", body });
   const scheduled = dateBox.value > today();
-  announceStatus.textContent = response.ok ? (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away.") : (await response.json()).error;
-  if (response.ok) { stopEditing(); refreshAnnouncements(); }
+  if (response.ok) flash(announceStatus, (editing ? "Saved." : "Posted.") + (scheduled ? " It goes up on " + dateBox.value + "." : " It shows on the homepage right away."));
+  else announceStatus.textContent = (await readReply(response)).error;
+  if (response.ok) { stopEditing(); annFormCard.hidden = true; flash(document.getElementById("ann-list-status"), announceStatus.textContent); announceStatus.textContent = ""; refreshAnnouncements(); }
 });
 
 
@@ -1179,7 +1726,19 @@ function updatePreview() {
   previewPhoto = picked ? URL.createObjectURL(picked) : keepOld ? document.querySelector("#ann-photo-now img").src : "";
   previewCard.textContent = "";
   previewCard.className = "ann" + (previewPhoto ? " has-photo" : "");
-  if (previewPhoto) { const image = document.createElement("img"); image.src = previewPhoto; image.alt = ""; previewCard.append(image); }
+  if (previewPhoto) {
+    const image = document.createElement("img");
+    image.src = previewPhoto;
+    image.alt = "";
+    if (annCrop) {
+      const frame = document.createElement("div");
+      frame.className = "ann-photo";
+      placeCrop(image, annCrop);
+      frame.append(image);
+      previewCard.append(frame);
+    } else previewCard.append(image);
+  }
+  syncCropRow();
   const when = document.createElement("time");
   when.textContent = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const heading = document.createElement("h3");
@@ -1189,31 +1748,262 @@ function updatePreview() {
   if (link) { const a = document.createElement("a"); a.href = "#"; a.textContent = linkText; body.append(" ", a); }
   previewCard.append(when, heading, body);
 }
+// ---- Crop & position: which part of the photo the 16:10 card shows, kept as
+// fractions of the photo ({x, y, w, h}) so it works for uploads and picked photos alike.
+const CARD = 16 / 10;
+let annCrop = null;
+const cropBox = document.getElementById("ann-crop");
+const cropFrame = cropBox.querySelector(".crop-frame");
+const cropImage = cropFrame.querySelector("img");
+const cropZoom = document.getElementById("ann-crop-zoom");
+const cropInput = document.getElementById("ann-photo-crop");
+const crop = { W: 0, H: 0, w0: 1, h0: 1, z: 1, cx: 0.5, cy: 0.5 };
+function placeCrop(image, c) {
+  image.style.left = (-c.x / c.w) * 100 + "%";
+  image.style.top = (-c.y / c.h) * 100 + "%";
+  image.style.width = 100 / c.w + "%";
+  image.style.height = 100 / c.h + "%";
+}
+function cropRect() {
+  const w = crop.w0 / crop.z, h = crop.h0 / crop.z;
+  const x = Math.min(Math.max(crop.cx - w / 2, 0), 1 - w), y = Math.min(Math.max(crop.cy - h / 2, 0), 1 - h);
+  crop.cx = x + w / 2;
+  crop.cy = y + h / 2;
+  return { x, y, w, h };
+}
+function showCrop() {
+  annCrop = cropRect();
+  placeCrop(cropImage, annCrop);
+  cropInput.value = JSON.stringify(annCrop);
+  document.getElementById("ann-crop-state").textContent = "Cropped.";
+  updatePreview();
+}
+function forgetCrop() {
+  annCrop = null;
+  cropInput.value = "";
+  cropBox.hidden = true;
+  document.getElementById("ann-crop-open").setAttribute("aria-expanded", "false");
+  document.getElementById("ann-crop-state").textContent = "";
+}
+function syncCropRow() {
+  const hasPhoto = !!document.getElementById("ann-photo").files[0] || (!document.getElementById("ann-photo-now").hidden && !document.getElementById("ann-photo-remove").checked);
+  document.getElementById("ann-crop-row").hidden = !hasPhoto;
+  if (!hasPhoto) cropBox.hidden = true;
+}
+document.getElementById("ann-crop-open").addEventListener("click", () => {
+  const opening = cropBox.hidden;
+  cropBox.hidden = !opening;
+  document.getElementById("ann-crop-open").setAttribute("aria-expanded", String(opening));
+  if (!opening) return;
+  cropImage.onload = () => {
+    crop.W = cropImage.naturalWidth;
+    crop.H = cropImage.naturalHeight;
+    const wide = crop.W / crop.H > CARD;
+    crop.w0 = wide ? (CARD * crop.H) / crop.W : 1;
+    crop.h0 = wide ? 1 : crop.W / (CARD * crop.H);
+    if (annCrop) { crop.z = crop.w0 / annCrop.w; crop.cx = annCrop.x + annCrop.w / 2; crop.cy = annCrop.y + annCrop.h / 2; }
+    else { crop.z = 1; crop.cx = 0.5; crop.cy = 0.5; }
+    cropZoom.value = String(crop.z);
+    placeCrop(cropImage, cropRect());
+  };
+  // Picked photos are edited on their full-size copy, so zooming in stays sharp.
+  cropImage.src = pickPath.value && !document.getElementById("ann-photo").files[0] ? "/" + pickPath.value : previewPhoto;
+  cropFrame.focus();
+});
+cropZoom.addEventListener("input", () => { crop.z = Number(cropZoom.value); showCrop(); });
+let cropDrag = null;
+cropFrame.addEventListener("pointerdown", (event) => { cropDrag = { x: event.clientX, y: event.clientY }; cropFrame.setPointerCapture(event.pointerId); });
+cropFrame.addEventListener("pointermove", (event) => {
+  if (!cropDrag) return;
+  const box = cropFrame.getBoundingClientRect();
+  crop.cx -= ((event.clientX - cropDrag.x) / box.width) * (crop.w0 / crop.z);
+  crop.cy -= ((event.clientY - cropDrag.y) / box.height) * (crop.h0 / crop.z);
+  cropDrag = { x: event.clientX, y: event.clientY };
+  showCrop();
+});
+const endCropDrag = () => { cropDrag = null; };
+cropFrame.addEventListener("pointerup", endCropDrag);
+cropFrame.addEventListener("pointercancel", endCropDrag);
+cropFrame.addEventListener("keydown", (event) => {
+  const step = 0.03;
+  const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (moves[event.key]) { crop.cx += moves[event.key][0] * (crop.w0 / crop.z); crop.cy += moves[event.key][1] * (crop.h0 / crop.z); }
+  else if (event.key === "+" || event.key === "=") crop.z = Math.min(3, crop.z + 0.1);
+  else if (event.key === "-") crop.z = Math.max(1, crop.z - 0.1);
+  else return;
+  event.preventDefault();
+  cropZoom.value = String(crop.z);
+  showCrop();
+});
+document.getElementById("ann-crop-done").addEventListener("click", () => { cropBox.hidden = true; document.getElementById("ann-crop-open").setAttribute("aria-expanded", "false"); document.getElementById("ann-crop-open").focus(); });
+document.getElementById("ann-crop-reset").addEventListener("click", () => { crop.z = 1; crop.cx = 0.5; crop.cy = 0.5; cropZoom.value = "1"; placeCrop(cropImage, cropRect()); annCrop = null; cropInput.value = ""; document.getElementById("ann-crop-state").textContent = ""; updatePreview(); });
+// A different photo starts uncropped.
+document.getElementById("ann-photo").addEventListener("change", forgetCrop);
+document.getElementById("ann-photo-remove").addEventListener("change", forgetCrop);
+
 announceForm.addEventListener("input", updatePreview);
 announceForm.addEventListener("change", updatePreview);
 updatePreview();
 // ---- Notice bar
 const noticeForm = document.getElementById("notice-form");
 const noticeStatus = noticeForm.querySelector("[role=status]");
-function showNotice(notice) {
+// Shows the notice bar's state. A refresh of the lists (keepDraft) never
+// overwrites a notice someone is still typing; saving or turning it off does.
+let noticeDraft = false;
+noticeForm.addEventListener("input", () => { noticeDraft = true; });
+function showNotice(notice, keepDraft) {
+  // A notice past its last day no longer shows on the site.
+  const ended = !!notice && !!notice.until && notice.until < today();
+  const on = !!notice && !ended;
+  const pill = document.getElementById("tab-notice-state");
+  pill.textContent = on ? "On" : ended ? "Ended" : "Off";
+  pill.className = "pill" + (on ? " on" : "");
+  document.getElementById("notice-now").textContent = on ? "On now" + (notice.until ? ", until " + notice.until : "") + (notice.by ? " (set by " + notice.by + ")" : "") + ". It shows on the site within a minute of changes." : ended ? "Ended on " + notice.until + ". It no longer shows on the site." : "Off.";
+  if (keepDraft && noticeDraft) return;
+  noticeDraft = false;
   document.getElementById("notice-text").value = notice ? notice.text : "";
   document.getElementById("notice-until").value = notice ? notice.until || "" : "";
   document.getElementById("notice-link").value = notice ? notice.link || "" : "";
   document.getElementById("notice-link-text").value = notice ? notice.linkText || "" : "";
-  document.getElementById("notice-now").textContent = notice ? "On now" + (notice.until ? ", until " + notice.until : "") + (notice.by ? " (set by " + notice.by + ")" : "") + ". It shows on the site within a minute of changes." : "Off.";
 }
 noticeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const response = await fetch("/studio/notice", { method: "POST", body: new FormData(noticeForm) });
-  const reply = await response.json();
-  noticeStatus.textContent = response.ok ? (reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.") : reply.error;
+  const reply = await readReply(response);
+  if (response.ok) flash(noticeStatus, reply.notice ? "Saved. The bar shows on every page within a minute." : "Turned off.");
+  else noticeStatus.textContent = reply.error;
   if (response.ok) showNotice(reply.notice);
 });
 document.getElementById("notice-off").addEventListener("click", async () => {
   const response = await post("/studio/notice", { text: "" });
-  if (response.ok) { showNotice(null); noticeStatus.textContent = "Turned off. It leaves the site within a minute."; }
+  if (response.ok) { showNotice(null); flash(noticeStatus, "Turned off. It leaves the site within a minute."); }
 });
 // ---- Presets
+// ---- Recaps: a page of picked photos, with an announcement linking to it.
+const recapForm = document.getElementById("recap-form");
+const recapPicker = document.getElementById("recap-picker");
+const recapSearch = document.getElementById("recap-search");
+const recapStatus = recapForm.querySelector("[role=status]");
+let recapPicked = []; // paths, in the order they were picked
+let recaps = [];
+function recapChoices() {
+  // Photos on the site now: added ones that are live, and built-in ones not taken off.
+  const now = Date.now();
+  return everyPhoto().filter((p) => (p.added ? !(p.added.liveAt > now) : !state.hidden.includes(p.path)));
+}
+function showRecapPicker() {
+  const words = recapSearch.value.trim().toLowerCase();
+  recapPicker.textContent = "";
+  for (const photo of recapChoices()) {
+    if (words && !(photo.title + " " + (photo.credit || "")).toLowerCase().includes(words) && !recapPicked.includes(photo.path)) continue;
+    const li = document.createElement("li");
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = recapPicked.includes(photo.path);
+    box.addEventListener("change", () => {
+      if (box.checked && recapPicked.length >= 60) { box.checked = false; recapStatus.textContent = "Pick up to 60 photos."; return; }
+      recapPicked = box.checked ? recapPicked.concat(photo.path) : recapPicked.filter((x) => x !== photo.path);
+      showRecapCount();
+    });
+    const image = document.createElement("img");
+    image.src = photo.thumb;
+    image.alt = "";
+    image.loading = "lazy";
+    label.append(box, image, photo.title);
+    li.append(label);
+    recapPicker.append(li);
+  }
+  showRecapCount();
+}
+function showRecapCount() {
+  document.getElementById("recap-count").textContent = recapPicked.length ? recapPicked.length + (recapPicked.length === 1 ? " photo picked." : " photos picked.") + " They show in the order you picked them." : "No photos picked yet.";
+}
+recapSearch.addEventListener("input", showRecapPicker);
+function stopRecapEditing() {
+  recapForm.reset();
+  document.getElementById("recap-id").value = "";
+  document.getElementById("recap-date").value = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  document.getElementById("recap-submit").textContent = "Post recap";
+  document.getElementById("recap-cancel").hidden = true;
+  recapPicked = [];
+  showRecapPicker();
+}
+const recapFormCard = document.getElementById("recap-form-card");
+document.getElementById("recap-cancel").addEventListener("click", () => { stopRecapEditing(); recapFormCard.hidden = true; });
+document.getElementById("recap-new").addEventListener("click", async () => {
+  stopRecapEditing();
+  document.getElementById("recap-form-title").textContent = "New recap";
+  recapFormCard.hidden = false;
+  await loadBuiltIn();
+  showRecapPicker();
+  document.getElementById("recap-title").focus();
+});
+document.getElementById("recap-close").addEventListener("click", () => { stopRecapEditing(); recapFormCard.hidden = true; document.getElementById("recap-new").focus(); });
+recapForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!recapPicked.length) { recapStatus.textContent = "Pick at least one photo."; return; }
+  const all = everyPhoto();
+  const photos = recapPicked.map((path) => all.find((p) => p.path === path)).filter(Boolean).map((p) => ({ path: p.path, title: p.title, credit: p.credit, owner: p.added ? p.added.owner || "" : "" }));
+  const body = new FormData(recapForm);
+  body.set("photos", JSON.stringify(photos));
+  const response = await fetch("/studio/recap", { method: "POST", body });
+  const reply = await readReply(response);
+  if (!response.ok) { recapStatus.textContent = reply.error; return; }
+  const editing = document.getElementById("recap-id").value;
+  stopRecapEditing();
+  recapFormCard.hidden = true;
+  flash(document.getElementById("recap-list-status"), (editing ? "Saved." : "Posted.") + " Its announcement links to the recap page.");
+  refreshRecaps();
+  refreshAnnouncements();
+});
+async function refreshRecaps() {
+  recaps = await (await fetch("/studio/recaps.json", { cache: "no-store" })).json();
+  await loadBuiltIn();
+  const list = document.getElementById("recap-list");
+  list.textContent = "";
+  for (const recap of recaps) {
+    const li = document.createElement("li");
+    const time = document.createElement("time");
+    time.textContent = recap.date + " · " + recap.photos.length + (recap.photos.length === 1 ? " photo" : " photos");
+    const title = document.createElement("b");
+    title.textContent = recap.title;
+    const view = document.createElement("a");
+    view.href = "/recap.html?r=" + recap.id;
+    view.target = "_blank";
+    view.rel = "noopener";
+    view.textContent = "Open the page";
+    const edit = button("Edit", "", () => {
+      showTab("recaps");
+      document.getElementById("recap-form-title").textContent = "Edit recap";
+      recapFormCard.hidden = false;
+      document.getElementById("recap-id").value = recap.id;
+      document.getElementById("recap-title").value = recap.title;
+      document.getElementById("recap-text").value = recap.text || "";
+      document.getElementById("recap-date").value = recap.date;
+      recapPicked = recap.photos.map((p) => p.path);
+      document.getElementById("recap-submit").textContent = "Save recap";
+      document.getElementById("recap-cancel").hidden = false;
+      recapStatus.textContent = "";
+      showRecapPicker();
+      document.getElementById("recap-title").focus();
+    });
+    const remove = button("Remove", "danger", async () => {
+      if (!confirm('Remove the recap "' + recap.title + '" and its announcement?')) return;
+      await post("/studio/recap-delete", { id: recap.id });
+      refreshRecaps();
+      refreshAnnouncements();
+    });
+    const p = document.createElement("p");
+    p.append(view, " ", edit, " ", remove);
+    li.append(time, title, p);
+    list.append(li);
+  }
+  document.getElementById("tab-recap-count").textContent = recaps.length;
+  if (!recaps.length) { const none = document.createElement("li"); none.className = "empty"; none.textContent = "No recaps yet. Press + New recap to make one."; list.append(none); }
+  if (!recapPicker.children.length) stopRecapEditing();
+}
+
 const presetForm = document.getElementById("preset-form");
 const presetStatus = presetForm.querySelector("[role=status]");
 const presetList = document.getElementById("preset-list");
@@ -1240,7 +2030,7 @@ async function refreshPresets() {
     const remove = button("Remove", "btn-danger", () => {
       removingPresets.add(item.id);
       refreshPresets();
-      removeLater('"' + item.name + '"', () => post("/studio/preset-delete", { id: item.id }).then(() => { removingPresets.delete(item.id); refreshPresets(); }), () => { removingPresets.delete(item.id); refreshPresets(); });
+      removeLater('"' + item.name + '"', () => removeNow("/studio/preset-delete", { id: item.id }, '"' + item.name + '"', () => { removingPresets.delete(item.id); refreshPresets(); }), () => { removingPresets.delete(item.id); refreshPresets(); });
     });
     info.append(remove);
     row.append(info);
@@ -1269,18 +2059,52 @@ presetForm.addEventListener("submit", async (event) => {
   }
   presetStatus.textContent = "Sending...";
   const response = await fetch("/studio/preset", { method: "POST", body });
-  const reply = await response.json().catch(() => ({ error: "That didn't send. The files may be too large." }));
-  presetStatus.textContent = response.ok ? "Added. It's on the presets page now." : reply.error;
+  const reply = await readReply(response).catch(() => ({ error: "That didn't send. The files may be too large." }));
+  if (response.ok) flash(presetStatus, "Added. It's on the presets page now."); else presetStatus.textContent = reply.error;
   if (response.ok) { presetForm.reset(); refreshPresets(); }
 });
 refreshPresets();
 showMe();
 refresh();
+// Sign-ins check (first sign-in only): which logins work, and why one doesn't.
+async function loadSetup() {
+  const slots = await readReply(await fetch("/studio/setup.json", { cache: "no-store" }));
+  if (!Array.isArray(slots)) return;
+  const why = { ok: "Working", "no-username": "Not working: the username is missing", "no-password": "Not working: the password is missing", "short-password": "Not working: the password is shorter than 12 characters" };
+  const list = document.getElementById("setup-list");
+  list.textContent = "";
+  for (const slot of slots) {
+    const row = document.createElement("li");
+    const who = document.createElement("span");
+    who.textContent = "Login " + slot.n + (slot.username ? " \u00b7 " + slot.username : "");
+    const state = document.createElement("span");
+    state.className = slot.state === "ok" ? "ok" : "bad";
+    state.textContent = why[slot.state] || slot.state;
+    row.append(who, state);
+    list.append(row);
+  }
+  document.getElementById("setup-card").hidden = false;
+}
+if (ME.first) loadSetup();
 refreshAnnouncements();
-refreshRequests();
+refreshRemovals().then(loadTemplates).then(refreshRequests);
+refreshRecaps();
 
 // Photos shared from the phone's gallery (sw.js keeps them for a moment) land here.
 async function takeShared() {
+  // The share arrived before this phone had the studio's helper installed.
+  if (new URLSearchParams(location.search).get("share") === "again") {
+    history.replaceState(null, "", "/studio#add");
+    go("add");
+    // Shown at the top of the form, where it's seen first.
+    const note = document.createElement("p");
+    note.className = "share-note";
+    note.setAttribute("role", "status");
+    note.textContent = "Those photos didn't come through, because this phone hadn't opened the studio yet. It's ready now: share them again, or choose them below.";
+    document.getElementById("add").prepend(note);
+    setTimeout(() => scrollTo(0, 0), 300);
+    return;
+  }
   if (!new URLSearchParams(location.search).has("shared") || !("caches" in window)) return;
   history.replaceState(null, "", "/studio#add");
   const box = await caches.open("studio-share");
@@ -1308,7 +2132,7 @@ takeShared();
 
 export function studioPage({ state, user = { name: "", credit: "" } }) {
   // Who is signed in, for the page's script. "<" is escaped so the values can't end the script.
-  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || "") }).replace(/</g, "\\u003c") + ";</script>";
+  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || ""), first: user.first === true }).replace(/</g, "\\u003c") + ";</script>";
   const body = state === "in" ? me + nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
   return head + body + '<script src="/js/site.js"></script></body></html>';
 }

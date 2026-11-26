@@ -6,15 +6,29 @@
   if (!list) return;
   const SHOW = 3;
 
-  function card({ id, date, title, text, link, linkText, photo }) {
+  // A photo picked from the portfolio or car page shows its smaller copy.
+  const smallCopy = (path) => path.replace(/\/full\.jpg$/, "/thumb.jpg").replace(/^img\/(portfolio|cars)\//, "img/$1/thumb/");
+  // A crop chosen in the studio: the part of the photo shown, as fractions.
+  function cropped(image, { x, y, w, h }) {
+    const frame = document.createElement("div");
+    frame.className = "ann-photo";
+    Object.assign(image.style, { left: `${(-x / w) * 100}%`, top: `${(-y / h) * 100}%`, width: `${100 / w}%`, height: `${100 / h}%` });
+    frame.append(image);
+    return frame;
+  }
+  function card({ id, date, title, text, link, linkText, photo, photoPath, photoCrop }) {
     const article = document.createElement("article");
-    article.className = "ann" + (photo ? " has-photo" : "");
-    if (photo) {
+    article.className = "ann" + (photo || photoPath ? " has-photo" : "");
+    if (photo || photoPath) {
       const image = document.createElement("img");
-      image.src = `announcement-photos/${id}.jpg?v=${photo}`;
+      // A cropped photo is zoomed in, so it uses the full-size copy to stay sharp.
+      image.src = photo ? `announcement-photos/${id}.jpg?v=${photo}` : photoCrop ? photoPath : smallCopy(photoPath);
       image.alt = "";
       image.loading = "lazy";
-      article.append(image);
+      const shown = photoCrop ? cropped(image, photoCrop) : image;
+      // If the photo can't be loaded, the card simply goes without it.
+      image.addEventListener("error", () => { shown.remove(); article.classList.remove("has-photo"); });
+      article.append(shown);
     }
     const when = document.createElement("time");
     when.setAttribute("datetime", date);

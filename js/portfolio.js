@@ -96,6 +96,20 @@
       watermark(context, canvas.width, canvas.height);
       canvas.classList.remove("is-loading");
     };
+    // A photo that can't load (offline, or gone) never leaves the last one showing.
+    image.onerror = () => {
+      if (ticket !== loading) return;
+      canvas.width = 800;
+      canvas.height = 600;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#151515";
+      context.fillRect(0, 0, 800, 600);
+      context.fillStyle = "#c9c9c9";
+      context.font = "28px Archivo, Arial, sans-serif";
+      context.textAlign = "center";
+      context.fillText("This photo couldn't load. Check your connection and try again.", 400, 300);
+      canvas.classList.remove("is-loading");
+    };
     canvas.classList.add("is-loading");
     image.src = src;
   }
@@ -116,10 +130,12 @@
     const title = document.createElement("b");
     title.textContent = shot.dataset.title;
     const link = document.createElement("a");
-    link.href = shot.dataset.post;
-    link.textContent = shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
+    link.href = shot.dataset.post || "https://www.instagram.com/hor1zonmedia/";
+    link.textContent = shot.dataset.post && shot.dataset.post.includes("/p/") ? "See the post on Instagram" : "See more on Instagram";
     const owner = shot.dataset.owner ? ` Car: @${shot.dataset.owner}.` : "";
-    caption.append(title, `Photo by @${shot.dataset.credit}.${owner} `, link);
+    // An uncredited photo (older studio uploads could have none) says Horizon Media.
+    const credit = shot.dataset.credit ? `Photo by @${shot.dataset.credit}.` : "Photo by Horizon Media.";
+    caption.append(title, `${credit}${owner} `, link);
     count.textContent = `${open + 1} / ${shots.length}`;
     requestForm.hidden = true;
     removal.hidden = true;
@@ -158,7 +174,7 @@
   const say = (text) => { toast.textContent = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.textContent = ""; }, 2500); };
   viewer.querySelector(".viewer-share").addEventListener("click", async () => {
     const shot = shots[open];
-    const data = { title: shot.dataset.title + " · Horizon Media", text: shot.dataset.title + ", photo by @" + shot.dataset.credit, url: linkTo(shot) };
+    const data = { title: shot.dataset.title + " · Horizon Media", text: shot.dataset.title + (shot.dataset.credit ? ", photo by @" + shot.dataset.credit : ", by Horizon Media"), url: linkTo(shot) };
     if (navigator.share) {
       try { await navigator.share(data); } catch (error) {}
       return;
@@ -213,9 +229,12 @@
   }
   requestButton.addEventListener("click", openRequest);
 
-  // ---- "Request removal": starts an email or an Instagram message to the team
-  // that names the photo, so anyone pictured (or a parent or guardian, or a
-  // car's owner) can have it taken down without hunting for how.
+  // ---- "Request removal": a short form that goes straight to the studio, or
+  // an email or Instagram message that names the photo, so anyone pictured (or
+  // a parent or guardian, or a car's owner) can have it taken down.
+  const removalForm = removal.querySelector(".removal-form");
+  const removalStatus = removalForm.querySelector("[role=status]");
+  const removalDone = removal.querySelector(".removal-done");
   function openRemoval() {
     const shot = shots[open];
     requestForm.hidden = true;
@@ -224,9 +243,36 @@
     const subject = "Please remove a photo: " + shot.dataset.title;
     const body = "Please remove this photo from the Horizon Media website:\n\n" + shot.dataset.title + "\n" + linkTo(shot) + "\n\nI am (in the photo / a parent or guardian / the car's owner): ";
     email.href = email.href.split("?")[0] + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    removalForm.reset();
+    removalForm.elements.photo.value = original(shot.dataset.full);
+    removalForm.elements.title.value = shot.dataset.title;
+    removalStatus.textContent = "";
+    removalForm.hidden = false;
+    removalDone.hidden = true;
     removal.hidden = false;
-    email.focus();
+    removalForm.elements.name.focus();
   }
+  removalForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const send = removalForm.querySelector("button[type=submit]");
+    send.disabled = true;
+    removalStatus.textContent = "Sending...";
+    try {
+      const response = await fetch("removal-request", { method: "POST", body: new FormData(removalForm) });
+      if (response.ok) {
+        removalStatus.textContent = "";
+        removalForm.hidden = true;
+        removalDone.hidden = false;
+        removalDone.focus();
+      } else {
+        const reply = await response.json().catch(() => ({}));
+        removalStatus.textContent = reply.error || "Something went wrong on our end, so please email us or message us on Instagram instead.";
+      }
+    } catch (error) {
+      removalStatus.textContent = "Your request didn't go through because of a connection problem, so please try again or email us.";
+    }
+    send.disabled = false;
+  });
   function closeRemoval() {
     if (removal.hidden) return;
     removal.hidden = true;
@@ -268,11 +314,76 @@
   // ---- Photos added through the studio (/studio) come first, newest at the top;
   // built-in photos the studio removed are taken out.
   const forCars = gallery.dataset.studio === "cars";
+  const forRecap = gallery.dataset.studio === "recap";
   const empty = document.querySelector(".gallery-empty");
   const showEmpty = () => {
     if (empty) empty.hidden = shots.length > 0;
   };
-  fetch("portfolio-photos.json")
+  // A shot for a photo given by its path, title and credit (studio photos and recaps).
+  function makeShot({ path, title, credit, owner, alt, sport, isNew }) {
+    const shot = document.createElement("button");
+    shot.className = "shot";
+    shot.type = "button";
+    if (sport) shot.dataset.sport = sport;
+    shot.dataset.full = path;
+    shot.dataset.title = title;
+    shot.dataset.credit = credit;
+    if (owner) shot.dataset.owner = owner;
+    shot.dataset.post = credit ? `https://www.instagram.com/${encodeURIComponent(credit)}/` : "https://www.instagram.com/hor1zonmedia/";
+    const image = document.createElement("img");
+    image.src = path.replace(/\/full\.jpg$/, "/thumb.jpg").replace(/^img\/(portfolio|cars)\//, "img/$1/thumb/");
+    image.alt = alt || title;
+    image.loading = "lazy";
+    fadeIn(image);
+    const info = document.createElement("span");
+    info.className = "shot-info";
+    const name = document.createElement("b");
+    name.textContent = title;
+    const by = document.createElement("span");
+    by.textContent = (credit ? `Photo by @${credit}` : "Photo by Horizon Media") + (owner ? ` · Car: @${owner}` : "");
+    info.append(name, by);
+    shot.append(image, info);
+    if (isNew) {
+      const tag = document.createElement("span");
+      tag.className = "shot-new";
+      tag.textContent = "New";
+      shot.append(tag);
+    }
+    wire(shot);
+    return shot;
+  }
+
+  // ---- A recap page (recap.html?r=<id>): only the photos chosen in the studio.
+  function loadRecap() {
+    const id = new URLSearchParams(location.search).get("r") || "";
+    const heading = document.querySelector(".recap-title");
+    const missing = () => {
+      heading.textContent = "Recap not found";
+      document.querySelector(".recap-text").textContent = "This recap has been taken down, or the link is wrong. See all our photos in the portfolio.";
+      showEmpty();
+    };
+    if (!/^[0-9a-f]{16}$/.test(id)) return missing();
+    fetch(`recaps/${id}.json`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((recap) => {
+        if (!recap) return missing();
+        heading.textContent = recap.title;
+        document.title = recap.title + " · Horizon Media";
+        document.querySelector(".recap-text").textContent = recap.text || "";
+        const date = document.querySelector(".recap-date");
+        date.textContent = new Date(recap.date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        date.dateTime = recap.date;
+        const added = recap.photos.map((photo) => makeShot(photo));
+        gallery.append(...added);
+        shots.push(...added);
+        showEmpty();
+        openFromLink();
+      })
+      .catch(missing);
+  }
+
+  if (forRecap) loadRecap();
+  else fetch("portfolio-photos.json")
     .then((response) => (response.ok ? response.json() : {}))
     .then(({ photos = [], hidden = [], pins = [] }) => {
       for (const shot of [...shots]) {
@@ -281,43 +392,30 @@
           shots.splice(shots.indexOf(shot), 1);
         }
       }
-      const added = photos.filter((photo) => (photo.sport === "cars") === forCars).map((photo) => {
-        const shot = document.createElement("button");
-        shot.className = "shot";
-        shot.type = "button";
-        shot.dataset.sport = photo.sport;
-        shot.dataset.full = `uploads/${photo.id}/full.jpg`;
-        shot.dataset.title = photo.title;
-        shot.dataset.credit = photo.credit;
-        if (photo.owner) shot.dataset.owner = photo.owner;
-        shot.dataset.post = `https://www.instagram.com/${encodeURIComponent(photo.credit)}/`;
-        const image = document.createElement("img");
-        image.src = `uploads/${photo.id}/thumb.jpg`;
-        image.alt = photo.alt || photo.title;
-        image.loading = "lazy";
-        fadeIn(image);
-        const info = document.createElement("span");
-        info.className = "shot-info";
-        const title = document.createElement("b");
-        title.textContent = photo.title;
-        const credit = document.createElement("span");
-        credit.textContent = `Photo by @${photo.credit}` + (photo.owner ? ` · Car: @${photo.owner}` : "");
-        info.append(title, credit);
-        shot.append(image, info);
-        // A "New" tag for the first week.
-        if (Date.now() - (photo.liveAt || photo.added) < 7 * 86_400_000) {
-          const tag = document.createElement("span");
-          tag.className = "shot-new";
-          tag.textContent = "New";
-          shot.append(tag);
-        }
-        wire(shot);
-        return shot;
-      });
+      const added = photos.filter((photo) => (photo.sport === "cars") === forCars).map((photo) =>
+        makeShot({ path: `uploads/${photo.id}/full.jpg`, title: photo.title, credit: photo.credit, owner: photo.owner, alt: photo.alt, sport: photo.sport, isNew: Date.now() - (photo.liveAt || photo.added) < 7 * 86_400_000 }));
       gallery.prepend(...added);
       shots.unshift(...added);
       // Pinned photos come first, in the studio's order.
       const pinned = pins.map((path) => shots.find((shot) => original(shot.dataset.full) === path)).filter(Boolean);
+      // Each pinned photo gets a little pin in its top-right corner.
+      for (const shot of pinned) {
+        if (shot.querySelector(".shot-pin")) continue;
+        const pin = document.createElement("span");
+        pin.className = "shot-pin";
+        pin.title = "Pinned";
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", "M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z");
+        svg.append(path);
+        const label = document.createElement("span");
+        label.className = "visually-hidden";
+        label.textContent = "Pinned";
+        pin.append(svg, label);
+        shot.append(pin);
+      }
       if (pinned.length) {
         gallery.prepend(...pinned);
         shots.splice(0, shots.length, ...pinned, ...shots.filter((shot) => !pinned.includes(shot)));
@@ -350,7 +448,7 @@
     if (viewer.hidden) return;
     if (event.key === "Escape") {
       if (!removal.hidden) return closeRemoval();
-      return requestForm.hidden ? close() : !requestAlert.hidden ? (requestAlert.hidden = true) : closeRequest();
+      return requestForm.hidden ? close() : !requestAlert.hidden ? requestAlert.querySelector(".request-alert-ok").click() : closeRequest();
     }
     if (!requestForm.hidden || !removal.hidden) return; // a box is open
     if (event.key === "ArrowLeft") show(open - 1);

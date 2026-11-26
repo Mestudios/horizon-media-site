@@ -36,8 +36,8 @@ beforeEach(() => {
   studio = createStudio();
 });
 
-async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "198.51.100.1" } = {}) {
-  const headers = new Headers();
+async function call(path, { method = "GET", form, cookie, origin = SITE, ip = "198.51.100.1", headers: extra = {} } = {}) {
+  const headers = new Headers(extra);
   if (cookie) headers.set("cookie", cookie);
   if (method === "POST" && origin) headers.set("origin", origin);
   let body;
@@ -80,6 +80,19 @@ test("without a password set in Netlify the studio is switched off", async () =>
 test("a password without a username also leaves it switched off", async () => {
   globalThis.Netlify = { env: { get: (name) => (name === "STUDIO_PASSWORD" ? PASSWORD : undefined) } };
   assert.equal((await call("/studio")).status, 503);
+});
+
+test("a third sign-in works even when a phone capitalizes the username or adds spaces; the password stays exact", async () => {
+  const env = { STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "second-person", STUDIO_PASSWORD_2: "second long password", STUDIO_USERNAME_3: "createddbyabby", STUDIO_PASSWORD_3: "third long password" };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  for (const username of ["createddbyabby", "Createddbyabby", " createddbyabby ", "CREATEDDBYABBY\n"]) {
+    const reply = await call("/studio/login", { method: "POST", form: { username, password: "third long password" }, ip: "198.51.100.33" });
+    assert.equal(reply.status, 200, JSON.stringify(username));
+    assert.match(reply.headers.get("set-cookie"), /^hm_studio=\d{13}\.3\./, "signed in as the third account");
+  }
+  for (const form of [{ username: "createddbyabby", password: "Third long password" }, { username: "createddbyabby", password: "third long password " }, { username: "created by abby", password: "third long password" }, { username: "createddbyabby", password: "second long password" }]) {
+    assert.equal((await call("/studio/login", { method: "POST", form, ip: "198.51.100.34" })).status, 401, JSON.stringify(form));
+  }
 });
 
 test("a second sign-in (STUDIO_USERNAME_2 / STUDIO_PASSWORD_2) works on its own, and short or half-set pairs are ignored", async () => {
@@ -167,7 +180,8 @@ test("a signed-in upload appears in the public list and can be fetched", async (
   const list = await call("/portfolio-photos.json");
   assert.equal(list.headers.get("cache-control"), "no-cache", "removals show on the next page load");
   assert.equal(list.body.photos.length, 1);
-  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0, by: USERNAME });
+  assert.deepEqual({ ...list.body.photos[0], added: 0 }, { id, title: "Big win", credit: "cb.framed.it", sport: "football", added: 0 }, "no sign-in name in the public list");
+  assert.doesNotMatch(JSON.stringify(list.body), new RegExp(USERNAME));
 
   for (const size of ["full", "thumb"]) {
     const image = await call(`/uploads/${id}/${size}.jpg`);
@@ -317,10 +331,16 @@ test("visitors can request a photo; only the team can read requests, and Done de
   assert.match(noConsent.body.error, /tick the box/);
   assert.equal((await ask({ website: "spam.example" })).status, 200, "a bot gets a quiet yes");
   assert.equal((await ask({ name: "<b>Sam</b>", message: "For my <script>mom</script>" })).status, 200);
-  assert.equal((await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" })).status, 200);
+  const missing = await ask({ photo: "uploads/0123456789abcdef/full.jpg" }, { ip: "198.51.100.9" });
+  assert.equal(missing.status, 400, "a photo that isn't on the site can't be requested (no padding the counts)");
+  assert.match(missing.body.error, /isn't on the site/);
 
   assert.equal((await call("/studio/requests.json")).status, 401);
   const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  assert.equal((await ask({ photo: `uploads/${id}/full.jpg` }, { ip: "198.51.100.9" })).status, 200, "a studio photo on the site can be requested");
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/portfolio/flex.jpg" } });
+  assert.equal((await ask({ photo: "img/portfolio/flex.jpg" }, { ip: "198.51.100.10" })).status, 400, "nor a built-in photo taken off the site");
   const requests = (await call("/studio/requests.json", { cookie })).body;
   assert.equal(requests.length, 2, "the bot's request was not stored");
   const sam = requests.find((r) => r.photo === "img/portfolio/golden-hour.jpg");
@@ -388,7 +408,7 @@ test("photos can be pinned in order; only real photo paths, by signed-in team me
     assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins: bad } })).status, 400, bad);
   }
   assert.equal((await call("/studio/pins", { method: "POST", cookie, form: { pins } })).status, 200);
-  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, JSON.parse(pins));
+  assert.deepEqual((await call("/portfolio-photos.json")).body.pins, ["img/cars/grille.jpg", "img/portfolio/golden-hour.jpg"], "a pin to a photo that isn't on the site is left out of the public list");
   await call("/studio/pins", { method: "POST", cookie, form: { pins: "[]" } });
   assert.deepEqual((await call("/portfolio-photos.json")).body.pins, []);
 });
@@ -426,6 +446,54 @@ test("ten wrong sign-ins from one address lock it out for 15 minutes, across Net
   const right = await createStudio()(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", PASSWORD); return f; })() }), { ip: "198.51.100.77" });
   assert.equal(right.status, 429, "even the right password waits out the lock");
   assert.equal((await wrong(createStudio(), "198.51.100.78")).status, 401, "other addresses are not affected");
+});
+
+test("the lockout counts a whole IPv6 network as one, and wrong tries sent at once all count", async () => {
+  const wrong = (s, ip) => s(new Request(SITE + "/studio/login", { method: "POST", headers: { origin: SITE }, body: (() => { const f = new FormData(); f.set("username", USERNAME); f.set("password", "wrong password!!"); return f; })() }), { ip });
+  // Ten different addresses inside one /64 network, each from a fresh server.
+  for (let i = 1; i <= 10; i++) assert.equal((await wrong(createStudio(), `2001:db8:aa:bb::${i.toString(16)}`)).status, 401, `try ${i}`);
+  assert.equal((await wrong(createStudio(), "2001:db8:aa:bb:ffff::1")).status, 429, "another address in the same network is locked out too");
+  assert.equal((await wrong(createStudio(), "2001:db8:aa:cc::1")).status, 401, "a different network is not");
+  // Ten tries sent at the same moment, to ten servers: none of them is lost.
+  await Promise.all(Array.from({ length: 10 }, () => wrong(createStudio(), "198.51.100.90")));
+  assert.equal((await wrong(createStudio(), "198.51.100.90")).status, 429);
+});
+
+test("a request that isn't a form gets a plain 400, not a crash", async () => {
+  for (const path of ["/photo-request", "/removal-request", "/studio/login"]) {
+    const reply = await studio(new Request(SITE + path, { method: "POST", headers: { origin: SITE, "content-type": "multipart/form-data; boundary=x" }, body: "not a form" }), { ip: "198.51.100.2" });
+    assert.equal(reply.status, 400, path);
+  }
+  const cookie = await signIn();
+  const reply = await studio(new Request(SITE + "/studio/upload", { method: "POST", headers: { origin: SITE, cookie, "content-type": "application/json" }, body: "{}" }), { ip: "198.51.100.2" });
+  assert.equal(reply.status, 400);
+});
+
+test("every studio photo needs a photographer credit", async () => {
+  const cookie = await signIn();
+  const reply = await call("/studio/upload", { method: "POST", cookie, form: photo({ credit: "@" }) });
+  assert.equal(reply.status, 400);
+  assert.match(reply.body.error, /Instagram name/);
+});
+
+test("Sign out ends the session on the server, so a copied cookie stops working", async () => {
+  const cookie = await signIn();
+  assert.match((await call("/studio", { cookie })).body, /id="add"/);
+  await call("/studio/logout", { method: "POST", cookie });
+  assert.doesNotMatch((await call("/studio", { cookie })).body, /id="add"/, "the old cookie no longer signs in");
+  assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 401);
+  assert.match((await call("/studio", { cookie: await signIn() })).body, /id="add"/, "signing in again works");
+  // A made-up cookie is not recorded.
+  const { getStore } = await import("@netlify/blobs");
+  const before = (await getStore("studio-photos").list({ prefix: "signed-out/" })).blobs.length;
+  await call("/studio/logout", { method: "POST", cookie: `hm_studio=${Date.now() + 99999}.1.${"a".repeat(64)}` });
+  assert.equal((await getStore("studio-photos").list({ prefix: "signed-out/" })).blobs.length, before);
+});
+
+test("photos shared from a phone before the studio's helper is installed get a plain explanation", async () => {
+  const reply = await studio(new Request(SITE + "/studio/share-target", { method: "POST", body: new FormData() }), { ip: "198.51.100.3" });
+  assert.equal(reply.status, 303);
+  assert.equal(reply.headers.get("location"), "/studio?share=again#add");
 });
 
 test("public lists cost one storage read per view and still change right away", async () => {
@@ -480,6 +548,82 @@ test("the homepage photo can be chosen in the studio, only from the site's own p
   assert.equal((await call("/portfolio-photos.json")).body.hero, "");
 });
 
+test("a photo that comes off the site stops being the homepage photo and is unpinned", async () => {
+  const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  const path = `uploads/${id}/full.jpg`;
+  // Removed from All photos (to the Trash).
+  await call("/studio/hero", { method: "POST", cookie, form: { path } });
+  await call("/studio/pins", { method: "POST", cookie, form: { pins: JSON.stringify([path, "img/cars/grille.jpg"]) } });
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  let list = (await call("/portfolio-photos.json")).body;
+  assert.equal(list.hero, "", "no longer the homepage photo");
+  assert.deepEqual(list.pins, ["img/cars/grille.jpg"], "unpinned; other pins stay");
+
+  // A built-in photo taken off its page.
+  await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } });
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } });
+  list = (await call("/portfolio-photos.json")).body;
+  assert.equal(list.hero, "");
+  assert.deepEqual(list.pins, []);
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/grille.jpg" } })).status, 400, "can't be chosen while it's off the site");
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path } })).status, 400, "nor a photo in the Trash");
+
+  // Taken down after a removal request.
+  await call("/studio/hero", { method: "POST", cookie, form: { path: "img/cars/nose.jpg" } });
+  await call("/removal-request", { method: "POST", form: { photo: "img/cars/nose.jpg", name: "Sam", contact: "@sam", relation: "owner", consent: "on" } });
+  const request = (await call("/studio/removals.json", { cookie })).body.find((r) => r.photo === "img/cars/nose.jpg");
+  assert.equal((await call("/studio/removal-takedown", { method: "POST", cookie, form: { id: request.id } })).status, 200);
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "");
+});
+
+test("a scheduled photo can't become the homepage photo before it goes live", async () => {
+  const cookie = await signIn();
+  const later = Date.now() + 86_400_000;
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Tomorrow", liveAt: String(later) }) })).body.photo.id;
+  const refused = await call("/studio/hero", { method: "POST", cookie, form: { path: `uploads/${id}/full.jpg` } });
+  assert.equal(refused.status, 400);
+  assert.match(refused.body.error, /isn't live yet/);
+  assert.equal((await call("/portfolio-photos.json")).body.hero, "");
+  await call("/studio/edit-photo", { method: "POST", cookie, form: { id, title: "Tomorrow", credit: "x", sport: "football", liveAt: "" } });
+  assert.equal((await call("/studio/hero", { method: "POST", cookie, form: { path: `uploads/${id}/full.jpg` } })).status, 200, "once live, it can");
+});
+
+test("public photos are kept by browsers for a day, then checked cheaply, and stop once removed", async () => {
+  const cookie = await signIn();
+  const id = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo.id;
+  const first = await call(`/uploads/${id}/full.jpg`);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("cache-control"), "public, max-age=86400, must-revalidate", "a day, not a year");
+  assert.doesNotMatch(first.headers.get("cache-control"), /immutable/);
+  const tag = first.headers.get("etag");
+  assert.match(tag, /^"[0-9a-f]{16}-full-\d+"$/);
+  const again = await call(`/uploads/${id}/full.jpg`, { headers: { "if-none-match": tag } });
+  assert.equal(again.status, 304, "unchanged: no photo sent again");
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call(`/uploads/${id}/full.jpg`, { headers: { "if-none-match": tag } })).status, 404, "once removed, the check says it's gone");
+});
+
+test("requests nobody handles are deleted after 90 days, with the visitor's details", async () => {
+  const { getStore } = await import("@netlify/blobs");
+  const store = getStore("studio-photos");
+  const old = Date.now() - 91 * 86_400_000;
+  const recent = Date.now() - 89 * 86_400_000;
+  await store.setJSON("req/00000000000000a1", { id: "00000000000000a1", photo: "img/cars/grille.jpg", name: "Old", contact: "@old", added: old });
+  await store.setJSON("req/00000000000000a2", { id: "00000000000000a2", photo: "img/cars/grille.jpg", name: "Recent", contact: "@recent", added: recent });
+  await store.setJSON("rem/00000000000000b1", { id: "00000000000000b1", photo: "img/cars/nose.jpg", name: "Old", contact: "@old", relation: "owner", added: old, status: "open" });
+  await store.setJSON("rem/00000000000000b2", { id: "00000000000000b2", photo: "img/cars/nose.jpg", added: old, status: "kept", handledAt: old });
+  const cookie = await signIn();
+  const requests = (await call("/studio/requests.json", { cookie })).body;
+  assert.deepEqual(requests.map((r) => r.name), ["Recent"]);
+  const removals = (await call("/studio/removals.json", { cookie })).body;
+  assert.deepEqual(removals.map((r) => r.id), ["00000000000000b2"], "the old open request is gone; a handled record (no details) stays");
+  // A new request also clears old ones, even if nobody opens the studio.
+  await store.setJSON("req/00000000000000a3", { id: "00000000000000a3", photo: "img/cars/grille.jpg", name: "Old 2", contact: "@old2", added: old });
+  await call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "New", contact: "@new" } });
+  assert.equal(await store.get("req/00000000000000a3"), null);
+});
+
 test("the studio counts how often each photo is requested, even after requests are done", async () => {
   const ask = (photo, ip) => call("/photo-request", { method: "POST", form: { photo, name: "A", contact: "a@b.c" }, ip });
   await ask("img/portfolio/golden-hour.jpg", "192.0.2.101");
@@ -498,13 +642,13 @@ test("the studio knows who is signed in: their name, their saved Instagram credi
   const one = await signInAs(USERNAME, PASSWORD);
   const two = await signInAs("cb.framed.it", "another long password");
   const meOf = async (cookie) => JSON.parse(/<script>const ME = (\{.*?\});<\/script>/.exec((await call("/studio", { cookie })).body)[1]);
-  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "" }, "a username that isn't an Instagram name starts with no credit");
-  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" });
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "", first: true }, "a username that isn't an Instagram name starts with no credit");
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it", first: false });
   assert.equal((await call("/studio/profile", { method: "POST", form: { credit: "@visuals_alex_" } })).status, 401);
   assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "not a name!" } })).status, 400);
   assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "@visuals_alex_" } })).status, 200);
-  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "visuals_alex_" });
-  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" }, "each login has its own");
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "visuals_alex_", first: true });
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it", first: false }, "each login has its own");
   const added = (await call("/studio/upload", { method: "POST", cookie: two, form: photo() })).body.photo;
   assert.equal(added.by, "cb.framed.it");
   const edited = (await call("/studio/edit-photo", { method: "POST", cookie: one, form: { id: added.id, title: "x", credit: "y", sport: "football" } })).body.photo;
@@ -583,13 +727,191 @@ test("presets: the team adds Lightroom files and before/after photos, visitors d
   assert.equal((await call(`/preset-files/${id}/dng`)).status, 404);
 });
 
-test("removing a photo deletes it everywhere", async () => {
+test("removing a photo takes it off the site at once and puts it in the trash", async () => {
   const cookie = await signIn();
   const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo() })).body.photo;
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id: "not-an-id" } })).status, 400);
   assert.equal((await call("/studio/delete", { method: "POST", cookie, form: { id } })).status, 200);
   assert.deepEqual((await call("/portfolio-photos.json")).body, { photos: [], hidden: [], pins: [], hero: "" });
   assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404);
+});
+
+test("trash: removed photos can be restored for 30 days, then they are deleted for good", async () => {
+  const cookie = await signIn();
+  const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Keep me" }) })).body.photo;
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call("/studio/trash.json")).status, 401, "only the team sees the trash");
+  let trash = (await call("/studio/trash.json", { cookie })).body;
+  assert.equal(trash.length, 1);
+  assert.equal(trash[0].title, "Keep me");
+  assert.equal(trash[0].trashedBy, USERNAME);
+  assert.ok(trash[0].deletesOn - trash[0].trashedAt === 30 * 86_400_000);
+  assert.equal((await call(`/uploads/${id}/full.jpg`)).status, 404, "a photo in the trash can't be loaded");
+  assert.equal((await call(`/studio/trash-photo/${id}.jpg`)).status, 401, "its thumbnail is for the team only");
+  assert.deepEqual([...(await call(`/studio/trash-photo/${id}.jpg`, { cookie })).body], [...JPEG]);
+  assert.equal((await call("/studio/restore", { method: "POST", form: { id } })).status, 401);
+  assert.equal((await call("/studio/restore", { method: "POST", cookie, form: { id } })).status, 200);
+  assert.deepEqual((await call("/portfolio-photos.json")).body.photos.map((p) => p.title), ["Keep me"], "restored photos are back on the site");
+  assert.deepEqual([...(await call(`/uploads/${id}/full.jpg`)).body], [...JPEG], "with their file");
+  assert.equal((await call("/studio/trash.json", { cookie })).body.length, 0);
+  // Delete for good, straight from the trash.
+  await call("/studio/delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call("/studio/trash-delete", { method: "POST", cookie, form: { id } })).status, 200);
+  assert.equal((await call("/studio/trash.json", { cookie })).body.length, 0);
+  assert.equal((await call("/studio/restore", { method: "POST", cookie, form: { id } })).status, 404);
+  // After 30 days, the trash empties itself.
+  const old = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Old one" }) })).body.photo.id;
+  await call("/studio/delete", { method: "POST", cookie, form: { id: old } });
+  const real = Date.now;
+  Date.now = () => real() + 31 * 86_400_000;
+  try { assert.equal((await call("/studio/trash.json", { cookie: await signIn() })).body.length, 0); } finally { Date.now = real; }
+  assert.equal((await call("/studio/restore", { method: "POST", cookie, form: { id: old } })).status, 404);
+});
+
+test("removal requests reach the studio, which takes the photo down or keeps it, then keeps only a record", async () => {
+  const cookie = await signIn();
+  const { id } = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Sideline" }) })).body.photo;
+  const send = (form, ip = "198.51.100.40") => call("/removal-request", { method: "POST", ip, form: { photo: `uploads/${id}/full.jpg`, title: "Sideline", name: "Pat", contact: "pat@example.com", relation: "parent", message: "That's my kid <b>please</b>", consent: "on", ...form } });
+  assert.equal((await send({ consent: "" })).status, 400);
+  assert.equal((await send({ relation: "boss" })).status, 400);
+  assert.equal((await send({ photo: "../secret.jpg" })).status, 400);
+  assert.equal((await send({ name: "" })).status, 400);
+  assert.equal((await send({}, undefined)).status, 200);
+  assert.equal((await call("/removal-request", { method: "POST", origin: "https://evil.example", form: { photo: `uploads/${id}/full.jpg` } })).status, 403);
+  assert.equal((await call("/studio/removals.json")).status, 401);
+  const [open] = (await call("/studio/removals.json", { cookie })).body;
+  assert.equal(open.status, "open");
+  assert.equal(open.name, "Pat");
+  assert.equal(open.relation, "parent");
+  assert.doesNotMatch(open.message, /[<>]/, "stored as plain text");
+  assert.equal((await call("/studio/removal-takedown", { method: "POST", form: { id: open.id } })).status, 401);
+  assert.equal((await call("/studio/removal-takedown", { method: "POST", cookie, form: { id: open.id } })).status, 200);
+  assert.deepEqual((await call("/portfolio-photos.json")).body.photos, [], "the photo is off the site");
+  const [trashed] = (await call("/studio/trash.json", { cookie })).body;
+  assert.equal(trashed.why, "removal request", "and in the trash, marked why");
+  const [record] = (await call("/studio/removals.json", { cookie })).body;
+  assert.deepEqual(Object.keys(record).sort(), ["added", "handledAt", "handledBy", "id", "photo", "status", "title"]);
+  assert.equal(record.status, "taken-down");
+  assert.equal(record.handledBy, USERNAME);
+  assert.equal((await call("/studio/removal-takedown", { method: "POST", cookie, form: { id: open.id } })).status, 409, "handled once");
+  // A built-in photo comes off its page instead; or the team can keep a photo up.
+  await call("/removal-request", { method: "POST", ip: "198.51.100.41", form: { photo: "img/portfolio/golden-hour.jpg", title: "Golden hour", name: "Sam", contact: "@sam", relation: "pictured", consent: "on" } });
+  await call("/removal-request", { method: "POST", ip: "198.51.100.42", form: { photo: "img/cars/grille.jpg", title: "Grille", name: "Lee", contact: "@lee", relation: "owner", consent: "on" } });
+  const waiting = (await call("/studio/removals.json", { cookie })).body.filter((r) => r.status === "open");
+  const golden = waiting.find((r) => r.title === "Golden hour"), grille = waiting.find((r) => r.title === "Grille");
+  await call("/studio/removal-takedown", { method: "POST", cookie, form: { id: golden.id } });
+  assert.deepEqual((await call("/portfolio-photos.json")).body.hidden, ["img/portfolio/golden-hour.jpg"]);
+  await call("/studio/removal-keep", { method: "POST", cookie, form: { id: grille.id } });
+  const kept = (await call("/studio/removals.json", { cookie })).body.find((r) => r.id === grille.id);
+  assert.equal(kept.status, "kept");
+  assert.equal(kept.name, undefined, "the visitor's details are deleted once handled");
+});
+
+test("reply templates: sensible ones to start, editable by the team as plain text", async () => {
+  const cookie = await signIn();
+  assert.equal((await call("/studio/templates.json")).status, 401);
+  const start = (await call("/studio/templates.json", { cookie })).body;
+  assert.ok(start.length >= 3 && start.every((t) => t.name && t.text.includes("{name}")));
+  const mine = [{ name: "Thanks", text: "Hi {name}, here's {photo}: {link}" }, { name: "", text: "dropped: no name" }, { name: "<b>Bold</b>", text: "Line one\nLine two <script>" }];
+  const saved = await call("/studio/templates", { method: "POST", cookie, form: { templates: JSON.stringify(mine) } });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.templates, [{ name: "Thanks", text: "Hi {name}, here's {photo}: {link}" }, { name: "bBold/b", text: "Line one\nLine two script" }]);
+  assert.deepEqual((await call("/studio/templates.json", { cookie })).body, saved.body.templates);
+  assert.equal((await call("/studio/templates", { method: "POST", cookie, form: { templates: "not json" } })).status, 400);
+  assert.equal((await call("/studio/templates", { method: "POST", cookie, form: { templates: JSON.stringify(Array(13).fill({ name: "a", text: "b" })) } })).status, 400);
+});
+
+test("recaps: a page of chosen photos with an announcement linking to it", async () => {
+  const cookie = await signIn();
+  const a = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Kickoff" }) })).body.photo;
+  const picks = [{ path: `uploads/${a.id}/full.jpg`, title: "Kickoff", credit: "@cb.framed.it" }, { path: "img/portfolio/golden-hour.jpg", title: "Golden hour", credit: "cb.framed.it" }, { path: "img/cars/grille.jpg", title: "Grille", credit: "connors.visualss", owner: "@carguy" }];
+  assert.equal((await call("/studio/recap", { method: "POST", form: { title: "Fall recap", photos: JSON.stringify(picks) } })).status, 401);
+  assert.equal((await call("/studio/recap", { method: "POST", cookie, form: { title: "Fall recap", photos: "[]" } })).status, 400);
+  assert.equal((await call("/studio/recap", { method: "POST", cookie, form: { title: "Fall recap", photos: JSON.stringify([{ path: "https://evil.example/x.jpg" }]) } })).status, 400);
+  const made = await call("/studio/recap", { method: "POST", cookie, form: { title: "Fall 2026 recap", text: "Our <best> season yet.", date: TODAY, photos: JSON.stringify(picks) } });
+  assert.equal(made.status, 200);
+  const id = made.body.recap.id;
+  const ann = (await call("/announcements.json")).body.find((x) => x.id === id);
+  assert.equal(ann.title, "Fall 2026 recap");
+  assert.equal(ann.link, `recap.html?r=${id}`);
+  assert.equal(ann.linkText, "See the photos");
+  const page = (await call(`/recaps/${id}.json`)).body;
+  assert.equal(page.title, "Fall 2026 recap");
+  assert.equal(page.text, "Our best season yet.");
+  assert.equal(page.by, undefined, "visitors don't see who made it");
+  assert.deepEqual(page.photos.map((p) => p.path), picks.map((p) => p.path));
+  assert.equal(page.photos[0].credit, "cb.framed.it");
+  assert.equal(page.photos[2].owner, "carguy");
+  // Photos that leave the site leave the recap too.
+  await call("/studio/delete", { method: "POST", cookie, form: { id: a.id } });
+  await call("/studio/hide", { method: "POST", cookie, form: { path: "img/portfolio/golden-hour.jpg" } });
+  assert.deepEqual((await call(`/recaps/${id}.json`)).body.photos.map((p) => p.path), ["img/cars/grille.jpg"]);
+  // Editing updates both; the announcement's link still passes the studio's link rules when edited.
+  await call("/studio/recap", { method: "POST", cookie, form: { id, title: "Fall recap (final)", date: TODAY, photos: JSON.stringify(picks.slice(2)) } });
+  assert.equal((await call("/announcements.json")).body.find((x) => x.id === id).title, "Fall recap (final)");
+  const edit = await call("/studio/announce", { method: "POST", cookie, form: { id, title: "Fall recap!", text: "x", date: TODAY, link: `recap.html?r=${id}`, linkText: "See the photos" } });
+  assert.equal(edit.status, 200, JSON.stringify(edit.body));
+  // A future recap stays hidden until its date; removing one removes its announcement.
+  const later = (await call("/studio/recap", { method: "POST", cookie, form: { title: "Winter", date: "2099-01-01", photos: JSON.stringify(picks.slice(2)) } })).body.recap.id;
+  assert.equal((await call(`/recaps/${later}.json`)).status, 404);
+  assert.equal((await call("/studio/recaps.json", { cookie })).body.length, 2);
+  await call("/studio/recap-delete", { method: "POST", cookie, form: { id } });
+  assert.equal((await call(`/recaps/${id}.json`)).status, 404);
+  assert.ok(!(await call("/announcements.json")).body.some((x) => x.id === id));
+});
+
+test("an announcement can use a photo picked from the portfolio, which drops out if the photo leaves the site", async () => {
+  const cookie = await signIn();
+  const announce = (form) => call("/studio/announce", { method: "POST", cookie, form: { title: "Big win", text: "We won.", date: TODAY, ...form } });
+  assert.equal((await announce({ photoPath: "https://evil.example/x.jpg" })).status, 400);
+  const made = await announce({ photoPath: "img/portfolio/golden-hour.jpg" });
+  assert.equal(made.status, 200);
+  const id = made.body.announcement.id;
+  let shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, "img/portfolio/golden-hour.jpg");
+  assert.equal(shown.photo, undefined);
+  // Uploading a photo replaces the picked one, and picking replaces an upload.
+  await announce({ id, photo: new Blob([JPEG]) });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.ok(shown.photo && !shown.photoPath);
+  const up = (await call("/studio/upload", { method: "POST", cookie, form: photo({ title: "Team photo" }) })).body.photo;
+  await announce({ id, photoPath: `uploads/${up.id}/full.jpg` });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, `uploads/${up.id}/full.jpg`);
+  assert.ok(!shown.photo);
+  assert.equal((await call(`/announcement-photos/${id}.jpg`)).status, 404, "the old upload is gone");
+  // If the picked photo comes off the site, the card goes without it.
+  await call("/studio/delete", { method: "POST", cookie, form: { id: up.id } });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.equal(shown.photoPath, undefined);
+  await call("/studio/restore", { method: "POST", cookie, form: { id: up.id } });
+  assert.equal((await call("/announcements.json")).body.find((a) => a.id === id).photoPath, `uploads/${up.id}/full.jpg`, "and gets it back if restored");
+  // Remove photo clears it.
+  await announce({ id, photoPath: `uploads/${up.id}/full.jpg`, removePhoto: "1" });
+  shown = (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.ok(!shown.photo && !shown.photoPath);
+  // A recap's announcement uses the recap's first photo.
+  const recap = (await call("/studio/recap", { method: "POST", cookie, form: { title: "Recap", date: TODAY, photos: JSON.stringify([{ path: "img/cars/grille.jpg", title: "Grille", credit: "x" }]) } })).body.recap;
+  assert.equal((await call("/announcements.json")).body.find((a) => a.id === recap.id).photoPath, "img/cars/grille.jpg");
+});
+
+test("an announcement photo can be cropped; bad crops are ignored and removing the photo drops the crop", async () => {
+  const cookie = await signIn();
+  const announce = (form) => call("/studio/announce", { method: "POST", cookie, form: { title: "Cropped", text: "x", date: TODAY, ...form } });
+  const id = (await announce({ photoPath: "img/portfolio/golden-hour.jpg", photoCrop: JSON.stringify({ x: 0.1, y: 0.2, w: 0.5, h: 0.4, extra: "<b>" }) })).body.announcement.id;
+  const card = async () => (await call("/announcements.json")).body.find((a) => a.id === id);
+  assert.deepEqual((await card()).photoCrop, { x: 0.1, y: 0.2, w: 0.5, h: 0.4 });
+  for (const bad of ["not json", JSON.stringify({ x: 0.8, y: 0, w: 0.5, h: 0.5 }), JSON.stringify({ x: -1, y: 0, w: 0.5, h: 0.5 }), JSON.stringify({ x: 0, y: 0, w: "a", h: 1 })]) {
+    await announce({ id, photoPath: "img/portfolio/golden-hour.jpg", photoCrop: bad });
+    assert.equal((await card()).photoCrop, undefined, bad);
+  }
+  await announce({ id, photoPath: "img/portfolio/golden-hour.jpg", photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  assert.ok((await card()).photoCrop);
+  await announce({ id, removePhoto: "1", photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  const after = await card();
+  assert.ok(!after.photoPath && !after.photoCrop, "no photo, no crop");
+  await announce({ id, photoCrop: JSON.stringify({ x: 0, y: 0, w: 1, h: 0.625 }) });
+  assert.equal((await card()).photoCrop, undefined, "a crop without a photo is not kept");
 });
 
 test("signing out ends the session in the browser", async () => {
@@ -600,4 +922,60 @@ test("signing out ends the session in the browser", async () => {
 test("the studio leaves every other address alone", async () => {
   assert.ok((await call("/")).passedThrough);
   assert.ok((await call("/portfolio.html")).passedThrough);
+});
+
+test("the studio's Roadmap tab shows every planned release in order, to everyone signed in", async () => {
+  const { ROADMAP } = await import("../netlify/studio/roadmap.js");
+  const page = (await call("/studio", { cookie: await signIn() })).body;
+  assert.match(page, /<button type="button" data-view="roadmap"><span class="long">Roadmap<\/span>/, "in the side menu");
+  const section = /<section data-view="roadmap" hidden>([\s\S]*?)<\/section>/.exec(page)[1];
+  const versions = [...section.matchAll(/<div class="rm-when"><b>([^<]+)<\/b>/g)].map((m) => m[1]);
+  assert.deepEqual(versions, ROADMAP.map((r) => r.version));
+  assert.ok(versions.length >= 5);
+  for (let i = 1; i < ROADMAP.length; i++) assert.ok(ROADMAP[i].date >= ROADMAP[i - 1].date, `${ROADMAP[i].version} comes after ${ROADMAP[i - 1].version}`);
+  assert.equal(ROADMAP.filter((r) => r.status === "current").length, 1, "exactly one release is this update");
+  assert.doesNotMatch(section, /<script/i);
+  // Signed out, it isn't shown.
+  assert.doesNotMatch((await call("/studio")).body, /data-view="roadmap"/);
+});
+
+test("logins 1 to 5 each sign in on their own, and stray spaces pasted into Netlify don't break them", async () => {
+  const env = {
+    STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD,
+    STUDIO_USERNAME_2: "cb.framed.it", STUDIO_PASSWORD_2: "second long password",
+    STUDIO_USERNAME_3: " createddbyabby\n", STUDIO_PASSWORD_3: "third long password ",
+    STUDIO_USERNAME_4: "connors.visualss", STUDIO_PASSWORD_4: "\tfourth long password\n",
+    STUDIO_USERNAME_5: "fifth-person", STUDIO_PASSWORD_5: "fifth long password",
+  };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  const logins = [[USERNAME, PASSWORD], ["cb.framed.it", "second long password"], ["createddbyabby", "third long password"], ["Connors.Visualss ", "fourth long password"], ["fifth-person", "fifth long password"]];
+  for (const [i, [username, password]] of logins.entries()) {
+    const reply = await call("/studio/login", { method: "POST", form: { username, password }, ip: `198.51.100.${120 + i}` });
+    assert.equal(reply.status, 200, `login ${i + 1}`);
+    const cookie = reply.headers.get("set-cookie").split(";")[0];
+    assert.match(cookie, new RegExp(`^hm_studio=\\d{13}\\.${i + 1}\\.`), `signed in as login ${i + 1}`);
+    assert.equal((await call("/studio/upload", { method: "POST", cookie, form: photo() })).status, 200, `login ${i + 1} can add photos`);
+  }
+  // One login's password doesn't work for another.
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: "connors.visualss", password: "third long password" }, ip: "198.51.100.130" })).status, 401);
+});
+
+test("the Sign-ins check tells the first sign-in which logins work and why one doesn't, without showing passwords", async () => {
+  const env = {
+    STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD,
+    STUDIO_USERNAME_2: "cb.framed.it", STUDIO_PASSWORD_2: "second long password",
+    STUDIO_USERNAME_3: "createddbyabby", STUDIO_PASSWORD_3: "short",
+    STUDIO_USERNAME_4: "connors.visualss",
+    STUDIO_PASSWORD_5: "a password with no username",
+  };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+  const first = await signIn();
+  const setup = await call("/studio/setup.json", { cookie: first });
+  assert.equal(setup.status, 200);
+  assert.deepEqual(setup.body.map((s) => [s.n, s.state]), [[1, "ok"], [2, "ok"], [3, "short-password"], [4, "no-password"], [5, "no-username"]]);
+  assert.doesNotMatch(JSON.stringify(setup.body), /password with no username|second long password|short"/, "no password is ever sent");
+  assert.equal((await call("/studio/login", { method: "POST", form: { username: "createddbyabby", password: "short" }, ip: "198.51.100.140" })).status, 401, "a short password stays switched off");
+  const second = (await call("/studio/login", { method: "POST", form: { username: "cb.framed.it", password: "second long password" }, ip: "198.51.100.141" })).headers.get("set-cookie").split(";")[0];
+  assert.equal((await call("/studio/setup.json", { cookie: second })).status, 403, "only the first sign-in sees it");
+  assert.equal((await call("/studio/setup.json")).status, 401);
 });

@@ -4,5 +4,5 @@ import { createStudio } from "../studio/studio.js";
 export default createStudio();
 
 export const config = {
-  path: ["/studio", "/studio/*", "/uploads/*", "/portfolio-photos.json", "/announcements.json", "/photo-request", "/announcement-photos/*", "/presets.json", "/preset-files/*"],
+  path: ["/studio", "/studio/*", "/uploads/*", "/portfolio-photos.json", "/announcements.json", "/photo-request", "/announcement-photos/*", "/presets.json", "/preset-files/*", "/removal-request", "/recaps/*"],
 };

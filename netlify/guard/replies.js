@@ -10,7 +10,8 @@ import { useNotice } from "./notice.js";
 //   mode: position in MODES; visitors: the count, when one was taken;
 //   cookie: a new visitor id to hand out; preview: the mode was asked for with ?busy=
 //   hero: the homepage photo chosen in the studio, if any; notice: the notice bar, if one is on
-export async function reply(response, { mode = 0, visitors, cookie, preview = false, hero = null, notice = null }) {
+//   forget: delete a visitor cookie the browser still has (the visitor said no to cookies)
+export async function reply(response, { mode = 0, visitors, cookie, preview = false, hero = null, notice = null, forget = false }) {
   const name = MODES[mode].name;
   const headers = new Headers(response.headers);
   for (const [header, value] of Object.entries(SECURITY_HEADERS)) headers.set(header, value);
@@ -18,6 +19,8 @@ export async function reply(response, { mode = 0, visitors, cookie, preview = fa
   if (visitors !== undefined) headers.set("x-busy-visitors", visitorLabel(visitors));
   if (cookie) {
     headers.append("set-cookie", `${COOKIE.name}=${cookie}; Max-Age=${COOKIE.maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Lax`);
+  } else if (forget) {
+    headers.append("set-cookie", `${COOKIE.name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`);
   }
 
   const isPage = response.status === 200 && (response.headers.get("content-type") || "").includes("text/html");
@@ -75,6 +78,14 @@ export function bannedPage() {
   return new Response(BANNED_PAGE, {
     status: 403,
     headers: { ...SECURITY_HEADERS, "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-busy-mode": "banned" },
+  });
+}
+
+// What a honeypot address answers: an ordinary "Not found", so the bot learns nothing.
+export function notFoundPage() {
+  return new Response("Not found", {
+    status: 404,
+    headers: { ...SECURITY_HEADERS, "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
 }
 
