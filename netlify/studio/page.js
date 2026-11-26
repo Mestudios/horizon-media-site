@@ -49,7 +49,9 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .photo-edit label{margin:10px 0 4px;font-size:13px}
 .studio .photo-edit input,.studio .photo-edit select{padding:9px;font-size:14px}
 .undo{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:16px;padding:10px 10px 10px 18px;background:var(--chalk);color:var(--night);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);font-weight:600;font-size:15px;max-width:calc(100% - 32px)}
-.undo span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo span{overflow-wrap:anywhere}
+.studio .share-note{margin:0 0 16px;padding:12px 16px;border:1px solid var(--flare);border-radius:8px;background:rgba(255,198,26,.08);color:var(--chalk);min-height:0}
+.studio .undo[role=status]{color:var(--night);margin-top:0;min-height:0}
 .studio .undo .btn,.undo .btn{margin:0;padding:9px 18px;min-height:40px}
 @media (max-width:760px){.undo{bottom:84px}}
 .studio ul.picked{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));margin:12px 0 0}
@@ -732,6 +734,7 @@ async function openTool(pick) {
   } catch (error) {
     blurPick = null;
     addStatus.textContent = "This device can't open that photo for editing (HEIC photos only open in Safari). Save it as a JPEG and choose it again.";
+    addStatus.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   preview = turned(blurImage, pick.rotate, 1400);
@@ -2044,7 +2047,13 @@ async function takeShared() {
   if (new URLSearchParams(location.search).get("share") === "again") {
     history.replaceState(null, "", "/studio#add");
     go("add");
-    addStatus.textContent = "Those photos didn't come through, because this phone hadn't opened the studio yet. It's ready now: share them again, or choose them below.";
+    // Shown at the top of the form, where it's seen first.
+    const note = document.createElement("p");
+    note.className = "share-note";
+    note.setAttribute("role", "status");
+    note.textContent = "Those photos didn't come through, because this phone hadn't opened the studio yet. It's ready now: share them again, or choose them below.";
+    document.getElementById("add").prepend(note);
+    setTimeout(() => scrollTo(0, 0), 300);
     return;
   }
   if (!new URLSearchParams(location.search).has("shared") || !("caches" in window)) return;
