@@ -20,6 +20,7 @@ import { SPORTS } from "./sports.js";
 import { MAX_REQUESTS } from "./limits.js";
 import { createBanList } from "../guard/bans.js";
 import { network } from "../guard/requests.js";
+import { can, NOT_ALLOWED, ownsPhoto, roleOf, ROLES } from "./roles.js";
 import { HERO_PATH } from "../guard/homepage.js";
 import { NOTICE_LINK } from "../guard/notice.js";
 
@@ -41,6 +42,26 @@ const TRASH_DAYS = 30;
 // Photo and removal requests nobody has handled are deleted after this long,
 // with the visitor's details (the privacy page promises it).
 const REQUEST_DAYS = 90;
+// The studio's history of who did what: the newest LOG_SHOWN are shown on the
+// Team tab, and only the newest LOG_KEEP are kept.
+const LOG_SHOWN = 100;
+const LOG_KEEP = 500;
+// Blocked senders of photo and removal requests: at most this many.
+const MAX_BLOCKED = 500;
+// What each studio action is called in the history.
+const ACTION_NAMES = {
+  "/studio/upload": "added a photo", "/studio/edit-photo": "edited a photo", "/studio/delete": "moved a photo to the Trash",
+  "/studio/restore": "restored a photo", "/studio/trash-delete": "deleted a photo for good", "/studio/pins": "changed the pinned photos",
+  "/studio/hide": "took a photo off the site", "/studio/unhide": "put a photo back on the site", "/studio/hero": "changed the homepage photo",
+  "/studio/notice": "changed the notice bar", "/studio/announce": "saved an announcement", "/studio/announce-delete": "removed an announcement",
+  "/studio/recap": "saved a recap", "/studio/recap-delete": "removed a recap", "/studio/preset": "saved a preset", "/studio/preset-delete": "removed a preset",
+  "/studio/request-done": "marked a photo request done", "/studio/removal-takedown": "took a photo down after a removal request",
+  "/studio/removal-keep": "kept a photo up after a removal request", "/studio/templates": "changed the reply templates",
+  "/studio/roles": "changed a team member's role", "/studio/block": "blocked a sender", "/studio/unblock": "unblocked a sender",
+  "/studio/profile": "changed their photo credit",
+};
+// A request's contact, as compared for blocking: no @, spaces or capitals.
+const contactKey = (contact) => String(contact || "").trim().toLowerCase().replace(/^@+/, "").replace(/\s+/g, "");
 // Removal requests: at most this many waiting, and handled ones kept as a record (without anyone's details).
 const MAX_REMOVALS = 200;
 const KEEP_HANDLED = 100;
@@ -145,7 +166,7 @@ async function signedIn(request, list, now) {
   if (account === undefined || !(await same(match[3], await sign(match[1], account)))) return null;
   // A session ended with Sign out stays ended, even if its cookie was copied.
   if (await store().get(`signed-out/${match[3]}`)) return null;
-  return account;
+  return { ...account, role: roleOf(account.n, await store().get("roles", { type: "json" })) };
 }
 
 // A posted form, or null when the body isn't one (a broken or hand-made request).
@@ -366,6 +387,28 @@ export function createStudio() {
     return items.sort((a, b) => b.added - a.added);
   }
 
+  // ---- Team roles, the history, and blocked senders (Update 2.2)
+  async function teamList(list) {
+    const saved = await store().get("roles", { type: "json" });
+    return { accounts: list.map((a) => ({ n: a.n, username: a.username, role: roleOf(a.n, saved) })), roles: ROLES };
+  }
+  async function logAction(me, path, form, now) {
+    const title = form ? clean(form.get("title") || form.get("name") || "", 60) : "";
+    const what = (ACTION_NAMES[path] || path.replace("/studio/", "")) + (title ? ` ("${title}")` : "");
+    await store().setJSON(`log/${now}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`, { who: me.username, what, when: now });
+    // Keep the newest LOG_KEEP: older ones go, a few at a time.
+    const { blobs } = await store().list({ prefix: "log/" });
+    if (blobs.length > LOG_KEEP) {
+      const oldest = blobs.map(({ key }) => key).sort().slice(0, Math.min(50, blobs.length - LOG_KEEP));
+      await Promise.all(oldest.map((key) => store().delete(key)));
+    }
+  }
+  const listBlocked = async () => (await store().get("blocked", { type: "json" })) || [];
+  async function isBlocked(contact) {
+    const key = contactKey(contact);
+    return key !== "" && (await listBlocked()).some((b) => b.key === key);
+  }
+
   // Deletes photo requests, and open removal requests, older than
   // REQUEST_DAYS. Run when the studio lists them and when a new one comes in,
   // so old ones go even if nobody opens the studio. Handled removal records
@@ -480,6 +523,8 @@ export function createStudio() {
       const onSite = photoPath.startsWith("uploads/") ? listed.photos.some((p) => `uploads/${p.id}/full.jpg` === photoPath) : !listed.hidden.includes(photoPath);
       if (!onSite) return json({ error: "That photo isn't on the site any more." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can reach you." }, 400);
+      // A blocked sender gets the usual reply; nothing is saved.
+      if (await isBlocked(contact)) return json({ ok: true });
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       // Counted only for requests that would be saved, so a mistyped form doesn't use up the hour.
       if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
@@ -507,6 +552,8 @@ export function createStudio() {
       const photoPath = String(form.get("photo") || "");
       if (!REQUESTABLE.test(photoPath)) return json({ error: "Unknown photo." }, 400);
       if (!name || !contact) return json({ error: "Give your name and an Instagram name or email so we can let you know when it's down." }, 400);
+      // Removal requests are never blocked: someone asking to be taken off the
+      // site (often for a child) must always reach the team.
       if (!relation) return json({ error: "Choose how you're connected to the photo." }, 400);
       if (form.get("consent") !== "on") return json({ error: "Please tick the box to agree to how we use your details, so we can send your request." }, 400);
       if (tooManyRequests(ip, now)) return json({ error: "You have sent a lot of requests in a short time, so please wait an hour and try again or message us on Instagram." }, 429);
@@ -569,8 +616,13 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json"].includes(url.pathname)) {
-        if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json", "/studio/team.json", "/studio/log.json", "/studio/blocked.json"].includes(url.pathname)) {
+        const who = await signedIn(request, list, now);
+        if (!who) return json({ error: "Sign in first." }, 401);
+        if (!can(who.role, url.pathname)) return json(NOT_ALLOWED, 403);
+        if (url.pathname === "/studio/team.json") return json(await teamList(list));
+        if (url.pathname === "/studio/log.json") return json(await listAll("log/", "when").then((items) => items.slice(0, LOG_SHOWN)));
+        if (url.pathname === "/studio/blocked.json") return json(await listBlocked());
         if (url.pathname === "/studio/trash.json") return json(await listTrash(now));
         if (url.pathname === "/studio/removals.json") { await forgetOldRequests(now); return json(await listAll("rem/")); }
         if (url.pathname === "/studio/templates.json") return json((await store().get("templates", { type: "json" })) || DEFAULT_TEMPLATES);
@@ -583,7 +635,9 @@ export function createStudio() {
       // Thumbnails of photos in the trash, for the team only.
       const trashThumb = /^\/studio\/trash-photo\/([0-9a-f]{16})\.jpg$/.exec(url.pathname);
       if (trashThumb) {
-        if (!(await signedIn(request, list, now))) return reply("Sign in first.", 401);
+        const who = await signedIn(request, list, now);
+        if (!who) return reply("Sign in first.", 401);
+        if (!can(who.role, "/studio/trash-photo")) return reply("Not allowed", 403);
         const bytes = await store().get(`trash-photo/${trashThumb[1]}/thumb`, { type: "arrayBuffer" });
         if (!bytes) return reply("Not found", 404);
         return new Response(bytes, { headers: { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, no-store" } });
@@ -591,7 +645,7 @@ export function createStudio() {
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       const me = await signedIn(request, list, now);
       if (!me) return reply(studioPage({ state: "out" }));
-      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me) } }));
+      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me), role: me.role } }));
     }
     // Photos shared from a phone's gallery are normally caught on the phone by
     // sw.js. If it isn't installed yet, the share lands here: nothing is kept,
@@ -646,8 +700,12 @@ export function createStudio() {
 
     const me = await signedIn(request, list, now);
     if (!me) return json({ error: "Sign in first." }, 401);
+    // Team roles: every change is checked against roles.js.
+    if (!can(me.role, url.pathname)) return json(NOT_ALLOWED, 403);
     const form = await readForm(request);
     if (!form) return json(BAD_FORM, 400);
+    // Every change that goes through is written to the history (Team tab).
+    const done = await (async () => {
 
     // Who you are: the Instagram name your photos are credited to by default.
     if (url.pathname === "/studio/profile") {
@@ -692,6 +750,7 @@ export function createStudio() {
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
       const old = await store().get(`meta/${id}`, { type: "json" });
       if (!old) return json({ error: "That photo no longer exists." }, 404);
+      if (!ownsPhoto(me, old)) return json({ error: "Contributors can only change their own photos." }, 403);
       const sport = SPORTS.includes(form.get("sport")) ? form.get("sport") : "other";
       const photo = { ...old, title: clean(form.get("title"), 60) || "Untitled", credit: clean(form.get("credit"), 40).replace(/^@+/, ""), sport, editedBy: me.username };
       if (form.has("liveAt")) {
@@ -908,6 +967,8 @@ export function createStudio() {
     if (url.pathname === "/studio/delete") {
       const id = String(form.get("id") || "");
       if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown photo." }, 400);
+      const owned = await store().get(`meta/${id}`, { type: "json" });
+      if (owned && !ownsPhoto(me, owned)) return json({ error: "Contributors can only change their own photos." }, 403);
       await trashPhoto(id, me.username);
       await forgetPhoto(`uploads/${id}/full.jpg`);
       await rebuildPhotoIndex();
@@ -1016,6 +1077,46 @@ export function createStudio() {
       console.log(`studio: removed recap ${id}`);
       return json({ ok: true });
     }
+    // Team roles: an admin sets another sign-in's role (the first stays admin).
+    if (url.pathname === "/studio/roles") {
+      const n = Number(form.get("n"));
+      const role = String(form.get("role") || "");
+      if (!list.some((a) => a.n === n)) return json({ error: "Unknown team member." }, 400);
+      if (n === 1) return json({ error: "The first sign-in is always an Admin." }, 400);
+      if (!ROLES.includes(role)) return json({ error: "Unknown role." }, 400);
+      const saved = (await store().get("roles", { type: "json" })) || {};
+      saved[String(n)] = role;
+      await store().setJSON("roles", saved);
+      return json({ ok: true, ...(await teamList(list)) });
+    }
+
+    // Blocking a sender of photo requests: their request is deleted, and later
+    // ones from the same Instagram name or email get the usual "sent" reply and
+    // are not saved. (Removal requests are never blocked.)
+    if (url.pathname === "/studio/block") {
+      const id = String(form.get("id") || "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return json({ error: "Unknown request." }, 400);
+      const key = `req/${id}`;
+      const item = await store().get(key, { type: "json" });
+      if (!item) return json({ error: "That request was already handled." }, 409);
+      const contact = contactKey(item.contact);
+      const blocked = await listBlocked();
+      if (contact && !blocked.some((b) => b.key === contact)) {
+        if (blocked.length >= MAX_BLOCKED) return json({ error: `The block list holds ${MAX_BLOCKED} at most. Unblock some first.` }, 409);
+        blocked.push({ key: contact, contact: clean(item.contact, 100), added: now, by: me.username });
+        await store().setJSON("blocked", blocked);
+      }
+      await store().delete(key);
+      return json({ ok: true, blocked: await listBlocked() });
+    }
+    if (url.pathname === "/studio/unblock") {
+      const key = contactKey(form.get("key"));
+      await store().setJSON("blocked", (await listBlocked()).filter((b) => b.key !== key));
+      return json({ ok: true, blocked: await listBlocked() });
+    }
     return json({ error: "Not found" }, 404);
+    })();
+    if (done.status < 400) await logAction(me, url.pathname, form, now);
+    return done;
   };
 }

@@ -2083,7 +2083,7 @@ takeShared();
 
 export function studioPage({ state, user = { name: "", credit: "" } }) {
   // Who is signed in, for the page's script. "<" is escaped so the values can't end the script.
-  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || "") }).replace(/</g, "\\u003c") + ";</script>";
+  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || ""), role: ["contributor", "editor", "admin"].includes(user.role) ? user.role : "contributor" }).replace(/</g, "\\u003c") + ";</script>";
   const body = state === "in" ? me + nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
   return head + body + '<script src="/js/site.js"></script></body></html>';
 }

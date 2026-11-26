@@ -642,13 +642,13 @@ test("the studio knows who is signed in: their name, their saved Instagram credi
   const one = await signInAs(USERNAME, PASSWORD);
   const two = await signInAs("cb.framed.it", "another long password");
   const meOf = async (cookie) => JSON.parse(/<script>const ME = (\{.*?\});<\/script>/.exec((await call("/studio", { cookie })).body)[1]);
-  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "" }, "a username that isn't an Instagram name starts with no credit");
-  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" });
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "", role: "admin" }, "a username that isn't an Instagram name starts with no credit");
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it", role: "contributor" });
   assert.equal((await call("/studio/profile", { method: "POST", form: { credit: "@visuals_alex_" } })).status, 401);
   assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "not a name!" } })).status, 400);
   assert.equal((await call("/studio/profile", { method: "POST", cookie: one, form: { credit: "@visuals_alex_" } })).status, 200);
-  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "visuals_alex_" });
-  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it" }, "each login has its own");
+  assert.deepEqual(await meOf(one), { name: USERNAME, credit: "visuals_alex_", role: "admin" });
+  assert.deepEqual(await meOf(two), { name: "cb.framed.it", credit: "cb.framed.it", role: "contributor" }, "each login has its own");
   const added = (await call("/studio/upload", { method: "POST", cookie: two, form: photo() })).body.photo;
   assert.equal(added.by, "cb.framed.it");
   const edited = (await call("/studio/edit-photo", { method: "POST", cookie: one, form: { id: added.id, title: "x", credit: "y", sport: "football" } })).body.photo;
@@ -922,4 +922,94 @@ test("signing out ends the session in the browser", async () => {
 test("the studio leaves every other address alone", async () => {
   assert.ok((await call("/")).passedThrough);
   assert.ok((await call("/portfolio.html")).passedThrough);
+});
+
+// ---- Update 2.2: team roles, the history, and blocking -------------------------
+
+function twoAccounts() {
+  const env = { STUDIO_USERNAME: USERNAME, STUDIO_PASSWORD: PASSWORD, STUDIO_USERNAME_2: "second-person", STUDIO_PASSWORD_2: "second long password" };
+  globalThis.Netlify = { env: { get: (name) => env[name] } };
+}
+async function signInAs(username, password, ip = "198.51.100.60") {
+  const reply = await call("/studio/login", { method: "POST", form: { username, password }, ip });
+  assert.equal(reply.status, 200);
+  return reply.headers.get("set-cookie").split(";")[0];
+}
+
+test("roles: a new sign-in is a Contributor and can only add and change its own photos", async () => {
+  twoAccounts();
+  const admin = await signIn();
+  const helper = await signInAs("second-person", "second long password");
+  const mine = (await call("/studio/upload", { method: "POST", cookie: helper, form: photo({ title: "Mine" }) })).body.photo;
+  assert.ok(mine, "a contributor can add photos");
+  const theirs = (await call("/studio/upload", { method: "POST", cookie: admin, form: photo({ title: "Admin's" }) })).body.photo;
+  const edit = (id, cookie) => call("/studio/edit-photo", { method: "POST", cookie, form: { id, title: "Changed", credit: "x", sport: "football" } });
+  assert.equal((await edit(mine.id, helper)).status, 200, "their own photo");
+  const refused = await edit(theirs.id, helper);
+  assert.equal(refused.status, 403, "not someone else's");
+  assert.match(refused.body.error, /own photos/);
+  assert.equal((await call("/studio/delete", { method: "POST", cookie: helper, form: { id: theirs.id } })).status, 403);
+  for (const [path, form] of [["/studio/hero", { path: "img/cars/grille.jpg" }], ["/studio/notice", { text: "Hi" }], ["/studio/announce", { title: "x", text: "y" }], ["/studio/pins", { pins: "[]" }], ["/studio/roles", { n: "2", role: "admin" }], ["/studio/made-up", {}]]) {
+    assert.equal((await call(path, { method: "POST", cookie: helper, form })).status, 403, path);
+  }
+  for (const path of ["/studio/requests.json", "/studio/removals.json", "/studio/announcements.json", "/studio/team.json", "/studio/log.json"]) {
+    assert.equal((await call(path, { cookie: helper })).status, 403, path);
+  }
+  assert.equal((await call("/studio/photos.json", { cookie: helper })).status, 200);
+  assert.match((await call("/studio", { cookie: helper })).body, /"role":"contributor"/, "the page knows the role");
+});
+
+test("roles: an Admin sets roles on the Team tab; the first sign-in always stays Admin", async () => {
+  twoAccounts();
+  const admin = await signIn();
+  const team = (await call("/studio/team.json", { cookie: admin })).body;
+  assert.deepEqual(team.accounts.map((a) => [a.n, a.role]), [[1, "admin"], [2, "contributor"]]);
+  assert.deepEqual(team.roles, ["contributor", "editor", "admin"]);
+  assert.equal((await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "1", role: "contributor" } })).status, 400, "the first can't be demoted");
+  assert.equal((await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "2", role: "boss" } })).status, 400);
+  assert.equal((await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "9", role: "editor" } })).status, 400);
+  assert.equal((await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "2", role: "editor" } })).status, 200);
+  const editor = await signInAs("second-person", "second long password");
+  assert.equal((await call("/studio/announce", { method: "POST", cookie: editor, form: { title: "News", text: "x" } })).status, 200, "an editor can post announcements");
+  assert.equal((await call("/studio/requests.json", { cookie: editor })).status, 200);
+  assert.equal((await call("/studio/notice", { method: "POST", cookie: editor, form: { text: "Hi" } })).status, 403, "but not the notice bar");
+  assert.equal((await call("/studio/removals.json", { cookie: editor })).status, 403, "nor removal requests");
+  // Changing a role takes effect at once, without signing in again.
+  await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "2", role: "contributor" } });
+  assert.equal((await call("/studio/announce", { method: "POST", cookie: editor, form: { title: "News 2", text: "x" } })).status, 403);
+});
+
+test("the history records who did what, and only Admins can read it", async () => {
+  twoAccounts();
+  const admin = await signIn();
+  await call("/studio/roles", { method: "POST", cookie: admin, form: { n: "2", role: "editor" } });
+  const editor = await signInAs("second-person", "second long password");
+  await call("/studio/announce", { method: "POST", cookie: editor, form: { title: "Game moved", text: "x" } });
+  await call("/studio/notice", { method: "POST", cookie: editor, form: { text: "refused" } });
+  const log = (await call("/studio/log.json", { cookie: admin })).body;
+  assert.equal(log[0].who, "second-person");
+  assert.equal(log[0].what, 'saved an announcement ("Game moved")');
+  assert.ok(log.some((e) => e.who === USERNAME && /changed a team member's role/.test(e.what)));
+  assert.ok(!log.some((e) => /notice/.test(e.what)), "refused actions are not recorded");
+});
+
+test("blocking: a blocked sender's photo requests get the usual reply and aren't saved; removal requests are never blocked", async () => {
+  const cookie = await signIn();
+  const ask = (contact, ip) => call("/photo-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "Spam", contact }, ip });
+  await ask("@Spammer.Bot", "192.0.2.31");
+  const spam = (await call("/studio/requests.json", { cookie })).body[0];
+  assert.equal((await call("/studio/block", { method: "POST", cookie, form: { id: spam.id } })).status, 200);
+  assert.deepEqual((await call("/studio/requests.json", { cookie })).body, [], "the request is gone");
+  const blocked = (await call("/studio/blocked.json", { cookie })).body;
+  assert.deepEqual(blocked.map((b) => [b.key, b.contact]), [["spammer.bot", "@Spammer.Bot"]]);
+  const again = await ask(" spammer.bot ", "192.0.2.32");
+  assert.equal(again.status, 200, "the same reply as everyone else");
+  assert.deepEqual((await call("/studio/requests.json", { cookie })).body, [], "and nothing saved");
+  // Removal requests always get through.
+  await call("/removal-request", { method: "POST", form: { photo: "img/cars/grille.jpg", name: "Spam", contact: "@spammer.bot", relation: "owner", consent: "on" }, ip: "192.0.2.33" });
+  assert.equal((await call("/studio/removals.json", { cookie })).body.length, 1);
+  // Unblocked: requests are saved again.
+  await call("/studio/unblock", { method: "POST", cookie, form: { key: "spammer.bot" } });
+  await ask("@spammer.bot", "192.0.2.34");
+  assert.equal((await call("/studio/requests.json", { cookie })).body.length, 1);
 });
