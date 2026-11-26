@@ -56,6 +56,11 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .photo-edit input,.studio .photo-edit select{padding:9px;font-size:14px}
 .undo{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:16px;padding:10px 10px 10px 18px;background:var(--chalk);color:var(--night);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);font-weight:600;font-size:15px;max-width:calc(100% - 32px)}
 .undo span{overflow-wrap:anywhere}
+.studio .team-roles{display:block;margin:18px 0 0}
+.studio .team-roles li{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--line)}
+.studio .team-roles label{margin:0;font-size:16px}
+.studio .team-roles select{width:auto;min-width:180px}
+.studio #blocked li .btn{margin:8px 0 0}
 .studio .share-note{margin:0 0 16px;padding:12px 16px;border:1px solid var(--flare);border-radius:8px;background:rgba(255,198,26,.08);color:var(--chalk);min-height:0}
 .studio .undo[role=status]{color:var(--night);margin-top:0;min-height:0}
 .studio .undo .btn,.undo .btn{margin:0;padding:9px 18px;min-height:40px}
@@ -182,8 +187,8 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 @media (max-width:640px){.studio .tabs .long{display:none}.studio .tabs .short{display:inline}}
 @media (max-width:760px){.studio .req-rows li{grid-template-columns:56px minmax(0,1fr)}.studio .req-rows li img{width:56px}.studio .req-rows .acts{grid-column:1/-1;justify-content:flex-start}}
 .studio .requests .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.studio details.handled{margin:6px 0 18px;color:var(--dim);font-size:14px}
-.studio details.handled summary{cursor:pointer;padding:6px 0}
+.studio details.handled,.studio details.blocked-box{margin:6px 0 18px;color:var(--dim);font-size:14px}
+.studio details.handled summary,.studio details.blocked-box summary{cursor:pointer;padding:6px 0}
 .studio .templates{display:grid;gap:12px;margin-top:10px}
 .studio .templates .tpl{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:10px}
 .studio .templates .tpl textarea{min-height:70px}
@@ -327,15 +332,15 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 });
 </script>`;
 
-const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><button type="button" data-view="roadmap"><span class="long">Roadmap</span><span class="short">Plan</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
+const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests" data-needs="editor"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements" data-needs="editor"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets" data-needs="admin"><span class="long">Presets</span><span class="short">Presets</span></button><button type="button" data-view="roadmap"><span class="long">Roadmap</span><span class="short">Plan</span></button><button type="button" data-view="team" data-needs="admin"><span class="long">Team</span><span class="short">Team</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
 <section data-view="overview">
 <div class="view-top"><h1 id="hello">Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
 <form class="me-card" id="me-form"><p id="me-line"></p><div class="me-edit" hidden><label for="me-credit">Your Instagram name (your photos are credited to it)</label><div class="me-row"><input id="me-credit" name="credit" maxlength="40" autocapitalize="none" placeholder="visuals_alex_"><button class="btn btn-hot">Save</button></div></div><p role="status" class="me-status"></p></form>
-<div class="inbox-warn" id="ov-warn" role="status" hidden><p></p><button class="btn" type="button" data-go="requests">Answer requests</button></div>
-<div class="stats"><button type="button" class="card" data-go="requests"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
-<div class="two"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
+<div class="inbox-warn" id="ov-warn" role="status" data-needs="editor" hidden><p></p><button class="btn" type="button" data-go="requests">Answer requests</button></div>
+<div class="stats"><button type="button" class="card" data-go="requests" data-needs="editor"><b id="stat-requests">-</b><span>Requests waiting</span></button><button type="button" class="card" data-go="photos"><b id="stat-photos">-</b><span>Photos on the site</span></button><button type="button" class="card" data-go="announcements" data-needs="editor"><b id="stat-ann">-</b><span id="stat-ann-label">Announcements live</span></button></div>
+<div class="two" data-needs="editor"><div class="card"><h2>Photo requests</h2><ul class="mini" id="ov-requests"></ul><button class="btn" type="button" data-go="requests">Open requests</button></div>
 <div class="card"><h2>Announcements</h2><ul class="mini" id="ov-ann"></ul><button class="btn" type="button" data-go="announcements">+ New announcement</button></div></div>
-<div class="card setup-card" id="setup-card" hidden><h2>Sign-ins</h2><p class="note">Each team sign-in set in Netlify, and whether it works. Only you (the first sign-in) see this. Passwords are never shown.</p><ul class="setup-list" id="setup-list"></ul><p class="note">Changes made in Netlify (Project configuration, Environment variables) only take effect after the next deploy.</p></div>
+<div class="card setup-card" id="setup-card" hidden><h2>Sign-ins</h2><p class="note">Each team sign-in set in Netlify, and whether it works. Only Admins see this. Passwords are never shown.</p><ul class="setup-list" id="setup-list"></ul><p class="note">Changes made in Netlify (Project configuration, Environment variables) only take effect after the next deploy.</p></div>
 <div class="card"><h2>Latest photos</h2><ul class="latest" id="ov-photos"></ul><button class="btn" type="button" data-go="photos">See all photos</button></div>
 </section>
 <section data-view="add" hidden><div class="view-top"><h1>Add photos</h1></div>
@@ -360,29 +365,30 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <section data-view="photos" hidden><div class="view-top"><h1>All photos</h1><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button></div>
 <div class="photo-tools"><input type="search" id="photo-search" placeholder="Search by title or photographer" aria-label="Search photos"><select id="photo-filter" aria-label="Show"><option value="all">All photos</option><option value="sports">Sports only</option><option value="cars">Cars only</option><option value="pinned">Pinned</option><option value="requested">Most requested</option><option value="removed">Taken off the site</option><option value="homepage">Homepage photo</option></select></div>
 <p role="status" id="photos-status"></p>
-<h2 style="margin-top:20px">Pinned</h2>
+<div data-needs="editor"><h2 style="margin-top:20px">Pinned</h2>
 <p class="note">Pinned photos show first on their page, in this order.</p>
-<ul id="pinned" class="pinned"></ul>
+<ul id="pinned" class="pinned"></ul></div>
 <h2>Added here</h2>
 <p class="note">Photos added in the studio. Remove takes one off the site and puts it in the Trash for 30 days (with a 10-second Undo right away).</p>
 <ul id="photos"></ul>
 <h2>On the site</h2>
 <p class="note">The photos built into the portfolio and car pages. Remove takes one off the site right away; Put back shows it again.</p>
 <ul id="site-photos"></ul>
-<h2>Trash</h2>
+<div data-needs="editor"><h2>Trash</h2>
 <p class="note">Removed photos wait here for 30 days, then they are deleted for good. Restore puts one back on the site.</p>
-<ul id="trash" class="trash"></ul></section>
-<section data-view="requests" hidden><div class="view-top"><h1>Requests</h1></div>
+<ul id="trash" class="trash"></ul></div></section>
+<section data-view="requests" data-needs="editor" hidden><div class="view-top"><h1>Requests</h1></div>
 <div class="tabs" role="tablist" aria-label="Request types" id="req-tabs">
 <button type="button" role="tab" id="tab-req" aria-controls="panel-req" aria-selected="true"><span class="long">Photo requests</span><span class="short">Photos</span> <span class="count" id="tab-req-count"></span></button>
-<button type="button" role="tab" id="tab-rem" aria-controls="panel-rem" aria-selected="false" tabindex="-1"><span class="long">Removal requests</span><span class="short">Removals</span> <span class="pill" id="tab-rem-count">0</span></button>
+<button type="button" role="tab" data-needs="admin" id="tab-rem" aria-controls="panel-rem" aria-selected="false" tabindex="-1"><span class="long">Removal requests</span><span class="short">Removals</span> <span class="pill" id="tab-rem-count">0</span></button>
 <button type="button" role="tab" id="tab-tpl" aria-controls="panel-tpl" aria-selected="false" tabindex="-1"><span class="long">Reply templates</span><span class="short">Replies</span></button>
 </div>
 <div role="tabpanel" id="panel-req" aria-labelledby="tab-req">
 <p class="note">Visitors who asked for a photo. Copy a reply, send it to them, then press Done to delete the request. <span id="requests-room"></span></p>
 <ul id="requests" class="requests req-rows"></ul>
+<details class="blocked-box" id="blocked-box"><summary>Blocked senders <span class="count" id="blocked-count"></span></summary><p class="note">Photo requests from these Instagram names or emails get the usual "sent" message and are not saved. Removal requests are never blocked.</p><ul id="blocked" class="ann-admin"></ul></details>
 </div>
-<div role="tabpanel" id="panel-rem" aria-labelledby="tab-rem" hidden>
+<div role="tabpanel" data-needs="admin" id="panel-rem" aria-labelledby="tab-rem" hidden>
 <p class="note">People asking for a photo to come off the site. Take down moves it to the Trash (or takes a built-in photo off its page). Either way, their details are then deleted and only a record is kept.</p>
 <ul id="removals" class="requests req-rows"></ul>
 <details class="handled"><summary>Handled removal requests</summary><ul id="removals-done" class="ann-admin"></ul></details>
@@ -391,11 +397,11 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <p class="note">Ready-made replies for photo requests. Write {name}, {photo} or {link} and they are filled in when you copy a reply.</p>
 <div id="templates" class="templates"></div><div class="form-end"><button class="btn" type="button" id="tpl-add">+ Add template</button><button class="btn btn-hot" type="button" id="tpl-save">Save templates</button></div><p role="status" id="tpl-status"></p>
 </div></section>
-<section data-view="announcements" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
+<section data-view="announcements" data-needs="editor" hidden><div class="view-top"><h1>Announcements</h1><button class="btn btn-hot" type="button" id="ann-new">+ New announcement</button></div>
 <div class="tabs" role="tablist" aria-label="News sections" id="ann-tabs">
 <button type="button" role="tab" id="tab-ann" aria-controls="panel-ann" aria-selected="true">Announcements <span class="count" id="tab-ann-count"></span></button>
 <button type="button" role="tab" id="tab-recaps" aria-controls="panel-recaps" aria-selected="false" tabindex="-1">Recaps <span class="count" id="tab-recap-count"></span></button>
-<button type="button" role="tab" id="tab-notice" aria-controls="panel-notice" aria-selected="false" tabindex="-1">Notice bar <span class="pill" id="tab-notice-state">Off</span></button>
+<button type="button" role="tab" data-needs="admin" id="tab-notice" aria-controls="panel-notice" aria-selected="false" tabindex="-1">Notice bar <span class="pill" id="tab-notice-state">Off</span></button>
 </div>
 <div role="tabpanel" id="panel-ann" aria-labelledby="tab-ann">
 <div class="card form-card-panel" id="ann-form-card" hidden><div class="card-top"><h2 id="ann-form-title">New announcement</h2><button type="button" class="btn btn-small" id="ann-close">Close</button></div>
@@ -451,10 +457,15 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
 </div>
 </section>
+<section data-view="team" data-needs="admin" hidden><div class="view-top"><h1>Team</h1></div>
+<p class="note">Each sign-in's role. <b>Contributor</b>: add photos, and edit or remove their own. <b>Editor</b>: also any photo, pins, photo requests, reply templates, announcements and recaps. <b>Admin</b>: everything, including removal requests, the homepage photo, the notice bar, presets, deleting for good and roles. The first sign-in is always an Admin. Changes apply right away.</p>
+<ul id="team-list" class="team-roles"></ul><p role="status" id="team-status"></p>
+<h2>History</h2><p class="note">The newest 100 changes made in the studio, and who made them.</p>
+<ul id="history" class="ann-admin"></ul></section>
 <section data-view="roadmap" hidden><div class="view-top"><h1>Roadmap</h1></div>
 <p class="note">What's coming to the website and the studio, release by release. Each release goes live on its date if it's ready. Updated ${roadmapUpdated}.</p>
 <ol class="roadmap">${roadmapList}</ol></section>
-<section data-view="presets" hidden><div class="view-top"><h1>Presets</h1></div>
+<section data-view="presets" data-needs="admin" hidden><div class="view-top"><h1>Presets</h1></div>
 <p class="note">Free Lightroom presets for the presets page. As soon as one is added here, the page switches from "coming soon" to downloads.</p>
 <div class="card"><form id="preset-form"><div class="form-cols"><div class="col">
 <label for="preset-name">Name</label><input id="preset-name" name="name" maxlength="40" required placeholder="Game day">
@@ -485,11 +496,16 @@ async function readReply(response) {
 // Remembers that this device belongs to the team, so the site's footer shows the studio link here.
 try { localStorage.setItem("hm-team", "1"); } catch (error) {}
 // The side menu: one section shows at a time, and the address remembers which.
+// Team roles: anything marked data-needs is hidden from roles below it (the
+// server refuses those actions too).
+const RANK = { contributor: 0, editor: 1, admin: 2 };
+const atLeast = (need) => RANK[ME.role] >= RANK[need];
+for (const el of document.querySelectorAll("[data-needs]")) if (!atLeast(el.dataset.needs)) { el.hidden = true; el.dataset.off = "1"; }
 const views = [...document.querySelectorAll("section[data-view]")];
 const menu = [...document.querySelectorAll(".side button[data-view]")];
 function go(name, keep) {
-  if (!views.some((v) => v.dataset.view === name)) name = "overview";
-  views.forEach((v) => { v.hidden = v.dataset.view !== name; });
+  if (!views.some((v) => v.dataset.view === name && !v.dataset.off)) name = "overview";
+  views.forEach((v) => { v.hidden = v.dataset.view !== name || !!v.dataset.off; });
   menu.forEach((b) => { if (b.dataset.view === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   if (!keep) { history.replaceState(null, "", "#" + name); window.scrollTo(0, 0); }
 }
@@ -999,6 +1015,7 @@ async function refresh() {
 // ---- Trash: removed photos, kept 30 days.
 const trashList = document.getElementById("trash");
 async function refreshTrash() {
+  if (!atLeast("editor")) return;
   const items = await (await fetch("/studio/trash.json", { cache: "no-store" })).json();
   trashList.textContent = "";
   if (!items.length) {
@@ -1021,7 +1038,7 @@ async function refreshTrash() {
       await post("/studio/trash-delete", { id: item.id });
       refreshTrash();
     });
-    const row = thumbItem(photo, [restore, forever]);
+    const row = thumbItem(photo, atLeast("admin") ? [restore, forever] : [restore]);
     const when = document.createElement("span");
     when.className = "when";
     when.textContent = "Removed " + new Date(item.trashedAt).toLocaleDateString() + " by " + (item.trashedBy || "the team") + (item.why ? " (" + item.why + ")" : "") + ". Deleted for good on " + new Date(item.deletesOn).toLocaleDateString() + ".";
@@ -1131,7 +1148,14 @@ function render() {
     });
     // A scheduled photo can't be the homepage photo until it goes live.
     const waiting = photo.added.liveAt > Date.now();
-    item = thumbItem(photo, waiting ? [edit, pinButton(photo), remove] : [edit, pinButton(photo), homepageButton(photo), remove]);
+    // Contributors change only their own photos; pins for editors; the homepage photo for admins.
+    const mine = atLeast("editor") || photo.added.by === ME.name;
+    const acts = [];
+    if (mine) acts.push(edit);
+    if (atLeast("editor")) acts.push(pinButton(photo));
+    if (atLeast("admin") && !waiting) acts.push(homepageButton(photo));
+    if (mine) acts.push(remove);
+    item = thumbItem(photo, acts);
     list.append(item);
   }
   if (!list.children.length) list.append(miniRow(all.some((p) => p.added) ? "No added photos match." : "Nothing added in the studio yet.", ""));
@@ -1147,7 +1171,7 @@ function render() {
       if (response.ok) { state.hidden = reply.hidden; render(); }
       else { status.textContent = reply.error; toggle.disabled = false; }
     });
-    const item = thumbItem(photo, off ? [toggle] : [pinButton(photo), homepageButton(photo), toggle]);
+    const item = thumbItem(photo, !atLeast("editor") ? [] : off ? [toggle] : atLeast("admin") ? [pinButton(photo), homepageButton(photo), toggle] : [pinButton(photo), toggle]);
     if (off) item.className = "off";
     sitePhotos.append(item);
   }
@@ -1204,7 +1228,7 @@ function openEditor(item, photo) {
 // ---- Requests view: tabs for photo requests, removal requests and reply templates.
 (() => {
   const list = document.getElementById("req-tabs");
-  const all = [...list.querySelectorAll("[role=tab]")];
+  const all = [...list.querySelectorAll("[role=tab]")].filter((t) => !t.dataset.off);
   const show = (tab) => {
     for (const t of all) {
       const on = t === tab;
@@ -1435,13 +1459,95 @@ async function refreshRequests() {
       await post("/studio/request-done", { id: item.id });
       refreshRequests();
     });
+    // Spam: Block deletes this request and ignores later ones from the same contact.
+    const block = button("Block", "btn-danger", async () => {
+      if (!confirm("Block " + item.contact + "? Their future photo requests will be ignored. Removal requests always get through.")) return;
+      block.disabled = true;
+      const response = await post("/studio/block", { id: item.id });
+      if (!response.ok) alert((await readReply(response)).error);
+      refreshRequests();
+    });
     const acts = document.createElement("div");
     acts.className = "acts";
-    acts.append(done, replyTools(item));
+    acts.append(done, replyTools(item), block);
     row.append(image, info, acts);
     requestList.append(row);
   }
   document.getElementById("tab-req-count").textContent = items.length;
+  showBlocked();
+}
+
+// Blocked senders, under Photo requests. Admins can unblock.
+async function showBlocked() {
+  const list = document.getElementById("blocked");
+  const items = await readReply(await fetch("/studio/blocked.json", { cache: "no-store" }));
+  if (!Array.isArray(items)) return;
+  document.getElementById("blocked-count").textContent = items.length;
+  list.textContent = "";
+  if (!items.length) { const none = document.createElement("li"); none.textContent = "Nobody is blocked."; list.append(none); }
+  for (const item of items) {
+    const row = document.createElement("li");
+    const who = document.createElement("b");
+    who.textContent = item.contact;
+    const when = document.createElement("p");
+    when.textContent = "Blocked by " + item.by + ", " + new Date(item.added).toLocaleDateString() + ".";
+    row.append(who, when);
+    if (atLeast("admin")) {
+      const unblock = button("Unblock", "", async () => {
+        unblock.disabled = true;
+        await post("/studio/unblock", { key: item.key });
+        showBlocked();
+      });
+      row.append(unblock);
+    }
+    list.append(row);
+  }
+}
+
+// ---- Team tab (admins): each sign-in's role, and the history of changes.
+async function loadTeam() {
+  const status = document.getElementById("team-status");
+  const team = await readReply(await fetch("/studio/team.json", { cache: "no-store" }));
+  const list = document.getElementById("team-list");
+  list.textContent = "";
+  for (const person of team.accounts || []) {
+    const row = document.createElement("li");
+    const id = "role-" + person.n;
+    const label = document.createElement("label");
+    label.htmlFor = id;
+    label.textContent = person.username + (person.n === 1 ? " (first sign-in)" : "");
+    const pick = document.createElement("select");
+    pick.id = id;
+    for (const role of team.roles) {
+      const option = document.createElement("option");
+      option.value = role;
+      option.textContent = role[0].toUpperCase() + role.slice(1);
+      option.selected = role === person.role;
+      pick.append(option);
+    }
+    pick.disabled = person.n === 1;
+    pick.addEventListener("change", async () => {
+      const response = await post("/studio/roles", { n: person.n, role: pick.value });
+      if (response.ok) flash(status, person.username + " is now " + pick.value + ". It applies right away.");
+      else status.textContent = (await readReply(response)).error;
+      loadTeam();
+    });
+    row.append(label, pick);
+    list.append(row);
+  }
+  const history = document.getElementById("history");
+  const entries = await readReply(await fetch("/studio/log.json", { cache: "no-store" }));
+  history.textContent = "";
+  if (!Array.isArray(entries) || !entries.length) { const none = document.createElement("li"); none.textContent = "Nothing yet."; history.append(none); return; }
+  for (const entry of entries) {
+    const row = document.createElement("li");
+    const when = document.createElement("time");
+    when.textContent = new Date(entry.when).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const what = document.createElement("p");
+    what.textContent = entry.who + " " + entry.what + ".";
+    row.append(when, what);
+    history.append(row);
+  }
 }
 
 document.getElementById("add").addEventListener("submit", async (event) => {
@@ -1499,7 +1605,7 @@ function showTab(name) {
 }
 for (const [key, id] of Object.entries(tabs)) document.getElementById(id).addEventListener("click", () => showTab(key));
 document.getElementById("ann-tabs").addEventListener("keydown", (event) => {
-  const keys = Object.keys(tabs);
+  const keys = Object.keys(tabs).filter((k) => !document.getElementById(tabs[k]).dataset.off);
   const now = keys.findIndex((k) => document.getElementById(tabs[k]).getAttribute("aria-selected") === "true");
   const next = event.key === "ArrowRight" ? now + 1 : event.key === "ArrowLeft" ? now - 1 : null;
   if (next === null) return;
@@ -2063,10 +2169,10 @@ presetForm.addEventListener("submit", async (event) => {
   if (response.ok) flash(presetStatus, "Added. It's on the presets page now."); else presetStatus.textContent = reply.error;
   if (response.ok) { presetForm.reset(); refreshPresets(); }
 });
-refreshPresets();
+if (atLeast("admin")) refreshPresets();
 showMe();
 refresh();
-// Sign-ins check (first sign-in only): which logins work, and why one doesn't.
+// Sign-ins check (Admins): which logins work, and why one doesn't.
 async function loadSetup() {
   const slots = await readReply(await fetch("/studio/setup.json", { cache: "no-store" }));
   if (!Array.isArray(slots)) return;
@@ -2085,10 +2191,13 @@ async function loadSetup() {
   }
   document.getElementById("setup-card").hidden = false;
 }
-if (ME.first) loadSetup();
-refreshAnnouncements();
-refreshRemovals().then(loadTemplates).then(refreshRequests);
-refreshRecaps();
+if (atLeast("editor")) {
+  refreshAnnouncements();
+  (atLeast("admin") ? refreshRemovals() : Promise.resolve()).then(loadTemplates).then(refreshRequests);
+  refreshRecaps();
+}
+if (atLeast("admin")) loadTeam();
+if (atLeast("admin")) loadSetup();
 
 // Photos shared from the phone's gallery (sw.js keeps them for a moment) land here.
 async function takeShared() {
@@ -2132,7 +2241,7 @@ takeShared();
 
 export function studioPage({ state, user = { name: "", credit: "" } }) {
   // Who is signed in, for the page's script. "<" is escaped so the values can't end the script.
-  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || ""), first: user.first === true }).replace(/</g, "\\u003c") + ";</script>";
+  const me = "<script>const ME = " + JSON.stringify({ name: String(user.name), credit: String(user.credit || ""), role: ["contributor", "editor", "admin"].includes(user.role) ? user.role : "contributor" }).replace(/</g, "\\u003c") + ";</script>";
   const body = state === "in" ? me + nav + signedIn + "</main></div>" : signinTop + (state === "off" ? off : out) + signinEnd;
   return head + body + '<script src="/js/site.js"></script></body></html>';
 }

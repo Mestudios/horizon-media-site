@@ -13,17 +13,17 @@ export const ROADMAP = [
     items: ["The studio became a dashboard with a side menu", "Watermarked photo viewer with Share, Request this photo and Request removal", "Homepage photo, notice bar, scheduled photos, presets page, new terms and privacy pages"],
   },
   {
-    version: "2.1", date: "2026-12-01", when: "Mon Dec 1", status: "current",
+    version: "2.1", date: "2026-12-01", when: "Mon Dec 1", status: "live",
     title: "A cleaner studio, recaps and removal requests",
     items: ["Tidier Announcements and Requests, with tabs", "Trash with 30-day restore", "Removal requests: Take down or Keep it up", "Reply templates and recap pages", "Announcement photos from the portfolio, with Crop & position", "A pin on pinned photos, and the cookie question for visitors", "Fixes from three outside reviews, and security improvements"],
   },
   {
-    version: "2.2", date: "2026-12-10", when: "Wed Dec 10", status: "next",
+    version: "2.2", date: "2026-12-10", when: "Wed Dec 10", status: "current",
     title: "Team roles",
     items: ["Contributor, Editor and Admin roles, set on a new Team tab", "Each role sees only the tools it can use", "A history of who changed what", "Block spam photo requests"],
   },
   {
-    version: "2.3", date: "2026-12-20", when: "Sat Dec 20", status: "planned",
+    version: "2.3", date: "2026-12-20", when: "Sat Dec 20", status: "next",
     title: "The free presets go live",
     items: ["Game day, Golden hour and Car meet, with before/after sliders and downloads", "Team: send the preset files and their before/after photos by Dec 15"],
   },
