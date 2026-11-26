@@ -1,5 +1,11 @@
 import { SEASONS } from "./sports.js";
 import { MAX_REQUESTS, WARN_REQUESTS } from "./limits.js";
+import { ROADMAP, ROADMAP_UPDATED, STATUS_LABELS } from "./roadmap.js";
+
+// The Roadmap tab: the update plan from roadmap.js, for every team member.
+const html = (text) => String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const roadmapList = ROADMAP.map((r) => `<li class="rm-${html(r.status)}"><div class="rm-when"><b>${html(r.version)}</b><time${/^\d{4}-\d{2}-\d{2}$/.test(r.date) ? ` datetime="${html(r.date)}"` : ""}>${html(r.when)}</time><span class="rm-pill">${html(STATUS_LABELS[r.status] || r.status)}</span></div><div class="rm-body"><h2>${html(r.title)}</h2><ul>${r.items.map((i) => `<li>${html(i)}</li>`).join("")}</ul></div></li>`).join("");
+const roadmapUpdated = new Date(ROADMAP_UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 // The team, as listed on the homepage. Tapping a name fills in the photo credit.
 export const TEAM = ["cb.framed.it", "visuals_alex_", "createddbyabby", "connors.visualss"];
@@ -54,6 +60,21 @@ const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 .studio .undo[role=status]{color:var(--night);margin-top:0;min-height:0}
 .studio .undo .btn,.undo .btn{margin:0;padding:9px 18px;min-height:40px}
 @media (max-width:760px){.undo{bottom:84px}}
+.studio ol.roadmap{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:0;border-left:3px solid var(--line)}
+.studio ol.roadmap>li{display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;padding:18px 0 18px 22px;position:relative;border-bottom:1px solid var(--line)}
+.studio ol.roadmap>li::before{content:"";position:absolute;left:-9px;top:24px;width:15px;height:15px;border-radius:50%;background:var(--panel);border:3px solid var(--line)}
+.studio ol.roadmap>li.rm-live::before{background:var(--dim);border-color:var(--dim)}
+.studio ol.roadmap>li.rm-current::before,.studio ol.roadmap>li.rm-next::before{background:var(--flare);border-color:var(--flare)}
+.studio .rm-when{display:flex;flex-direction:column;gap:4px}
+.studio .rm-when b{font:800 30px/1 var(--display)}
+.studio .rm-when time{font-weight:600;font-size:14px}
+.studio .rm-pill{align-self:flex-start;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);color:var(--dim)}
+.studio .rm-current .rm-pill,.studio .rm-next .rm-pill{background:var(--flare);border-color:var(--flare);color:#1a1402}
+.studio .rm-idea .rm-pill{border-style:dashed}
+.studio .rm-body h2{margin:0 0 6px;font-size:24px}
+.studio .rm-body ul{display:block;margin:0;padding-left:18px;list-style:disc;color:var(--dim);font-size:15px}
+.studio .rm-body ul li{margin:3px 0}
+@media (max-width:760px){.studio ol.roadmap>li{grid-template-columns:1fr;gap:8px}.studio .rm-when{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px}}
 .studio ul.picked{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));margin:12px 0 0}
 .blur-tool{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(5,5,5,.85)}
 .blur-panel{width:min(900px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
@@ -302,7 +323,7 @@ document.getElementById("login").addEventListener("submit", async (event) => {
 });
 </script>`;
 
-const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
+const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sections"><button type="button" data-view="overview"><span class="long">Overview</span><span class="short">Home</span></button><button type="button" data-view="add"><span class="long">Add photos</span><span class="short">Add</span></button><button type="button" data-view="photos"><span class="long">All photos</span><span class="short">Photos</span></button><button type="button" data-view="requests"><span class="long">Requests</span><span class="short">Requests</span><span class="badge" id="nav-requests" hidden></span></button><button type="button" data-view="announcements"><span class="long">Announcements</span><span class="short">News</span></button><button type="button" data-view="presets"><span class="long">Presets</span><span class="short">Presets</span></button><button type="button" data-view="roadmap"><span class="long">Roadmap</span><span class="short">Plan</span></button><p class="me" id="me-side"></p><button type="button" id="logout">Sign out</button></aside><main class="studio" id="main">
 <section data-view="overview">
 <div class="view-top"><h1 id="hello">Overview</h1><span><button class="btn btn-hot" type="button" data-go="add">+ Add photos</button> <button class="btn" type="button" id="logout-top">Sign out</button></span></div>
 <form class="me-card" id="me-form"><p id="me-line"></p><div class="me-edit" hidden><label for="me-credit">Your Instagram name (your photos are credited to it)</label><div class="me-row"><input id="me-credit" name="credit" maxlength="40" autocapitalize="none" placeholder="visuals_alex_"><button class="btn btn-hot">Save</button></div></div><p role="status" class="me-status"></p></form>
@@ -425,6 +446,9 @@ const signedIn = `<div class="shell"><aside class="side" aria-label="Studio sect
 <div class="form-end"><button class="btn btn-hot">Save notice</button><button class="btn" type="button" id="notice-off">Turn off</button><p class="note" id="notice-now"></p></div><p role="status"></p></form></div>
 </div>
 </section>
+<section data-view="roadmap" hidden><div class="view-top"><h1>Roadmap</h1></div>
+<p class="note">What's coming to the website and the studio, release by release. Each release goes live on its date if it's ready. Updated ${roadmapUpdated}.</p>
+<ol class="roadmap">${roadmapList}</ol></section>
 <section data-view="presets" hidden><div class="view-top"><h1>Presets</h1></div>
 <p class="note">Free Lightroom presets for the presets page. As soon as one is added here, the page switches from "coming soon" to downloads.</p>
 <div class="card"><form id="preset-form"><div class="form-cols"><div class="col">

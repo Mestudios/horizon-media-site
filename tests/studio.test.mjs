@@ -923,3 +923,18 @@ test("the studio leaves every other address alone", async () => {
   assert.ok((await call("/")).passedThrough);
   assert.ok((await call("/portfolio.html")).passedThrough);
 });
+
+test("the studio's Roadmap tab shows every planned release in order, to everyone signed in", async () => {
+  const { ROADMAP } = await import("../netlify/studio/roadmap.js");
+  const page = (await call("/studio", { cookie: await signIn() })).body;
+  assert.match(page, /<button type="button" data-view="roadmap"><span class="long">Roadmap<\/span>/, "in the side menu");
+  const section = /<section data-view="roadmap" hidden>([\s\S]*?)<\/section>/.exec(page)[1];
+  const versions = [...section.matchAll(/<div class="rm-when"><b>([^<]+)<\/b>/g)].map((m) => m[1]);
+  assert.deepEqual(versions, ROADMAP.map((r) => r.version));
+  assert.ok(versions.length >= 5);
+  for (let i = 1; i < ROADMAP.length; i++) assert.ok(ROADMAP[i].date >= ROADMAP[i - 1].date, `${ROADMAP[i].version} comes after ${ROADMAP[i - 1].version}`);
+  assert.equal(ROADMAP.filter((r) => r.status === "current").length, 1, "exactly one release is this update");
+  assert.doesNotMatch(section, /<script/i);
+  // Signed out, it isn't shown.
+  assert.doesNotMatch((await call("/studio")).body, /data-view="roadmap"/);
+});
