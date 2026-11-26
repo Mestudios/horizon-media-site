@@ -23,7 +23,7 @@ mkdir -p "$out"
 
 for item in *; do
   case "$item" in
-    dist | node_modules | netlify | netlify.toml | photos | tests | tools | package.json | package-lock.json | README.md) ;;
+    dist | node_modules | netlify | netlify.toml | photos | tests | tools | package.json | package-lock.json | README.md | SECURITY.md | docs) ;;
     *) [ "$item" = "$out" ] || cp -R "$item" "$out/" ;;
   esac
 done

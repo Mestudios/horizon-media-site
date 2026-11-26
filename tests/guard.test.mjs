@@ -868,7 +868,7 @@ test("the published folder holds the website and none of the project's own files
     assert.ok(!published.some((path) => path.startsWith("photos")), "the original photos are not published");
     const allowed = new Set(["index.html", "css", "js", "img"]);
     const extra = readdirSync(out).filter((name) => !allowed.has(name));
-    const privateFiles = ["netlify", "netlify.toml", "photos", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "dist"];
+    const privateFiles = ["netlify", "netlify.toml", "photos", "tests", "tools", "node_modules", "package.json", "package-lock.json", "README.md", "SECURITY.md", "docs", "dist"];
     assert.deepEqual(extra.filter((name) => privateFiles.includes(name)), [], "none of the project's own files are published");
     assert.equal(readFileSync(join(out, "index.html"), "utf8"), PAGE);
 
