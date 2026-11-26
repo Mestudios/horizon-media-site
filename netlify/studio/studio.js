@@ -100,15 +100,27 @@ const MAX_ACCOUNTS = 5;
 // The team's sign-ins: STUDIO_USERNAME and STUDIO_PASSWORD, then
 // STUDIO_USERNAME_2 and STUDIO_PASSWORD_2, and so on up to _5. A pair with no
 // username, or a password shorter than 12 characters, is ignored.
+// Spaces or a line break pasted around a value in Netlify are ignored.
+const MIN_PASSWORD = 12;
 function accounts() {
-  const found = [];
+  return accountSetup().filter((a) => a.state === "ok").map(({ n, username, password }) => ({ n, username, password }));
+}
+
+// Every sign-in slot 1 to MAX_ACCOUNTS that has anything set, and whether it
+// works. The studio's Sign-ins check shows this to the first sign-in, without
+// any password, so a broken login says why instead of looking like a wrong
+// password.
+function accountSetup() {
+  const slots = [];
   for (let n = 1; n <= MAX_ACCOUNTS; n++) {
     const suffix = n === 1 ? "" : `_${n}`;
-    const username = setting(`STUDIO_USERNAME${suffix}`);
-    const password = setting(`STUDIO_PASSWORD${suffix}`);
-    if (username !== "" && password.length >= 12) found.push({ n, username, password });
+    const username = setting(`STUDIO_USERNAME${suffix}`).trim();
+    const password = setting(`STUDIO_PASSWORD${suffix}`).trim();
+    if (!username && !password) continue;
+    const state = !username ? "no-username" : !password ? "no-password" : password.length < MIN_PASSWORD ? "short-password" : "ok";
+    slots.push({ n, username, password, state });
   }
-  return found;
+  return slots;
 }
 
 // Compares two strings without leaking, through timing, how much of them matched.
@@ -569,9 +581,14 @@ export function createStudio() {
     if (request.method === "GET") {
       // Lists only the team sees: every announcement (with scheduled and ended
       // ones) and the photo requests.
-      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json"].includes(url.pathname)) {
-        if (!(await signedIn(request, list, now))) return json({ error: "Sign in first." }, 401);
+      if (["/studio/announcements.json", "/studio/requests.json", "/studio/stats.json", "/studio/photos.json", "/studio/trash.json", "/studio/removals.json", "/studio/templates.json", "/studio/recaps.json", "/studio/setup.json"].includes(url.pathname)) {
+        const who = await signedIn(request, list, now);
+        if (!who) return json({ error: "Sign in first." }, 401);
         if (url.pathname === "/studio/trash.json") return json(await listTrash(now));
+        if (url.pathname === "/studio/setup.json") {
+          if (who.n !== 1) return json({ error: "Only the first sign-in can see this." }, 403);
+          return json(accountSetup().map(({ n, username, state }) => ({ n, username, state })));
+        }
         if (url.pathname === "/studio/removals.json") { await forgetOldRequests(now); return json(await listAll("rem/")); }
         if (url.pathname === "/studio/templates.json") return json((await store().get("templates", { type: "json" })) || DEFAULT_TEMPLATES);
         if (url.pathname === "/studio/recaps.json") return json(await listAll("recap/"));
@@ -591,7 +608,7 @@ export function createStudio() {
       if (url.pathname !== "/studio" && url.pathname !== "/studio/") return reply("Not found", 404);
       const me = await signedIn(request, list, now);
       if (!me) return reply(studioPage({ state: "out" }));
-      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me) } }));
+      return reply(studioPage({ state: "in", user: { name: me.username, credit: await creditOf(me), first: me.n === 1 } }));
     }
     // Photos shared from a phone's gallery are normally caught on the phone by
     // sw.js. If it isn't installed yet, the share lands here: nothing is kept,
